@@ -34,6 +34,7 @@ exclude_patterns = []
 rst_prolog = """
 .. |pkgname| replace:: LinToolbox4py
 .. _matSizeSpec: https://petsc.org/release/petsc4py/reference/petsc4py.typing.MatSizeSpec.html#petsc4py.typing.MatSizeSpec
+.. _KSPs: https://petsc.org/release/petsc4py/reference/petsc4py.PETSc.KSP.Type.html#petsc4py.PETSc.KSP.Type
 """
 
 

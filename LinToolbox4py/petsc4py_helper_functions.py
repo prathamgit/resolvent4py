@@ -5,7 +5,6 @@ from mpi4py import MPI
 from petsc4py import PETSc
 from slepc4py import SLEPc
 
-
 def petscprint(
     comm,
     string
@@ -86,13 +85,14 @@ def convert_coo_to_csr(
     return my_rows_ptr, my_cols, my_vals
 
 def mat_solve_hermitian_transpose(
-        lin_solver,
+        ksp,
         X
 ):
     r"""
         Solve :math:`A^{-1}X = Y`, where :math:`X` is a dense PETSc matrix.
         
-        :param lin_solver: an instance of the class :meth:`LinToolbox4py.linear_solver.LinearSolver`
+        :param ksp: a KPS solver structure
+        :type ksp: PETSc.KSP
         :param X: a dense PETSc matrix
         :type X: PETSc.Mat.Type.DENSE
 
@@ -106,7 +106,7 @@ def mat_solve_hermitian_transpose(
     for i in range (n):
         y = Y.getColumn(i)
         y.conjugate()
-        lin_solver.ksp.solveTranspose(y,y)
+        ksp.solveTranspose(y,y)
         y.conjugate()
         Y.restoreColumn(i,y)
     

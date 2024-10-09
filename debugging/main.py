@@ -26,8 +26,7 @@ Phi = lin.read_dense_matrix(comm,path + 'Phi.dat',((Nl,N),(rl,r)))
 Psi = lin.read_dense_matrix(comm,path + 'Psi.dat',((Nl,N),(rl,r)))
 
 
-lin_op = lin.LinearOperator(comm,A,(B,K,C),(Phi,Psi,0))
-lin_solver = lin.LinearSolver(lin_op)
+lin_op = lin.LinearOperator(comm,A,None,(B,K,C),None)
 
 
 x = lin.read_vector(comm,path + 'x.dat')
@@ -40,12 +39,12 @@ ygt.axpy(-1.0,y)
 yTgt = lin.read_vector(comm,path + 'yT.dat')
 yTgt.axpy(-1.0,yT)
 
-yinv = lin_solver.solve(x)
+yinv = lin_op.solve(x)
 yinvgt = lin.read_vector(comm,path + 'yinv.dat')
 yinvgt.axpy(-1.0,yinv)
 
 
-yinvT = lin_solver.solve(x,mode='adjoint')
+yinvT = lin_op.solve(x,mode='adjoint')
 yinvTgt = lin.read_vector(comm,path + 'yinvT.dat')
 yinvTgt.axpy(-1.0,yinvT)
 

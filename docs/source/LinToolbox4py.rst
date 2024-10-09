@@ -9,9 +9,5 @@ Modules
    :undoc-members:
    :show-inheritance:
 
-.. automodule:: LinToolbox4py.linear_solver
-   :members:
-   :undoc-members:
-   :show-inheritance:
 
 

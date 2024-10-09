@@ -37,7 +37,7 @@ class LinearSolver:
         self.create_solver()
         self.set_woodbury_factors()
 
-
+    
     def create_solver(
         self
     ):

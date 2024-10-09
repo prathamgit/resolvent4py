@@ -46,6 +46,7 @@ viewer.destroy()
 
 Phi = Phi@sp.linalg.inv(Psi.conj().T@Phi)
 P = Phi@Psi.conj().T
+P = np.eye(P.shape[0])
 
 # Generate random vector
 x = np.random.randn(N)
