@@ -30,11 +30,13 @@ class LinearOperator:
     """
     def __init__(
         self,
+        comm,
         A,
         W=None,
         P=None
     ):
 
+        self.comm = comm
         self.A = A
 
         if W != None:
@@ -49,9 +51,10 @@ class LinearOperator:
 
             # Enforce biorthogonality
             self.Psi.conjugate()
-            F = self.Psi.transposeMatMult(self.Phi)
-            self.Phi = self.Phi.matMult(compute_dense_inverse(MPI.COMM_WORLD,F))
+            self.Phi = self.Phi.matMult(compute_dense_inverse(\
+                self.comm,self.Psi.transposeMatMult(self.Phi)))
             self.Psi.conjugate()
+
         else:
             self.projection = False
 

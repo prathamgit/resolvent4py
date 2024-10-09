@@ -101,6 +101,7 @@ def mat_solve_hermitian_transpose(
     """
 
     Y = SLEPc.BV().createFromMat(X)
+    Y.setType('mat')
     n = Y.getSizes()[-1]
     for i in range (n):
         y = Y.getColumn(i)
@@ -134,6 +135,8 @@ def compute_dense_inverse(
     M_array = M_vec.getArray().reshape((sizes[0][0],sizes[-1][-1]))
     X = PETSc.Mat().createDense(sizes,None,M_array,comm=comm)
 
+
     return X
+
 
 
