@@ -45,12 +45,12 @@ for (i,array) in enumerate(arrays):
 viewer.destroy()
 
 Phi = Phi@sp.linalg.inv(Psi.conj().T@Phi)
-P = Phi@Psi.conj().T
-P = np.eye(P.shape[0])
+P = np.eye(Phi.shape[0]) - Phi@Psi.conj().T
+# P = np.eye(P.shape[0])
 
 # Generate random vector
 x = np.random.randn(N)
-M = A + B@K@C.conj().T
+M = A.toarray() + B@K@C.conj().T
 Mat = P@M@P
 y = Mat@x
 yT = Mat.conj().T@x

@@ -36,16 +36,18 @@ def convert_coo_to_csr(
     sizes
 ):
     r"""
-        Convert arrays = [row indices, col indices, values] for COO matrix assembly
-        to [row pointers, col indices, values] for CSR matrix assembly. (petsc4py currently
-        does not support coo matrix assembly, hence the need to convert.)
+        Convert arrays = [row indices, col indices, values] for COO matrix 
+        assembly to [row pointers, col indices, values] for CSR matrix assembly. 
+        (petsc4py currently does not support coo matrix assembly, hence the need 
+        to convert.)
         
         :param comm: MPI communicator (MPI.COMM_WORLD or MPI.COMM_SELF)
         :param arrays: a list of numpy arrays (e.g., arrays = [rows,cols,vals])
         :param sizes: matrix size
         :type sizes: `MatSizeSpec <matSizeSpec_>`_
 
-        :return: csr row pointers, column indices and matrix values for CSR matrix assembly
+        :return: csr row pointers, column indices and matrix values for CSR 
+            matrix assembly
         :rtype: list
     """
     
@@ -64,7 +66,8 @@ def convert_coo_to_csr(
     my_rows, my_cols, my_vals = [], [], []
     for i in range (pool_size):
         
-        idces = np.argwhere((rows >= ownership_ranges[i,0]) & (rows < ownership_ranges[i,1])).reshape(-1)
+        idces = np.argwhere((rows >= ownership_ranges[i,0]) & \
+                            (rows < ownership_ranges[i,1])).reshape(-1)
         rows_i, cols_i, vals_i = rows[idces], cols[idces], vals[idces]
         
         if i != pool_rank:
@@ -96,7 +99,7 @@ def mat_solve_hermitian_transpose(
         :param X: a dense PETSc matrix
         :type X: PETSc.Mat.Type.DENSE
 
-        :return: a matrix :math:`Y` of the same type and size as :math:`X`
+        :return: a matrix of the same type and size as :math:`X`
         :rtype: PETSc.Mat.Type.DENSE
     """
 
@@ -110,7 +113,10 @@ def mat_solve_hermitian_transpose(
         y.conjugate()
         Y.restoreColumn(i,y)
     
-    return Y.getMat()
+    Z = Y.getMat().copy()
+    Y.destroy()
+
+    return Z
 
 def compute_dense_inverse(
     comm,
@@ -122,19 +128,22 @@ def compute_dense_inverse(
     M_array = M.getDenseArray().reshape(-1)
     size_vec_local = len(M_array)
     size_vec_global = sum(comm.allgather(size_vec_local))
-    M_vec = PETSc.Vec().createWithArray(M_array,(size_vec_local,size_vec_global),None,comm=comm)
+    M_vec = PETSc.Vec().createWithArray(M_array,\
+                                        (size_vec_local,size_vec_global),
+                                        None,comm=comm)
     scatter, M_vec_seq = PETSc.Scatter().toAll(M_vec)
     scatter.scatter(M_vec,M_vec_seq,addv=PETSc.InsertMode.INSERT)
 
     # Compute the inverse using scipy and scatter back to all
     M_array = M_vec_seq.getArray().reshape((sizes[0][-1],sizes[0][-1]))
-    M_vec_seq.setValues(np.arange(M_vec_seq.getSize()),sp.linalg.inv(M_array).reshape(-1))
+    M_vec_seq.setValues(np.arange(M_vec_seq.getSize()),\
+                        sp.linalg.inv(M_array).reshape(-1))
     M_vec_seq.assemble()
-    scatter.scatter(M_vec_seq,M_vec,addv=PETSc.InsertMode.INSERT,mode=PETSc.ScatterMode.REVERSE)
+    scatter.scatter(M_vec_seq,M_vec,addv=PETSc.InsertMode.INSERT,\
+                    mode=PETSc.ScatterMode.REVERSE)
     
     M_array = M_vec.getArray().reshape((sizes[0][0],sizes[-1][-1]))
     X = PETSc.Mat().createDense(sizes,None,M_array,comm=comm)
-
 
     return X
 

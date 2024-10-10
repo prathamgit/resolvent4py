@@ -1,6 +1,7 @@
 import sys
 sys.path.append('../')
 import numpy as np
+import scipy as sp
 
 import LinToolbox4py as lin
 
@@ -26,8 +27,7 @@ Phi = lin.read_dense_matrix(comm,path + 'Phi.dat',((Nl,N),(rl,r)))
 Psi = lin.read_dense_matrix(comm,path + 'Psi.dat',((Nl,N),(rl,r)))
 
 
-lin_op = lin.LinearOperator(comm,A,None,(B,K,C),None)
-
+lin_op = lin.LinearOperator(comm,A,(Phi,Psi,1),(B,K,C),None)
 
 x = lin.read_vector(comm,path + 'x.dat')
 y = lin_op.apply(x)
@@ -48,7 +48,11 @@ yinvT = lin_op.solve(x,mode='adjoint')
 yinvTgt = lin.read_vector(comm,path + 'yinvT.dat')
 yinvTgt.axpy(-1.0,yinvT)
 
+
 lin.petscprint(comm,"Error = %1.15e"%(ygt.norm()))
 lin.petscprint(comm,"Error = %1.15e"%(yTgt.norm()))
 lin.petscprint(comm,"Error = %1.15e"%(yinvgt.norm()))
 lin.petscprint(comm,"Error = %1.15e"%(yinvTgt.norm()))
+
+
+lin_op.destroy()
