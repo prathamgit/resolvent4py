@@ -10,7 +10,7 @@
 import os, sys
 sys.path.insert(0,os.path.abspath('../..'))
 
-project = 'LinToolbox4py'
+project = 'resolvent4py'
 copyright = '2024, Alberto Padovan'
 author = 'Alberto Padovan'
 release = '0.1'
@@ -28,11 +28,14 @@ extensions = [
     'sphinx.ext.viewcode',
 ]
 
+html_logo = "logo.png"
+html_show_sphinx = False
+
 templates_path = ['_templates']
 exclude_patterns = []
 
 rst_prolog = """
-.. |pkgname| replace:: LinToolbox4py
+.. |pkgname| replace:: resolvent4py
 .. _matSizeSpec: https://petsc.org/release/petsc4py/reference/petsc4py.typing.MatSizeSpec.html#petsc4py.typing.MatSizeSpec
 .. _KSPs: https://petsc.org/release/petsc4py/reference/petsc4py.PETSc.KSP.Type.html#petsc4py.PETSc.KSP.Type
 """

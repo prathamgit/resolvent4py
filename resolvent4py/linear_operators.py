@@ -12,33 +12,35 @@ class LinearOperator:
 
         .. math::
             L = \mathbb{P}M\mathbb{P},\quad M = A + 
-            \textcolor{orange}{B K C^*}
+            \textcolor{black}{B K C^*}
 
         where :math:`A \in \mathbb{C}^{N\times N}`,
         :math:`B \in \mathbb{C}^{N\times m}`, 
         :math:`K \in \mathbb{C}^{m\times q}`,
         :math:`C\in \mathbb{C}^{N\times q}`
-        and, given the integer :math:`s\in\{0,1\}`, 
-        :math:`\mathbb{P}` is a projection operator defined as follows
+        and :math:`\mathbb{P}` is a projection operator
         
         .. math::
             \mathbb{P} = \begin{cases} 
-            I & \text{default} \\
             \Phi\left(\Psi^*\Phi\right)^{-1}\Psi^* & \text{if } s = 0 \\
-            I - \Phi\left(\Psi^*\Phi\right)^{-1}\Psi^*  & \text{if } s = 1
+            I - \Phi\left(\Psi^*\Phi\right)^{-1}\Psi^*  & \text{if } s = 1,
             \end{cases}
 
-        Perhaps the most useful methods here are :code:`apply(x)`, 
-        which returns :math:`y = Lx`, and :code:`solve(x)`, 
+        where :math:`s` is passed as an argument during initialization.
+        Perhaps the most useful methods here are :code:`apply(x,mode='direct')`, 
+        which returns :math:`y = Lx`, and :code:`solve(x,mode='direct')`, 
         which returns :math:`y = \mathbb{P}M^{-1}\mathbb{P} x`,
         where :math:`M^{-1}` is computed using the Woodbury matrix identity
 
         .. math::
 
-            M^{-1} = A^{-1} - X D Y^*\,\,\text{with}\,\, \textcolor{blue}{X}
-            = A^{-1}U,\, \textcolor{blue}{D} = 
+            M^{-1} = A^{-1} - X D Y^*\,\,\text{with}\,\, \textcolor{black}{X}
+            = A^{-1}U,\, \textcolor{black}{D} = 
             K\left(I + V^* A^{-1}U K\right)^{-1},\, 
-            \textcolor{blue}{Y} = A^{-*}V.
+            \textcolor{black}{Y} = A^{-*}V.
+
+        The argument :code:`mode` in the :code:`apply()` and :code:`solve()` can
+        also be set to :code:`'adjoint'` to compute the action of the adjoint.
 
         :param comm: MPI communicator (one of :code:`MPI.COMM_WORLD` or 
             :code:`MPI.COMM_SELF`)
@@ -46,33 +48,33 @@ class LinearOperator:
         :param A: a sparse matrix of size :math:`N\times N`
         :type A: PETSc.Mat.Type.MPIAIJ
 
-        :param P: a tuple of 2 rank-:math:`r` distributed matrices of size 
+        :param P: [optional] a tuple of 2 rank-:math:`r` matrices of size 
             :math:`N{\times}r` and an integer :math:`s{\in\{0,1\}}` 
             (e.g., P = :math:`\left(\Phi,\Psi,0\right)`).
             If :code:`None`, :math:`L = M`.
         :type P: PETSc.Mat.Type.DENSE,PETSc.Mat.Type.DENSE,int
 
-        :param F: a tuple of distributed matrices (e.g., 
-            :math:`\left(\textcolor{orange}{B,K,C}\right)`). 
+        :param F: [optional] a tuple of matrices (e.g., 
+            :math:`\left(\textcolor{black}{B,K,C}\right)`). 
             If :code:`F == None`, :math:`M = A`.
         :type F: PETSc.Mat.Type.DENSE,PETSc.Mat.Type.DENSE,PETSc.Mat.Type.DENSE
         
-        :param Finv: a tuple of distributed matrices 
-            (e.g., :math:`\left(\textcolor{blue}{X,D,Y}\right)`). 
+        :param Finv: [optional] a tuple of matrices 
+            (e.g., :math:`\left(\textcolor{black}{X,D,Y}\right)`). 
             If :code:`Finv == None`, :code:`F != None` and 
             :code:`create_solver == True`, the factors :math:`X,\,D`, 
             and :math:`Y` are computed exactly as defined in the equation above.
             However, there are instances when :math:`X,\,D`, 
-            and :math:`Y` are known a-priori, and they can be passed directly
-            as an argument.
+            and :math:`Y` are known exactly (or approximately) a-priori, 
+            and they can be passed directly as an argument.
         :type Finv: PETSc.Mat.Type.DENSE,PETSc.Mat.Type.DENSE,
             PETSc.Mat.Type.DENSE
 
-        :param create_solver: :code:`True` enables the use of the 
+        :param create_solver: [optional] :code:`True` enables the use of the 
             :code:`solve()` method
         :type create_solver: bool
 
-        :param solver_type: one of PETSc available `KSPs`_.
+        :param solver_type: [optional] one of PETSc available `KSPs`_.
         :type solver_type: str
     """
     def __init__(
@@ -112,7 +114,7 @@ class LinearOperator:
             biorthogonality (i.e., 
             :math:`\Phi\leftarrow \Phi\left(\Psi^*\Phi\right)^{-1}`).
 
-            :param P: a tuple of 2 rank-:math:`r` distributed matrices of size 
+            :param P: a tuple of 2 rank-:math:`r` matrices of size 
                 :math:`N{\times}r` and an integer :math:`s{\in\{0,1\}}` 
                 (e.g., P = :math:`\left(\Phi,\Psi,0\right)`)
             :type P: PETSc.Mat.Type.DENSE,PETSc.Mat.Type.DENSE,int
@@ -146,11 +148,11 @@ class LinearOperator:
             Set attributes :code:`B`, :code:`K` and :code:`C` and attributes 
             :code:`X`, :code:`D` and :code:`Y`.
 
-            :param F: a tuple of distributed matrices (e.g., :math:`(B,K,C)`)
+            :param F: a tuple of matrices (e.g., :math:`(B,K,C)`)
             :type F: PETSc.Mat.Type.DENSE,PETSc.Mat.Type.DENSE,
                 PETSc.Mat.Type.DENSE
             
-            :param Finv: a tuple of distributed matrices (e.g., :math:`(X,D,Y)`)
+            :param Finv: a tuple of matrices (e.g., :math:`(X,D,Y)`)
             :type Finv: PETSc.Mat.Type.DENSE,PETSc.Mat.Type.DENSE,
                 PETSc.Mat.Type.DENSE
         """
@@ -402,9 +404,9 @@ class LinearOperator:
             .. math::
                 y = \begin{cases}
                 \mathbb{P} M^{-1}\mathbb{P} x & \text{if }  
-                \text{mode} = \text{`direct'}\\
+                \text{mode} = \text{direct}\\
                 \mathbb{P}^* M^{-*}\mathbb{P}^*x  & \text{if } 
-                \text{mode} = \text{`adjoint'}.
+                \text{mode} = \text{adjoint}.
                 \end{cases}
 
             :param x: a vector of size :math:`N`
@@ -446,14 +448,14 @@ class LinearOperator:
 # ------------------------------------------------------------------------------
 # ------------------------------------------------------------------------------
 
-class LowRankLinearOperator:
+class FactorizedLinearOperator:
     r"""
         This class creates a linear operator of the form
 
         .. math::
             L = \mathbb{P}M\mathbb{P},\quad M = 
-            \underbrace{\textcolor{red}{U \Sigma V^*}}_{A} + 
-            \textcolor{orange}{B K C^*}
+            \underbrace{\textcolor{black}{U \Sigma V^*}}_{A} + 
+            \textcolor{black}{B K C^*}
 
         where :math:`U \in \mathbb{C}^{N\times r}`, 
         :math:`\Sigma \in \mathbb{C}^{r\times p}`,
@@ -472,7 +474,7 @@ class LowRankLinearOperator:
             \end{cases}
 
         This class is similar to the 
-        :meth:`LinToolbox4py.linear_operator.LinearOperator` class, except
+        :meth:`resolvent4py.linear_operators.LinearOperator` class, except
         that :code:`A` is a low-rank matrix (hence the name of the class) and
         the :code:`solve()` method is not provided.
 
@@ -480,7 +482,7 @@ class LowRankLinearOperator:
             :code:`MPI.COMM_SELF`)
 
         :param A: a tuple of distributed matrices (e.g., 
-            :math:`\left(\textcolor{red}{U,\Sigma,V}\right)`). 
+            :math:`\left(\textcolor{black}{U,\Sigma,V}\right)`). 
         :type A: PETSc.Mat.Type.DENSE,PETSc.Mat.Type.DENSE,PETSc.Mat.Type.DENSE
 
         :param P: a tuple of 2 rank-:math:`r` distributed matrices of size 
@@ -490,7 +492,7 @@ class LowRankLinearOperator:
         :type P: PETSc.Mat.Type.DENSE,PETSc.Mat.Type.DENSE,int
 
         :param F: a tuple of distributed matrices (e.g., 
-            :math:`\left(\textcolor{orange}{B,K,C}\right)`). 
+            :math:`\left(\textcolor{black}{B,K,C}\right)`). 
             If :code:`F == None`, :math:`M = A`.
         :type F: PETSc.Mat.Type.DENSE,PETSc.Mat.Type.DENSE,PETSc.Mat.Type.DENSE
     """
@@ -620,7 +622,7 @@ class LowRankLinearOperator:
                 F_2 F_1^* F_0^*x  & \text{if } \text{mode} = \text{adjoint}.
                 \end{cases}
 
-            where :math:`F_j` is the :math:`j`th component of the tuple 
+            where :math:`F_j` is the :math:`j`-th component of the tuple 
             :code:`F`.
             
             :param x: a vector of size :math:`N`

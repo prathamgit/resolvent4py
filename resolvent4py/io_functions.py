@@ -8,11 +8,24 @@ from .petsc4py_helper_functions import convert_coo_to_csr
 def read_vector(
     comm,
     filename,
-    *argv
+    vec=None
 ):
+    r"""
+        Read PETSc Vec from file
+
+        :param comm: MPI communicator (MPI.COMM_WORLD or MPI.COMM_SELF)
+        :param filename: name of the file that holds the vector
+        :type filename: str
+        :param vec: [optional] Vec to load the data into (must have the same  
+            global dimension as the vector in the file)
+        :type vec: PETSc.Vec
+
+        :return: vector with the data read from the file
+        :rtype: PETSc.Vec
+    """
 
     viewer = PETSc.Viewer().createBinary(filename,"r",comm=comm)
-    vec = argv[0] if len(argv) > 0 else PETSc.Vec().create(comm)
+    vec = vec if vec != None else PETSc.Vec().create(comm)
     vec.load(viewer)
     viewer.destroy()
 

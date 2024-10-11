@@ -1,1 +1,1 @@
-sphinx-apidoc -o docs/source LinToolbox4py/
+sphinx-apidoc -o docs/source resolvent4py/

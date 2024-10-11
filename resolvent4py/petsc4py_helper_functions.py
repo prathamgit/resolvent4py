@@ -7,13 +7,20 @@ from slepc4py import SLEPc
 
 def petscprint(
     comm,
-    string
+    arg
 ):
+    r"""
+        Print to terminal
+
+        :param comm: MPI communicator (MPI.COMM_WORLD or MPI.COMM_SELF)
+        :param string: argument to be fed into print()
+        :type string: any
+    """
     if comm == MPI.COMM_SELF:
-        print(string)
+        print(arg)
     else:
         if MPI.COMM_WORLD.Get_rank() == 0:
-            print(string)
+            print(arg)
 
 def compute_local_size(
     Nglob
@@ -23,6 +30,9 @@ def compute_local_size(
 
         :param Nglob: global size
         :type Nglob: int
+
+        :return: local size
+        :rtype: int
     """
     
     size, rank = MPI.COMM_WORLD.Get_size(), MPI.COMM_WORLD.Get_rank()
@@ -122,6 +132,18 @@ def compute_dense_inverse(
     comm,
     M
 ):
+    r"""
+        Compute :math:`M^{-1}`
+        
+        :param ksp: a KPS solver structure
+        :type ksp: PETSc.KSP
+        :param X: a dense PETSc matrix
+        :type X: PETSc.Mat.Type.DENSE
+
+        :return: the inverse of :math:`M`
+        :rtype: PETSc.Mat.Type.DENSE
+    """
+
     
     # Gather data in M on all processors
     sizes = M.getSizes()
