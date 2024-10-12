@@ -6,7 +6,7 @@ from petsc4py import PETSc
 import sys
 sys.path.append('../')
 
-import LinToolbox4py as lin
+import resolvent4py as lin
 
 path = 'data/'
 
@@ -45,17 +45,18 @@ for (i,array) in enumerate(arrays):
 viewer.destroy()
 
 Phi = Phi@sp.linalg.inv(Psi.conj().T@Phi)
-P = np.eye(Phi.shape[0]) - Phi@Psi.conj().T
+P = Phi@Psi.conj().T
 # P = np.eye(P.shape[0])
+# P *= 0
 
 # Generate random vector
 x = np.random.randn(N)
-M = A.toarray() + B@K@C.conj().T
-Mat = P@M@P
+Mat = P@(A.toarray() + B@K@C.conj().T)@P
 y = Mat@x
 yT = Mat.conj().T@x
 
-Mat = P@sp.linalg.inv(M)@P
+Mat = P@sp.linalg.inv(A.toarray() + B@K@C.conj().T)@P
+# Mat = sp.linalg.inv(Mat)
 yinv = Mat@x
 yinvT = Mat.conj().T@x
 

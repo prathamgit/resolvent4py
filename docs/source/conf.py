@@ -36,11 +36,12 @@ exclude_patterns = []
 
 rst_prolog = """
 .. |pkgname| replace:: resolvent4py
-.. _matSizeSpec: https://petsc.org/release/petsc4py/reference/petsc4py.typing.MatSizeSpec.html#petsc4py.typing.MatSizeSpec
-.. _KSPs: https://petsc.org/release/petsc4py/reference/petsc4py.PETSc.KSP.Type.html#petsc4py.PETSc.KSP.Type
+.. _MatType: https://petsc.org/release/petsc4py/reference/petsc4py.PETSc.Mat.Type.html
+.. _MatSizeSpec: https://petsc.org/release/petsc4py/reference/petsc4py.typing.MatSizeSpec.html#petsc4py.typing.MatSizeSpec
+.. _KSPType: https://petsc.org/release/petsc4py/reference/petsc4py.PETSc.KSP.Type.html#petsc4py.PETSc.KSP.Type
+.. _KSP: https://petsc.org/release/petsc4py/reference/petsc4py.PETSc.KSP.html
+.. _Vec: https://petsc.org/release/petsc4py/reference/petsc4py.PETSc.Vec.html
 """
-
-
 
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output

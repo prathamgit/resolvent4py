@@ -3,7 +3,7 @@ sys.path.append('../')
 import numpy as np
 import scipy as sp
 
-import LinToolbox4py as lin
+import resolvent4py as res4py
 
 from mpi4py import MPI
 from petsc4py import PETSc
@@ -11,48 +11,52 @@ from petsc4py import PETSc
 comm = MPI.COMM_WORLD
 
 N, Nb, Nc, r = 10, 5, 3, 2
-Nl = lin.compute_local_size(N)
-Nbl = lin.compute_local_size(Nb)
-Ncl = lin.compute_local_size(Nc)
-rl = lin.compute_local_size(r)
+Nl = res4py.compute_local_size(N)
+Nbl = res4py.compute_local_size(Nb)
+Ncl = res4py.compute_local_size(Nc)
+rl = res4py.compute_local_size(r)
 
 path = 'data/'
 fnames = [path + 'rows.dat',path + 'cols.dat',path + 'vals.dat']
 
-A = lin.read_coo_matrix(comm,fnames,((Nl,N),(Nl,N)))
-B = lin.read_dense_matrix(comm,path + 'B.dat',((Nl,N),(Nbl,Nb)))
-C = lin.read_dense_matrix(comm,path + 'C.dat',((Nl,N),(Ncl,Nc)))
-K = lin.read_dense_matrix(comm,path + 'K.dat',((Nbl,Nb),(Ncl,Nc)))
-Phi = lin.read_dense_matrix(comm,path + 'Phi.dat',((Nl,N),(rl,r)))
-Psi = lin.read_dense_matrix(comm,path + 'Psi.dat',((Nl,N),(rl,r)))
+A = res4py.read_coo_matrix(comm,fnames,((Nl,N),(Nl,N)))
+B = res4py.read_dense_matrix(comm,path + 'B.dat',((Nl,N),(Nbl,Nb)))
+C = res4py.read_dense_matrix(comm,path + 'C.dat',((Nl,N),(Ncl,Nc)))
+K = res4py.read_dense_matrix(comm,path + 'K.dat',((Nbl,Nb),(Ncl,Nc)))
+Phi = res4py.read_dense_matrix(comm,path + 'Phi.dat',((Nl,N),(rl,r)))
+Psi = res4py.read_dense_matrix(comm,path + 'Psi.dat',((Nl,N),(rl,r)))
+
+ksp = res4py.create_mumps_solver(comm,A)
+lin_op_ = res4py.MatrixLinearOperator(comm,A,ksp)
+lin_op__ = res4py.LowRankUpdatedLinearOperator(comm,lin_op_,B,K,C,None)
+lin_op = res4py.ProjectedLinearOperator(comm,lin_op__,Phi,Psi,True)
 
 
-lin_op = lin.LinearOperator(comm,A,(Phi,Psi,1),(B,K,C),None)
+# res4py_op = res4py.LinearOperator(comm,A,(Phi,Psi,1),(B,K,C),None)
 
-x = lin.read_vector(comm,path + 'x.dat')
+x = res4py.read_vector(comm,path + 'x.dat')
 y = lin_op.apply(x)
-yT = lin_op.apply(x,mode='adjoint')
-
-ygt = lin.read_vector(comm,path + 'y.dat')
+yT = lin_op.apply_hermitian_transpose(x)
+ygt = res4py.read_vector(comm,path + 'y.dat')
 ygt.axpy(-1.0,y)
-
-yTgt = lin.read_vector(comm,path + 'yT.dat')
+yTgt = res4py.read_vector(comm,path + 'yT.dat')
 yTgt.axpy(-1.0,yT)
 
+
 yinv = lin_op.solve(x)
-yinvgt = lin.read_vector(comm,path + 'yinv.dat')
+yinvgt = res4py.read_vector(comm,path + 'yinv.dat')
 yinvgt.axpy(-1.0,yinv)
 
 
-yinvT = lin_op.solve(x,mode='adjoint')
-yinvTgt = lin.read_vector(comm,path + 'yinvT.dat')
+yinvT = lin_op.solve_hermitian_transpose(x)
+yinvTgt = res4py.read_vector(comm,path + 'yinvT.dat')
 yinvTgt.axpy(-1.0,yinvT)
 
 
-lin.petscprint(comm,"Error = %1.15e"%(ygt.norm()))
-lin.petscprint(comm,"Error = %1.15e"%(yTgt.norm()))
-lin.petscprint(comm,"Error = %1.15e"%(yinvgt.norm()))
-lin.petscprint(comm,"Error = %1.15e"%(yinvTgt.norm()))
+res4py.petscprint(comm,"Error = %1.15e"%(ygt.norm()))
+res4py.petscprint(comm,"Error = %1.15e"%(yTgt.norm()))
+res4py.petscprint(comm,"Error = %1.15e"%(yinvgt.norm()))
+res4py.petscprint(comm,"Error = %1.15e"%(yinvTgt.norm()))
 
 
-lin_op.destroy()
+# res4py_op.destroy()

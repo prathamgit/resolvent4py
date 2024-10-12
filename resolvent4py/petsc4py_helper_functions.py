@@ -5,16 +5,13 @@ from mpi4py import MPI
 from petsc4py import PETSc
 from slepc4py import SLEPc
 
-def petscprint(
-    comm,
-    arg
-):
+def petscprint(comm, arg):
     r"""
         Print to terminal
 
         :param comm: MPI communicator (MPI.COMM_WORLD or MPI.COMM_SELF)
-        :param string: argument to be fed into print()
-        :type string: any
+        :param arg: argument to be fed into print()
+        :type arg: any
     """
     if comm == MPI.COMM_SELF:
         print(arg)
@@ -22,9 +19,7 @@ def petscprint(
         if MPI.COMM_WORLD.Get_rank() == 0:
             print(arg)
 
-def compute_local_size(
-    Nglob
-):
+def compute_local_size(Nglob):
     r"""
         Compute local size given the global size
 
@@ -40,11 +35,7 @@ def compute_local_size(
 
     return Nloc
 
-def convert_coo_to_csr(
-    comm,
-    arrays,
-    sizes
-):
+def convert_coo_to_csr(comm, arrays, sizes):
     r"""
         Convert arrays = [row indices, col indices, values] for COO matrix 
         assembly to [row pointers, col indices, values] for CSR matrix assembly. 
@@ -54,7 +45,7 @@ def convert_coo_to_csr(
         :param comm: MPI communicator (MPI.COMM_WORLD or MPI.COMM_SELF)
         :param arrays: a list of numpy arrays (e.g., arrays = [rows,cols,vals])
         :param sizes: matrix size
-        :type sizes: `MatSizeSpec <matSizeSpec_>`_
+        :type sizes: `MatSizeSpec <MatSizeSpec_>`_
 
         :return: csr row pointers, column indices and matrix values for CSR 
             matrix assembly
@@ -97,10 +88,7 @@ def convert_coo_to_csr(
 
     return my_rows_ptr, my_cols, my_vals
 
-def mat_solve_hermitian_transpose(
-        ksp,
-        X
-):
+def mat_solve_hermitian_transpose(ksp, X):
     r"""
         Solve :math:`A^{-1}X = Y`, where :math:`X` is a dense PETSc matrix.
         
@@ -128,10 +116,7 @@ def mat_solve_hermitian_transpose(
 
     return Z
 
-def compute_dense_inverse(
-    comm,
-    M
-):
+def compute_dense_inverse(comm, M):
     r"""
         Compute :math:`M^{-1}`
         
@@ -144,7 +129,6 @@ def compute_dense_inverse(
         :rtype: PETSc.Mat.Type.DENSE
     """
 
-    
     # Gather data in M on all processors
     sizes = M.getSizes()
     M_array = M.getDenseArray().reshape(-1)
@@ -168,6 +152,5 @@ def compute_dense_inverse(
     X = PETSc.Mat().createDense(sizes,None,M_array,comm=comm)
 
     return X
-
 
 
