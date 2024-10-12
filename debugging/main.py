@@ -29,7 +29,7 @@ Psi = res4py.read_dense_matrix(comm,path + 'Psi.dat',((Nl,N),(rl,r)))
 ksp = res4py.create_mumps_solver(comm,A)
 lin_op_ = res4py.MatrixLinearOperator(comm,A,ksp)
 lin_op__ = res4py.LowRankUpdatedLinearOperator(comm,lin_op_,B,K,C,None)
-lin_op = res4py.ProjectedLinearOperator(comm,lin_op__,Phi,Psi,True)
+lin_op = res4py.ProjectedLinearOperator(comm,lin_op__,Phi,Psi,False)
 
 
 # res4py_op = res4py.LinearOperator(comm,A,(Phi,Psi,1),(B,K,C),None)

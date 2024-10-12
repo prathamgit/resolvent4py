@@ -196,7 +196,7 @@ class LowRankLinearOperator(LinearOperator):
         :param V: dense PETSc matrix
         :type V: PETSc.Mat.Type.DENSE
     """
-
+    
     def __init__(self, comm, U, Sigma, V):
         
         dimensions = (U.getSizes()[0],V.getSizes()[0])
@@ -243,12 +243,12 @@ class SumOfLowRankOperatorsLinearOperator(LinearOperator):
         where :math:`U`, :math:`\Sigma` and :math:`V` are matrices of
         conformal sizes (and :math:`\Sigma` is not necessarily diagonal) and 
         :math:`A` is an instance of the class
-        `resolvent4py.linear_operators.LowRankLinearOperator`
+        :class:`resolvent4py.linear_operators.LowRankLinearOperator`
 
         :param comm: MPI communicator (one of :code:`MPI.COMM_WORLD` or
             :code:`MPI.COMM_SELF`)
         :param A: instance of the \
-            `resolvent4py.linear_operators.LowRankLinearOperator` class
+            :class:`resolvent4py.linear_operators.LowRankLinearOperator` class
         :param U: dense PETSc matrix
         :type U: PETSc.Mat.Type.DENSE
         :param Sigma: dense PETSc matrix
@@ -308,7 +308,7 @@ class LowRankUpdatedLinearOperator(LinearOperator):
             L = A + B K C^*
         
         where :math:`A` is an instance of any subclass of the 
-        `resolvent4py.linear_operators.LinearOperator` class,
+        :class:`resolvent4py.linear_operators.LinearOperator` class,
         and :math:`B`, :math:`K` and :math:`C` are low-rank (dense) matrices of 
         conformal size.
         If :code:`A.solve()` is enabled, then the :code:`solve()` method 
@@ -333,7 +333,7 @@ class LowRankUpdatedLinearOperator(LinearOperator):
         :param comm: MPI communicator (one of :code:`MPI.COMM_WORLD` or
             :code:`MPI.COMM_SELF`)
         :param A: instance of a subclass of the 
-            `resolvent4py.linear_operators.LinearOperator` class
+            :class:`resolvent4py.linear_operators.LinearOperator` class
         :param B: dense PETSc matrix
         :type B: PETSc.Mat.Type.DENSE
         :param K: dense PETSc matrix
@@ -357,10 +357,13 @@ class LowRankUpdatedLinearOperator(LinearOperator):
         self.K = K
         self.C = C
 
-        if self.A.ksp != None and woodbury_factors == None:
-            self.compute_woodbury_factors()
-        else:
-            self.X, self.D, self.Y = None, None, None
+        self.X, self.D, self.Y = None, None, None
+        if woodbury_factors == None:
+            try:
+                self.compute_woodbury_factors()
+            except:
+                self.X, self.D, self.Y = None, None, None
+            
 
     def compute_woodbury_factors(self):
         r"""
@@ -426,15 +429,13 @@ class LowRankUpdatedLinearOperator(LinearOperator):
         return y
 
     def apply(self, x):
-        y = self.create_left_vector()
-        self.A.A.mult(x,y)
+        y = self.A.apply(x)
         z = self.apply_low_rank_factors(self.B,self.K,self.C,x)
         y.axpy(1.0,z)
         return y
     
     def apply_hermitian_transpose(self, x):
-        y = self.create_right_vector()
-        self.A.A.multHermitian(x,y)
+        y = self.A.apply_hermitian_transpose(x)
         z = self.apply_low_rank_factors_hermitian_transpose(self.B,\
                                                             self.K,\
                                                             self.C,\
@@ -443,40 +444,19 @@ class LowRankUpdatedLinearOperator(LinearOperator):
         return y
     
     def solve(self, x):
-        if self.A.ksp != None:
-            y = self.create_left_vector()
-            self.A.ksp.solve(x,y)
-            z = self.apply_low_rank_factors(self.X,self.D,self.Y,x)
-            y.axpy(-1.0,z)
-            return y
-        else:
-            raise Exception(
-                f"Error from {self.get_name()}.solve(): "
-                f"Please provide a PETSc KSP object when initializing the "
-                f"{self.A.get_name()} class and then reinitialize "
-                f"{self.get_name()}."
-            )
+        y = self.A.solve(x)
+        z = self.apply_low_rank_factors(self.X,self.D,self.Y,x)
+        y.axpy(-1.0,z)
+        return y
         
     def solve_hermitian_transpose(self, x):
-        if self.A.ksp != None:
-            y = self.create_right_vector()
-            x.conjugate()
-            self.A.ksp.solveTranspose(x,y)
-            x.conjugate()
-            y.conjugate()
-            z = self.apply_low_rank_factors_hermitian_transpose(self.X,\
-                                                                self.D,
-                                                                self.Y,\
-                                                                x)
-            y.axpy(-1.0,z)
-            return y
-        else:
-            raise Exception(
-                f"Error from {self.get_name()}.solve_hermitian_transpose(). "
-                f"Please provide a PETSc KSP object when initializing the "
-                f"{self.A.get_name()} class and then reinitialize "
-                f"{self.get_name()}."
-            )
+        y = self.A.solve_hermitian_transpose(x)
+        z = self.apply_low_rank_factors_hermitian_transpose(self.X,\
+                                                            self.D,
+                                                            self.Y,\
+                                                            x)
+        y.axpy(-1.0,z)
+        return y
     
     def destroy(self):
         r"""
@@ -500,7 +480,7 @@ class ProjectedLinearOperator(LinearOperator):
     r"""
         Class for a linear operator of the form :math:`L = PAP`,
         where :math:`A` is an instance of any subclass of the 
-        `resolvent4py.linear_operators.LinearOperator` class,
+        :class:`resolvent4py.linear_operators.LinearOperator` class,
         and :math:`P` is a projection operator of the form
 
         .. math::
@@ -525,7 +505,7 @@ class ProjectedLinearOperator(LinearOperator):
         :param comm: MPI communicator (one of :code:`MPI.COMM_WORLD` or
             :code:`MPI.COMM_SELF`)
         :param A: instance of a subclass of the
-            `resolvent4py.linear_operators.LinearOperator` class
+            :class:`resolvent4py.linear_operators.LinearOperator` class
         :param Phi: dense PETSc matrix
         :type Phi: PETSc.Mat.Type.DENSE
         :param Psi: dense PETSc matrix
