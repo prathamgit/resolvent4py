@@ -24,7 +24,7 @@ Current functionalities include:
    :caption: Getting Started
    
    quickstart.rst
-   modules.rst
+   api-reference.rst
 
 
 

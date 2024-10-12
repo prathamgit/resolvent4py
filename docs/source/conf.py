@@ -41,6 +41,7 @@ rst_prolog = """
 .. _KSPType: https://petsc.org/release/petsc4py/reference/petsc4py.PETSc.KSP.Type.html#petsc4py.PETSc.KSP.Type
 .. _KSP: https://petsc.org/release/petsc4py/reference/petsc4py.PETSc.KSP.html
 .. _Vec: https://petsc.org/release/petsc4py/reference/petsc4py.PETSc.Vec.html
+.. _LayoutSizeSpec: https://petsc.org/release/petsc4py/reference/petsc4py.typing.LayoutSizeSpec.html#petsc4py.typing.LayoutSizeSpec
 """
 
 # -- Options for HTML output -------------------------------------------------

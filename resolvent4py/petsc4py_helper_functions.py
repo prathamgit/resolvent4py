@@ -5,6 +5,21 @@ from mpi4py import MPI
 from petsc4py import PETSc
 from slepc4py import SLEPc
 
+numpy_to_mpi_dtype = {
+        np.dtype(np.int32): MPI.INT,
+        np.dtype(np.int64): MPI.INT64_T,
+        np.dtype(np.float64): MPI.DOUBLE,
+        np.dtype(np.complex64): MPI.COMPLEX,
+        np.dtype(np.complex128): MPI.DOUBLE_COMPLEX
+    }
+
+def get_mpi_type(dtype):
+    r"""Get the corresponding MPI type for a given NumPy data type."""
+    mpi_dtype = numpy_to_mpi_dtype.get(dtype)
+    if mpi_dtype is None:
+        raise ValueError(f"No MPI type found for NumPy dtype {dtype}")
+    return mpi_dtype
+
 def petscprint(comm, arg):
     r"""
         Print to terminal
@@ -152,5 +167,110 @@ def compute_dense_inverse(comm, M):
     X = PETSc.Mat().createDense(sizes,None,M_array,comm=comm)
 
     return X
+
+
+def scatter_array(comm, array, locsize=None):
+    r"""
+        Scatter numpy array from root to all other processors
+
+        :param array: numpy array to be scattered from root to the rest of
+            the MPI pool
+        :type array: numpy
+        :param locsize: local size owned by each processor. If :code:`None`
+            :code:`locsize` is computed using the 
+            :code:`compute_local_size()` routine
+
+        :return: scattered array
+        :rtype: numpy
+    """
+
+    size, rank = comm.Get_size(), comm.Get_rank()
+    counts, displs = None, None
+    if locsize == None:
+        if rank == 0:
+            n = len(array)
+            counts = np.asarray([n//size + 1 if np.mod(n,size) > j \
+                                else n//size for j in range (size)])
+            displs = np.concatenate(([0],np.cumsum(counts[:-1])))
+            count = counts[0]
+            dtype = array.dtype
+            for j in range (1,size):
+                comm.send(counts[rank],dest=j,tag=0)
+                comm.send(dtype,dest=j,tag=1)
+        else:
+            count = comm.recv(source=0,tag=0)
+            dtype = comm.recv(source=0,tag=1)
+    else:
+        count = locsize
+        counts = comm.gather(locsize, root=0)
+        if rank == 0:
+            dtype = array.dtype
+            displs = np.concatenate(([0],np.cumsum(counts[:-1])))
+            for j in range (1,size):
+                comm.send(dtype,dest=j,tag=1)
+        else:
+            dtype = comm.recv(source=0,tag=1)
+
+    recvbuf = np.empty(count, dtype=dtype)
+    comm.Scatterv([array, counts, displs, get_mpi_type(dtype)], recvbuf, root=0)
+
+    return recvbuf
+
+def generate_random_petsc_sparse_matrix(comm, sizes):
+    r"""
+        :param comm: MPI communicator
+        :param sizes: matrix sizes
+        :type sizes: `MatSizeSpec`_
+
+        :return: a sparse PETSc matrix
+        :rtype: PETSc.Mat.Type.MPIAIJ
+    """
+
+    rank = comm.Get_rank()
+    nrows, ncols = sizes[0][-1], sizes[-1][-1]
+
+    # Generate random matrix on root
+    arrays = [None, None, None]
+    if rank == 0:
+        A = np.random.randn(nrows, ncols) + 1j*np.random.randn(nrows, ncols)
+        A = sp.sparse.csr_matrix(A)
+        rows, cols = A.nonzero()
+        data = A.data
+        arrays = [rows,cols,data]
+        print(A.todense())
+
+    # Scatter to all other processors and assemble
+    recv_bufs = [scatter_array(comm, array) for array in arrays]
+    row_ptrs, cols, data = convert_coo_to_csr(comm, recv_bufs, sizes)
+    A = PETSc.Mat().create(comm=comm)
+    A.setSizes(sizes)
+    A.setUp()
+    A.setPreallocationCSR((row_ptrs,cols,data))
+    A.setValuesCSR(row_ptrs,cols,data)
+    A.assemble(None)
+    
+    return A
+
+
+def generate_random_petsc_vector(comm, sizes):
+    r"""
+        :param comm: MPI communicator
+        :param sizes: vector sizes
+        :type sizes: `LayoutSizeSpec`_
+
+        :return: a PETSc vector
+        :rtype: `Vec`_
+    """
+    rank = comm.Get_rank()
+    # Generate random array on root
+    array = None
+    if rank == 0:
+        array = np.random.randn(sizes[-1]) + 1j*np.random.randn(sizes[-1])
+    # Scatter and assemble
+    array = scatter_array(comm, array, sizes[0])
+    vec = PETSc.Vec().createWithArray(array, sizes, None, comm=comm)
+    return vec
+
+
 
 
