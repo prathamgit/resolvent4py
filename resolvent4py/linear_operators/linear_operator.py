@@ -1,6 +1,11 @@
 import abc
+import numpy as np
 from petsc4py import PETSc
 from ..error_handling_functions import raise_not_implemented_error
+from ..petsc4py_helper_functions import generate_random_petsc_vector
+from ..petsc4py_helper_functions import enforce_complex_conjugacy
+
+
 
 class LinearOperator(metaclass=abc.ABCMeta):
     r"""
@@ -12,12 +17,16 @@ class LinearOperator(metaclass=abc.ABCMeta):
         :type name: str
         :param dimensions: row and column sizes of the linear operator
         :type dimensions: `MatSizeSpec`_
+        :param nblocks: number of blocks (if the linear operator has block \
+            structure)
+        :type nblocks: int
     """
 
-    def __init__(self, comm, name, dimensions):
+    def __init__(self, comm, name, dimensions, nblocks):
         self._comm = comm
         self._name = name
         self._dimensions = dimensions
+        self._nblocks = nblocks
 
     def get_comm(self):
         """The MPI communicator"""
@@ -30,6 +39,10 @@ class LinearOperator(metaclass=abc.ABCMeta):
     def get_dimensions(self):
         """The dimensions of the linear operator"""
         return self._dimensions
+    
+    def get_nblocks(self):
+        """The number of blocks of the linear operator"""
+        return self._nblocks
     
     def create_right_vector(self):
         r"""
@@ -50,7 +63,44 @@ class LinearOperator(metaclass=abc.ABCMeta):
         vec.setSizes(self._dimensions[0])
         vec.setUp()
         return vec
+    
+    def check_if_real_valued(self):
+        r"""
+            :return: :code:`True` if the matrix is real-valued, :code:`False`
+                otherwise
+            :rtype: bool
+        """
+        sizes = self.get_dimensions()[-1]
+        array = np.random.randn(sizes[0])
+        x = PETSc.Vec().createWithArray(array, sizes, None, self.get_comm())
+        Lx = self.apply(x)
+        result = True if np.linalg.norm(Lx.getArray().imag) <= 1e-15 else False
+        x.destroy()
+        Lx.destroy()
+        return result
+    
+    def check_if_complex_conjugate_structure(self):
+        r"""
+            Given a vector x
 
+            .. math::
+                x = \left(\ldots,x_{-1},x_{0},x_{1},\ldots\right)
+
+            with vector-valued entries that satisfy \
+            :math:`x_{-i} = \overline{x_i}`, check if the vector :code:`Lx` \
+            also satisfies :math:`(Lx)_{-i}=\overline{(Lx)_{i}}`.
+
+            :rtype: bool
+        """
+        x = generate_random_petsc_vector(self._comm, self._dimensions[-1])
+        enforce_complex_conjugacy(self._comm, x, self._nblocks)
+        Lx = self.apply(x)
+        result = True if np.linalg.norm(Lx.getArray().imag) <= 1e-15 else False
+        x.destroy()
+        Lx.destroy()
+        return result
+
+    
     # Methods that must be implemented by subclasses
     @abc.abstractmethod
     def apply(self,x):

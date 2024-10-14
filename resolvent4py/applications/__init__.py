@@ -1,1 +1,1 @@
-from .eigendecomposition import eigendecomposition
+from .eigendecomposition import *

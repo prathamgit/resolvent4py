@@ -19,15 +19,22 @@ class LowRankLinearOperator(LinearOperator):
         :type Sigma: PETSc.Mat.Type.DENSE
         :param V: dense PETSc matrix
         :type V: PETSc.Mat.Type.DENSE
+        :param nblocks: [optional] number of blocks (if the linear operator \
+            has block structure)
+        :type nblocks: int
     """
     
-    def __init__(self, comm, U, Sigma, V):
+    def __init__(self, comm, U, Sigma, V, nblocks=None):
         
         dimensions = (U.getSizes()[0],V.getSizes()[0])
-        super().__init__(comm, 'LowRankLinearOperator', dimensions)
+        super().__init__(comm, 'LowRankLinearOperator', dimensions, nblocks)
         self.U = U
         self.Sigma = Sigma
         self.V = V
+        self.real = self.check_if_real_valued()
+        self.block_cc = self.check_if_complex_conjugate_structure() if \
+            self.get_nblocks() != None else None
+        
 
     def apply(self, x):
         z = self.V.createVecRight()

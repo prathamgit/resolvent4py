@@ -50,17 +50,23 @@ class LowRankUpdatedLinearOperator(LinearOperator):
             If :code:`woodbury_factors == None` and :code:`A.solve()` is
             enabled, the factors are computed using the 
             :code:`compute_woodbury_factors()` method.
+        :param nblocks: [optional] number of blocks (if the linear operator \
+            has block structure)
+        :type nblocks: int
     """
 
-    def __init__(self, comm, A, B, K, C, woodbury_factors=None):
+    def __init__(self, comm, A, B, K, C, woodbury_factors=None, nblocks=None):
 
         super().__init__(comm, 'LowRankUpdatedLinearOperator', \
-                         A.get_dimensions())
+                         A.get_dimensions(), nblocks)
         self.A = A
         self.B = B
         self.K = K
         self.C = C
-
+        self.real = self.check_if_real_valued()
+        self.block_cc = self.check_if_complex_conjugate_structure() if \
+            self.get_nblocks() != None else None
+        
         self.X, self.D, self.Y = None, None, None
         if woodbury_factors == None:
             try:

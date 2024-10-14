@@ -15,13 +15,20 @@ class MatrixLinearOperator(LinearOperator):
             and :code:solve_hermitian_transpose()` methods. If a KSP is 
             provided, its type and the type of A must be compatible.
         :type ksp: `KSP`_
+        :param nblocks: [optional] number of blocks (if the linear operator \
+            has block structure)
+        :type nblocks: int
     """
 
-    def __init__(self, comm, A, ksp=None):
+    def __init__(self, comm, A, ksp=None, nblocks=None):
 
-        super().__init__(comm, 'MatrixLinearOperator', A.getSizes())
         self.A = A
         self.ksp = ksp
+        super().__init__(comm, 'MatrixLinearOperator', A.getSizes(), nblocks)
+        self.real = self.check_if_real_valued()
+        self.block_cc = self.check_if_complex_conjugate_structure() if \
+            self.get_nblocks() != None else None
+        
         
     def apply(self, x):
         y = self.create_left_vector()

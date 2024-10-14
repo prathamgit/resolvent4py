@@ -5,6 +5,8 @@ from slepc4py import SLEPc
 import numpy as np
 import scipy as sp
 
+from ..petsc4py_helper_functions import enforce_complex_conjugacy
+
 def arnoldi_iteration(lin_op, lin_op_action, krylov_dim):
     r"""
         This function uses the Arnoldi iteration algorithm to compute the 
@@ -27,6 +29,8 @@ def arnoldi_iteration(lin_op, lin_op_action, krylov_dim):
     
     comm = lin_op.get_comm()
     sizes = lin_op.get_dimensions()
+    nblocks = lin_op.get_nblocks()
+
     # Initialize the BV structure and the Hessenberg matrix
     Q = SLEPc.BV().create(comm=comm)
     Q.setSizes(sizes,krylov_dim)
@@ -34,7 +38,13 @@ def arnoldi_iteration(lin_op, lin_op_action, krylov_dim):
     H = np.zeros((krylov_dim,krylov_dim),dtype=np.complex128)
     # Draw the first vector at random
     q = Q.createVec()
-    q.setArray(np.random.randn(sizes[0]))
+    q.setArray(np.random.randn(sizes[0]) + 1j*np.random.randn(sizes[0]))
+    if lin_op.real == True:
+        idces = np.arange(*q.getOwnershipRange())
+        q.setValues(idces, q.getArray().real)
+        q.assemble()
+    if lin_op.block_cc == True:
+        enforce_complex_conjugacy(comm, nblocks)
     q.scale(1./q.norm())
     Q.insertVec(0,q)
     # Perform Arnoldi iteration
@@ -70,9 +80,10 @@ def eigendecomposition(lin_op, lin_op_action, krylov_dim, n_evals):
         :param krylov_dim: dimension of the Krylov subspace for the arnoldi
             iterator
         :type kyrlov_dim: int
-        :param n_evals:
+        :param n_evals: number of largest eigenvalues to return
+        :type n_evals: int
 
-        :return: a 2-tuple with the :code:`n_evals` largest eigenvalues and 
+        :return: a 2-tuple with the :code:`n_evals` largest eigenvalues and
             corresponding eigenvectors
         :rtype: (numpy, SLEPc BV)
     """

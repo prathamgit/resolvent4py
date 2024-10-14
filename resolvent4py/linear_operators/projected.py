@@ -35,18 +35,26 @@ class ProjectedLinearOperator(LinearOperator):
         :type Phi: PETSc.Mat.Type.DENSE
         :param Psi: dense PETSc matrix
         :type Psi: PETSc.Mat.Type.DENSE
-        :param complement: specifies which projection operator
+        :param complement: [optional] specifies which projection operator
         :type complement: Bool
+        :param nblocks: [optional] number of blocks (if the linear operator \
+            has block structure)
+        :type nblocks: int
     """
     
-    def __init__(self, comm, A, Phi, Psi, complement=False):
+    def __init__(self, comm, A, Phi, Psi, complement=False, nblocks=None):
 
-        super().__init__(comm, 'ProjectedLinearOperator', A.get_dimensions())
+        super().__init__(comm, 'ProjectedLinearOperator', \
+                         A.get_dimensions(), nblocks)
         self.A = A
         self.Phi = Phi
         self.Psi = Psi
         self.complement = complement
         self.enforce_biorthogonality()
+        self.real = self.check_if_real_valued()
+        self.block_cc = self.check_if_complex_conjugate_structure() if \
+            self.get_nblocks() != None else None
+        
 
     def enforce_biorthogonality(self):
         r"""
