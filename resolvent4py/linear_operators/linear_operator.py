@@ -66,8 +66,8 @@ class LinearOperator(metaclass=abc.ABCMeta):
     
     def check_if_real_valued(self):
         r"""
-            :return: :code:`True` if the matrix is real-valued, :code:`False`
-                otherwise
+            :return: :code:`True` if the linear operator is real-valued, 
+                :code:`False` otherwise
             :rtype: bool
         """
         sizes = self.get_dimensions()[-1]
@@ -87,7 +87,7 @@ class LinearOperator(metaclass=abc.ABCMeta):
                 x = \left(\ldots,x_{-1},x_{0},x_{1},\ldots\right)
 
             with vector-valued entries that satisfy \
-            :math:`x_{-i} = \overline{x_i}`, check if the vector :code:`Lx` \
+            :math:`x_{-i} = \overline{x_i}`, check if the vector :math:`Lx` \
             also satisfies :math:`(Lx)_{-i}=\overline{(Lx)_{i}}`.
 
             :rtype: bool

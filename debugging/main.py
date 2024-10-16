@@ -32,8 +32,6 @@ lin_op__ = res4py.LowRankUpdatedLinearOperator(comm,lin_op_,B,K,C,None)
 lin_op = res4py.ProjectedLinearOperator(comm,lin_op__,Phi,Psi,False)
 
 
-# res4py_op = res4py.LinearOperator(comm,A,(Phi,Psi,1),(B,K,C),None)
-
 x = res4py.read_vector(comm,path + 'x.dat')
 y = lin_op.apply(x)
 yT = lin_op.apply_hermitian_transpose(x)
@@ -58,5 +56,15 @@ res4py.petscprint(comm,"Error = %1.15e"%(yTgt.norm()))
 res4py.petscprint(comm,"Error = %1.15e"%(yinvgt.norm()))
 res4py.petscprint(comm,"Error = %1.15e"%(yinvTgt.norm()))
 
+cc = res4py.check_complex_conjugacy(lin_op_.get_comm(),x,5)
+print(cc)
+x.view()
+res4py.enforce_complex_conjugacy(lin_op_.get_comm(),x,5)
+x.view()
+cc = res4py.check_complex_conjugacy(lin_op_.get_comm(),x,5)
+print(cc)
+
+print(lin_op_.check_if_real_valued())
+# print(lin_op_.check_if_complex_conjugate_structure())
 
 # res4py_op.destroy()

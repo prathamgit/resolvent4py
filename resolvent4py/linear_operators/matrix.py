@@ -16,7 +16,7 @@ class MatrixLinearOperator(LinearOperator):
             provided, its type and the type of A must be compatible.
         :type ksp: `KSP`_
         :param nblocks: [optional] number of blocks (if the linear operator \
-            has block structure)
+            has block structure). This must be an odd number.
         :type nblocks: int
     """
 
@@ -28,7 +28,6 @@ class MatrixLinearOperator(LinearOperator):
         self.real = self.check_if_real_valued()
         self.block_cc = self.check_if_complex_conjugate_structure() if \
             self.get_nblocks() != None else None
-        
         
     def apply(self, x):
         y = self.create_left_vector()

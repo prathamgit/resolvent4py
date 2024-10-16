@@ -42,6 +42,7 @@ rst_prolog = """
 .. _KSP: https://petsc.org/release/petsc4py/reference/petsc4py.PETSc.KSP.html
 .. _Vec: https://petsc.org/release/petsc4py/reference/petsc4py.PETSc.Vec.html
 .. _LayoutSizeSpec: https://petsc.org/release/petsc4py/reference/petsc4py.typing.LayoutSizeSpec.html#petsc4py.typing.LayoutSizeSpec
+.. _BV: https://slepc.upv.es/slepc4py-current/docs/apiref/slepc4py.SLEPc.BV-class.html
 """
 
 # -- Options for HTML output -------------------------------------------------

@@ -6,3 +6,4 @@ API-reference
    :caption: Modules
 
    linear_operators.rst
+   applications.rst
