@@ -1,11 +1,7 @@
 from mpi4py import MPI
 from petsc4py import PETSc
 from slepc4py import SLEPc
-
-import numpy as np
 import scipy as sp
-
-from ..petsc4py_helper_functions import enforce_complex_conjugacy
 
 def _matrix_matrix_product(lin_op_action, X, Y):
     r"""
@@ -19,7 +15,7 @@ def _matrix_matrix_product(lin_op_action, X, Y):
         :type X: `BV`_
         :param Y: a SLEPc BV
         :type Y: `BV`_
-
+        
         :rtype: None
     """
     _, ncols = X.getSizes()
@@ -30,7 +26,7 @@ def _matrix_matrix_product(lin_op_action, X, Y):
         X.restoreColumn(j,x)
     
 
-def randomized_svd(lin_op, lin_op_action, n_rand, n_iter, n_svals):
+def randomized_svd(lin_op, lin_op_action, n_rand, n_loops, n_svals):
     r"""
         Compute the randomized SVD of the linear operator :math:`L` 
         specified by :code:`lin_op`. 
@@ -40,14 +36,14 @@ def randomized_svd(lin_op, lin_op_action, n_rand, n_iter, n_svals):
             :code:`lin_op.solve`
         :param n_rand: number of random vectors to use
         :type n_rand: int
-        :param n_iter: number of randomized svd iterations
-        :type n_iter: int
+        :param n_loops: number of randomized svd iterations
+        :type n_loops: int
         :param n_svals: number of singular triplets to return
         :type n_svals: int
 
         :return: a 3-tuple with the :code:`n_svals` singular values and 
             corresponding left and right singular vectors
-        :rtype: (SLEPc BV, numpy, SLEPc BV)
+        :rtype: (PETSc Mat, PETSc Mat, PETSc Mat)
     """
 
     if lin_op_action == lin_op.apply:
@@ -57,14 +53,16 @@ def randomized_svd(lin_op, lin_op_action, n_rand, n_iter, n_svals):
 
     X = SLEPc.BV().create(comm=lin_op.get_comm())
     X.setSizes(lin_op.get_dimensions()[0],n_rand)
+    X.setFromOptions()
     X.setRandomNormal()
     X.orthogonalize(None)
     Qadj = X.duplicate()
     Qfwd = X.duplicate()
     _matrix_matrix_product(lin_op_action_adj, X, Qadj)
+    X.destroy()
     Qadj.orthogonalize(None)
     j = 0
-    while j < n_iter:
+    while j < n_loops:
         _matrix_matrix_product(lin_op_action, Qadj, Qfwd)
         Qfwd.orthogonalize(None)
         _matrix_matrix_product(lin_op_action_adj, Qfwd, Qadj)
@@ -74,11 +72,30 @@ def randomized_svd(lin_op, lin_op_action, n_rand, n_iter, n_svals):
     Qadj.orthogonalize(R)
     u, s, v = sp.linalg.svd(R.getDenseArray())
     v = v.conj().T
-    u = u[:,:n_svals]
+    u = PETSc.Mat().createDense((n_rand,n_svals),None,\
+                                u[:,:n_svals],comm=MPI.COMM_SELF)
+    v = PETSc.Mat().createDense((n_rand,n_svals),None,\
+                                v[:,:n_svals],comm=MPI.COMM_SELF)
     s = s[:n_svals]
-    v = v[:,:n_svals]
+
     Qfwd.multInPlace(v,0,n_svals)
     Qfwd.setActiveColumns(0,n_svals)
     Qadj.multInPlace(u,0,n_svals)
     Qadj.setActiveColumns(0,n_svals)
-    return (Qfwd,s,Qadj)
+
+    Qfwd_ = Qfwd.getMat()
+    Qfwd_mat = Qfwd_.copy()
+    Qfwd.restoreMat(Qfwd_)
+    Qfwd.destroy()
+    Qadj_ = Qadj.getMat()
+    Qadj_mat = Qadj_.copy()
+    Qadj.restoreMat(Qadj_)
+    Qadj.destroy()
+    sizes_S = Qfwd_mat.getSizes()[-1]
+    S = PETSc.Mat().createDense((sizes_S, sizes_S), comm=lin_op.get_comm())
+    S.setUp()
+    for i in range (*S.getOwnershipRange()):
+        S.setValues(i,i,s[i])
+    S.assemble(None)
+
+    return (Qfwd_mat, S, Qadj_mat)

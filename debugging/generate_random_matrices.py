@@ -68,13 +68,16 @@ yT = PETSc.Vec().createWithArray(yT,N,None,comm=MPI.COMM_WORLD)
 yinv = PETSc.Vec().createWithArray(yinv,N,None,comm=MPI.COMM_WORLD)
 yinvT = PETSc.Vec().createWithArray(yinvT,N,None,comm=MPI.COMM_WORLD)
 
-lin.write_vector(MPI.COMM_WORLD,path + 'x.dat',x)
-lin.write_vector(MPI.COMM_WORLD,path + 'y.dat',y)
-lin.write_vector(MPI.COMM_WORLD,path + 'yT.dat',yT)
-lin.write_vector(MPI.COMM_WORLD,path + 'yinv.dat',yinv)
-lin.write_vector(MPI.COMM_WORLD,path + 'yinvT.dat',yinvT)
+lin.write_to_file(MPI.COMM_WORLD,path + 'x.dat',x)
+lin.write_to_file(MPI.COMM_WORLD,path + 'y.dat',y)
+lin.write_to_file(MPI.COMM_WORLD,path + 'yT.dat',yT)
+lin.write_to_file(MPI.COMM_WORLD,path + 'yinv.dat',yinv)
+lin.write_to_file(MPI.COMM_WORLD,path + 'yinvT.dat',yinvT)
 
 
 A = A.todense()
 evals, _ = sp.linalg.eig(P@A@P)
 np.save(path + 'evals.npy',evals)
+
+_, svals, _ = sp.linalg.svd(sp.linalg.inv(A))
+np.save(path + 'svals.npy',svals)

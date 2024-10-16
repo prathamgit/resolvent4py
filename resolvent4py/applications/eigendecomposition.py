@@ -73,23 +73,33 @@ def eigendecomposition(lin_op, lin_op_action, krylov_dim, n_evals):
             of the linear operator against a vector. This argument allows the 
             user to specify whether they want the eigendecomposition of 
             :math:`L`, :math:`L^*`, :math:`L^{-1}` or :math:`L^{-*}`.
-        :param krylov_dim: dimension of the Krylov subspace for the arnoldi
-            iterator
-        :type kyrlov_dim: int
+        :param krylov_dim: dimension of the Arnoldi Krylov subspace
+        :type krylov_dim: int
         :param n_evals: number of largest eigenvalues to return
         :type n_evals: int
 
         :return: a 2-tuple with the :code:`n_evals` largest eigenvalues and
             corresponding eigenvectors
-        :rtype: (numpy, SLEPc BV)
+        :rtype: (PETSc Mat, PETSc Mat)
     """
-
     Q, H = arnoldi_iteration(lin_op, lin_op_action, krylov_dim)
     evals, evecs = sp.linalg.eig(H)
-    idces = np.flipud(np.argsort(evals).reshape(-1))[:n_evals]
+    idces = np.flipud(np.argsort(np.abs(evals)).reshape(-1))[:n_evals]
     evals = evals[idces]
     evecs = evecs[:,idces]
     evecs_ = PETSc.Mat().createDense(evecs.shape,None,evecs,comm=MPI.COMM_SELF)
     Q.multInPlace(evecs_,0,n_evals)
     Q.setActiveColumns(0,n_evals)
-    return (evals, Q)
+
+    Q_ = Q.getMat()
+    Q_mat = Q_.copy()
+    Q.restoreMat(Q_)
+    Q.destroy()
+
+    sizes_D = Q_mat.getSizes()[-1]
+    D = PETSc.Mat().createDense((sizes_D, sizes_D), comm=lin_op.get_comm())
+    D.setUp()
+    for i in range (*D.getOwnershipRange()):
+        D.setValues(i,i,evals[i])
+    D.assemble(None)
+    return (D, Q_mat)

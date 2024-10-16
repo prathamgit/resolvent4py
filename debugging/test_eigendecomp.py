@@ -40,3 +40,27 @@ if comm.Get_rank() == 0:
     plt.plot(evals.real,evals.imag,'ko')
     plt.plot(evals_.real,evals_.imag,'rx')
     plt.savefig("evals.png")
+
+
+_, svals, _ = res4py.randomized_svd(lin_op_,lin_op_.solve,100,1,10)
+svals_ = np.load(path + 'svals.npy')
+if comm.Get_rank() == 0:
+    plt.figure()
+    plt.plot(svals.real,'ko')
+    plt.plot(svals_.real,'rx')
+    plt.savefig("svals.png")
+
+
+Mat = np.zeros((4,4))
+Mat[1,] = 1.0
+Mat[2,] = 2.0
+Mat[3,] = 3.0
+
+Mat = PETSc.Mat().createDense((4,4),None,Mat,MPI.COMM_SELF)
+# Mat.view()
+
+nloc = res4py.compute_local_size(4)
+Matd = PETSc.Mat().createDense(((nloc,4),(nloc,4)),comm=MPI.COMM_WORLD)
+
+res4py.sequential_to_distributed_matrix(Mat,Matd)
+Matd.view()

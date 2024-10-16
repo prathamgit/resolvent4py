@@ -135,10 +135,9 @@ def compute_dense_inverse(comm, M):
     r"""
         Compute :math:`M^{-1}`
         
-        :param ksp: a KPS solver structure
-        :type ksp: PETSc.KSP
-        :param X: a dense PETSc matrix
-        :type X: PETSc.Mat.Type.DENSE
+        :param comm: MPI communicator
+        :param M: a dense PETSc matrix
+        :type M: PETSc.Mat.Type.DENSE
 
         :return: the inverse of :math:`M`
         :rtype: PETSc.Mat.Type.DENSE
@@ -151,7 +150,7 @@ def compute_dense_inverse(comm, M):
     size_vec_global = sum(comm.allgather(size_vec_local))
     M_vec = PETSc.Vec().createWithArray(M_array,\
                                         (size_vec_local,size_vec_global),
-                                        None,comm=comm)
+                                        None, comm=comm)
     scatter, M_vec_seq = PETSc.Scatter().toAll(M_vec)
     scatter.scatter(M_vec,M_vec_seq,addv=PETSc.InsertMode.INSERT)
 
@@ -167,6 +166,27 @@ def compute_dense_inverse(comm, M):
     X = PETSc.Mat().createDense(sizes,None,M_array,comm=comm)
 
     return X
+
+
+def sequential_to_distributed_matrix(Mat_seq, Mat_dist):
+    r"""
+        Populate a distributed dense matrix from a sequential dense matrix
+
+        :param Mat_seq: a sequential dense matrix
+        :type Mat_seq: PETSc.Mat
+        :param Mat_dist: a distributed dense matrix
+        :type Mat_dist: PETSc.Mat
+
+        :return: a distributed matrix with the same entries as the \
+            sequential matrix
+        :rtype: PETSc.Mat
+    """
+    array = Mat_seq.getDenseArray()
+    r0, r1 = Mat_dist.getOwnershipRange()
+    rows = np.arange(r0,r1)
+    cols = np.arange(0,Mat_seq.getSizes()[-1][-1])
+    Mat_dist.setValues(rows,cols,array[r0:r1,].reshape(-1))
+    Mat_dist.assemble(None)
 
 
 def scatter_array(comm, array, locsize=None):

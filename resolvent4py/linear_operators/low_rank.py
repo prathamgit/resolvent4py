@@ -43,16 +43,42 @@ class LowRankLinearOperator(LinearOperator):
         self.V.multHermitian(x,z)
         self.Sigma.mult(z,q)
         self.U.mult(q,y)
+        z.destroy()
+        q.destroy()
         return y
+
+    def apply_mat(self, X):
+        self.V.hermitianTranspose()
+        F1 = self.V.matMult(X)
+        self.V.hermitianTranspose()
+        F2 = self.Sigma.matMult(F1)
+        Y = self.U.matMult(F2)
+        F1.destroy()
+        F2.destroy()
+        return Y
     
-    def apply_low_rank_factors_hermitian_transpose(self, x):
+    def apply_hermitian_transpose(self, x):
         z = self.U.createVecRight()
         q = self.Sigma.createVecRight()
         y = self.V.createVecLeft()
         self.U.multHermitian(x,z)
         self.Sigma.multHermitian(z,q)
         self.V.mult(q,y)
+        z.destroy()
+        q.destroy()
         return y
+    
+    def apply_hermitian_transpose_mat(self, X):
+        self.U.hermitianTranspose()
+        F1 = self.U.matMult(X)
+        self.U.hermitianTranspose()
+        self.Sigma.hermitianTranspose()
+        F2 = self.Sigma.matMult(F1)
+        self.Sigma.hermitianTranspose()
+        Y = self.V.matMult(F2)
+        F1.destroy()
+        F2.destroy()
+        return Y
     
     def destroy(self):
         self.U.destroy()

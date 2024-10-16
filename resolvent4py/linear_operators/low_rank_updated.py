@@ -142,6 +142,7 @@ class LowRankUpdatedLinearOperator(LinearOperator):
         y = self.A.apply(x)
         z = self.apply_low_rank_factors(self.B,self.K,self.C,x)
         y.axpy(1.0,z)
+        z.destroy()
         return y
     
     def apply_hermitian_transpose(self, x):
@@ -151,12 +152,14 @@ class LowRankUpdatedLinearOperator(LinearOperator):
                                                             self.C,\
                                                             x)
         y.axpy(1.0,z)
+        z.destroy()
         return y
     
     def solve(self, x):
         y = self.A.solve(x)
         z = self.apply_low_rank_factors(self.X,self.D,self.Y,x)
         y.axpy(-1.0,z)
+        z.destroy()
         return y
         
     def solve_hermitian_transpose(self, x):
@@ -166,6 +169,7 @@ class LowRankUpdatedLinearOperator(LinearOperator):
                                                             self.Y,\
                                                             x)
         y.axpy(-1.0,z)
+        z.destroy()
         return y
     
     def destroy(self):
