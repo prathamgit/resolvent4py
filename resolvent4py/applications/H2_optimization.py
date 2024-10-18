@@ -177,7 +177,7 @@ def create_objective_and_gradient(manifold,opt_obj):
             Ji *= opt_obj.weights[i]
             J += Ji
             M.destroy()
-
+        
         # Stability-promoting component of the cost function
         lin_op = LowRankUpdatedLinearOperator(opt_obj.comm, opt_obj.A, B, Kd, C)
         D_, _ = eigendecomposition(lin_op, lin_op.solve, 300, 20)
@@ -218,14 +218,8 @@ def create_objective_and_gradient(manifold,opt_obj):
         r1 = disps[rank + 1] if rank < size - 1 else K.shape[0]
         Kd = PETSc.Mat().createDense(((naloc, na), (nsloc, ns)), \
                                      array=K[r0:r1,], comm=opt_obj.comm)
+        grad_K = Kd.duplicate()
         
-        sizes_Idna = ((naloc, na), (naloc, na))
-        sizes_Idns = ((nsloc, ns), (nsloc, ns))
-        Idna = PETSc.Mat().createConstantDiagonal(sizes_Idna, 1.0, opt_obj.comm)
-        Idns = PETSc.Mat().createConstantDiagonal(sizes_Idns, 1.0, opt_obj.comm)
-        Idna.convert(PETSc.Mat.Type.DENSE)
-        Idns.convert(PETSc.Mat.Type.DENSE)
-
         for i in range (len(opt_obj.freqs)):
 
             wi = opt_obj.weights[i]
@@ -251,6 +245,8 @@ def create_objective_and_gradient(manifold,opt_obj):
             M.U.hermitianTranspose()
             F1.destroy()
             F2.destroy()
+            grad_K.axpy(2.0*wi,grad_K_i)
+            grad_K_i.destroy()
 
             # Gradient with respect to p
             KLinv.hermitianTranspose()
@@ -268,14 +264,15 @@ def create_objective_and_gradient(manifold,opt_obj):
             KLinv.hermitianTranspose()
             F1.destroy()
             F2.destroy()
-
             for j in range (len(p)):
                 pj = p.copy()
                 pj[j] += 1e-3
                 dB = opt_obj.compute_dB(p, pj)
                 dB.conjugate()
-
-
+                grad_p[j] += 2*wi*compute_double_contraction(opt_obj.comm, \
+                                                             dB, grad_B_i).real
+                dB.destroy()
+            
 
             # Gradient with respect to s
             F1 = M.U.matMult(KLinv)
@@ -287,64 +284,15 @@ def create_objective_and_gradient(manifold,opt_obj):
             C.hermitianTranspose()
             F1.destroy()
             F2.destroy()
+            for j in range (len(s)):
+                sj = s.copy()
+                sj[j] += 1e-3
+                dC = opt_obj.compute_dC(s, sj)
+                dC.conjugate()
+                grad_s[j] += 2*wi*compute_double_contraction(opt_obj.comm, \
+                                                             dC, grad_C_i).real
+                dC.destroy()
 
-
-
-        
-        p, K, s = params
-        na, ns, N = len(p), len(s), opt_obj.RB[0].shape[0]
-        
-        RB = np.zeros((N,na),dtype=np.complex128)
-        CR = np.zeros((ns,N),dtype=np.complex128)
-        CRB_ = np.zeros((opt_obj.fom.C.shape[0],na),dtype=np.complex128)
-        CRB = np.zeros((ns,na),dtype=np.complex128)
-        
-        B = opt_obj.interpolate(opt_obj.fom.actu_locs,opt_obj.fom.B,p)
-        C = opt_obj.interpolate(opt_obj.fom.actu_locs,opt_obj.fom.C.T,s).T
-        dBdp = opt_obj.compute_interp_derivative(opt_obj.fom.actu_locs,opt_obj.fom.B,p,1e-6)
-        dBdp = lift_into_third_order_tensor(dBdp,p)
-        dCds = opt_obj.compute_interp_derivative(opt_obj.fom.sens_locs,opt_obj.fom.C.T,s,1e-6).T
-        dCds = lift_into_third_order_tensor(dCds,s)
-        
-        grad_p = np.zeros(len(p),dtype=np.complex128)
-        grad_s = np.zeros(len(s),dtype=np.complex128)
-        grad_K = np.zeros(K.shape,dtype=np.complex128)
-        
-        # H2 component of the gradient
-        Idna, Idns = np.eye(K.shape[0]), np.eye(K.shape[-1])
-        
-        for i in range (opt_obj.n_freqs):
-            
-            RB[:,:] = opt_obj.interpolate(opt_obj.fom.actu_locs,opt_obj.RB[i],p)
-            CRB_[:,:] = opt_obj.interpolate(opt_obj.fom.actu_locs,opt_obj.CRB[i],p)
-            CR[:,:] = opt_obj.interpolate(opt_obj.fom.sens_locs,opt_obj.CR[i].T,s).T
-            CRB[:,:] = opt_obj.interpolate(opt_obj.fom.sens_locs,CRB_.T,s).T
-            
-            
-            Linv = sp.linalg.inv(Idns + CRB@K)
-            KLinv = K@Linv
-            
-            wi = opt_obj.weights[i]
-            Linv = sp.linalg.inv(Idns + CRB@K)
-            KLinv = K@Linv
-            
-            # Gradient with respect to actuator parameters
-            G = -opt_obj.V[i]@(opt_obj.S[i]**2)@(opt_obj.V[i].conj().T@CR.conj().T@KLinv.conj().T)
-            G += opt_obj.V[i]@opt_obj.S[i]@(opt_obj.U[i].conj().T@RB)@KLinv@CR@CR.conj().T@KLinv.conj().T
-            grad_p += 2*wi*np.einsum('ijk,ij',dBdp.conj(),G - CR.conj().T@KLinv.conj().T@(B.conj().T@G)).reshape(-1)
-            
-            # Gradient with respect to K
-            G = -RB.conj().T@opt_obj.U[i]@opt_obj.S[i]@(opt_obj.V[i].conj().T@CR.conj().T@Linv.conj().T)
-            G += RB.conj().T@RB@KLinv@CR@CR.conj().T@Linv.conj().T
-            Mat = Idna - CRB.conj().T@KLinv.conj().T
-            grad_K += 2*wi*Mat@G
-            
-            # Gradient with respect to sensor parameters
-            G = -(KLinv.conj().T@RB.conj().T@opt_obj.U[i])@(opt_obj.S[i]**2)@opt_obj.U[i].conj().T
-            G += (KLinv.conj().T@RB.conj().T@RB@KLinv@CR@opt_obj.V[i]@opt_obj.S[i])@opt_obj.U[i].conj().T
-            grad_s += 2*wi*np.einsum('ij,ijk',G - (G@C.conj().T)@KLinv.conj().T@RB.conj().T,dCds.conj()).reshape(-1)
-            
-        
         # Stability-promoting penalty
         V, D, W = opt_obj.fom.compute_spectrum(B,K,C,opt_obj.stab_reg[-1])
         M = np.diag([opt_obj.evaluate_gradient_exponential(D[k]) for k in range (len(D))])
