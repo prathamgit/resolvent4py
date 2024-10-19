@@ -189,7 +189,29 @@ def sequential_to_distributed_matrix(Mat_seq, Mat_dist):
     Mat_dist.assemble(None)
 
 
-def scatter_array(comm, array, locsize=None):
+def distributed_to_sequential_matrix(comm, Mat_dist):
+    r"""
+        Populate a sequential dense matrix from a distributed dense matrix
+
+        :param comm: MPI communicator
+        :param Mat_dist: a distributed dense matrix
+        :type Mat_dist: PETSc.Mat
+
+        :rtype: PETSc.Mat
+    """
+    array = Mat_dist.getDenseArray().reshape(-1)
+    counts = comm.allgather(len(array))
+    disps = np.concatenate(([0],np.cumsum(counts[:-1])))
+    recvbuf = np.zeros(np.sum(counts), dtype=array.dtype)
+    comm.Allgatherv(array, (recvbuf, counts, disps, get_mpi_type(array.dtype)))
+    sizes = Mat_dist.getSizes()
+    nr, nc = sizes[0][-1], sizes[-1][-1]
+    recvbuf = recvbuf.reshape((nr,nc))
+    Mat_seq = PETSc.Mat().createDense((nr,nc), None, recvbuf, MPI.COMM_SELF)
+    return Mat_seq
+
+
+def scatter_from_root_to_all(comm, array, locsize=None):
     r"""
         Scatter numpy array from root to all other processors
 
@@ -260,7 +282,7 @@ def generate_random_petsc_sparse_matrix(comm, sizes):
         print(A.todense())
 
     # Scatter to all other processors and assemble
-    recv_bufs = [scatter_array(comm, array) for array in arrays]
+    recv_bufs = [scatter_from_root_to_all(comm, array) for array in arrays]
     row_ptrs, cols, data = convert_coo_to_csr(comm, recv_bufs, sizes)
     A = PETSc.Mat().create(comm=comm)
     A.setSizes(sizes)
@@ -287,7 +309,7 @@ def generate_random_petsc_vector(comm, sizes):
     if rank == 0:
         array = np.random.randn(sizes[-1]) + 1j*np.random.randn(sizes[-1])
     # Scatter and assemble
-    array = scatter_array(comm, array, sizes[0])
+    array = scatter_from_root_to_all(comm, array, sizes[0])
     vec = PETSc.Vec().createWithArray(array, sizes, None, comm=comm)
     return vec
 

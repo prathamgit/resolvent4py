@@ -28,9 +28,9 @@ class LowRankLinearOperator(LinearOperator):
         
         dimensions = (U.getSizes()[0],V.getSizes()[0])
         super().__init__(comm, 'LowRankLinearOperator', dimensions, nblocks)
-        self.U = U
-        self.Sigma = Sigma
-        self.V = V
+        self.U = U.copy()
+        self.Sigma = Sigma.copy()
+        self.V = V.copy()
         self.real = self.check_if_real_valued()
         self.block_cc = self.check_if_complex_conjugate_structure() if \
             self.get_nblocks() != None else None

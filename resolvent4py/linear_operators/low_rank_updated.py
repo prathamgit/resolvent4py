@@ -60,9 +60,9 @@ class LowRankUpdatedLinearOperator(LinearOperator):
         super().__init__(comm, 'LowRankUpdatedLinearOperator', \
                          A.get_dimensions(), nblocks)
         self.A = A
-        self.B = B
-        self.K = K
-        self.C = C
+        self.B = B.copy()
+        self.K = K.copy()
+        self.C = C.copy()
         self.real = self.check_if_real_valued()
         self.block_cc = self.check_if_complex_conjugate_structure() if \
             self.get_nblocks() != None else None

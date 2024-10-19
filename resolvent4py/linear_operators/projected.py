@@ -47,8 +47,8 @@ class ProjectedLinearOperator(LinearOperator):
         super().__init__(comm, 'ProjectedLinearOperator', \
                          A.get_dimensions(), nblocks)
         self.A = A
-        self.Phi = Phi
-        self.Psi = Psi
+        self.Phi = Phi.copy()
+        self.Psi = Psi.copy()
         self.complement = complement
         self.enforce_biorthogonality()
         self.real = self.check_if_real_valued()
