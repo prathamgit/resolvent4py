@@ -20,7 +20,7 @@ from ..linear_operators import LowRankUpdatedLinearOperator
 from ..solvers_and_preconditioners_functions import create_mumps_solver
 from ..applications import eigendecomposition
 
-def compute_left_and_right_eigendecomposition(lin_op, krylov_dim, n_evals):
+def _compute_left_and_right_eigendecomposition(lin_op, krylov_dim, n_evals):
 
     Df, V_ = eigendecomposition(lin_op, lin_op.solve, krylov_dim, n_evals)
     Da, W = eigendecomposition(lin_op, lin_op.solve_hermitian_transpose, \
@@ -31,6 +31,8 @@ def compute_left_and_right_eigendecomposition(lin_op, krylov_dim, n_evals):
     idces = []
     for j in range (len(df)):
         idces.append(np.argmin(np.abs(da - df[j].conj())))
+    D = compute_dense_inverse(lin_op.get_comm(), Df)
+    D.scale(-1.0)
 
     W_ = SLEPc.BV().createFromMat(W)
     W_.setFromOptions()
@@ -51,35 +53,32 @@ def compute_left_and_right_eigendecomposition(lin_op, krylov_dim, n_evals):
     V_.destroy()
     Da.destroy()
 
-    return V, Df, W
+    return V, D, W
 
-def compute_double_contraction(comm, Mat1, Mat2):
+def _compute_double_contraction(comm, Mat1, Mat2):
     Mat1_array = Mat1.getDenseArray()
     Mat2_array = Mat2.getDenseArray()
     value = comm.allreduce(np.sum(Mat1_array*Mat2_array), op=MPI.SUM)
     return value
 
-def compute_trace(comm, L1, L2, L1_hermitian_transpose=False, \
-                  L2_hermitian_transpose=False):
+def _compute_trace(comm, L1, L2, L2_hermitian_transpose=False):
     r"""
         Compute the trace of the product of two low-rank operators :math:`L_1` 
         and :math:`L_2` (see 
-        :meth:`resolvent4py.linear_operators.LowRankLinearOperator`).
+        :meth:`resolvent4py.linear_operators.LowRankLinearOperator`). If
+        :code:`L2_hermitian_transpose==False`, compute 
+        :math:`\text{Tr}(L_1 L_2)`, else :math:`\text{Tr}(L_1 L_2^*)`.
 
         :param comm: MPI communicator
         :param L1: low-rank linear operator
         :param L2: low-rank linear operator
-        :param L1_hermitian_transpose: [optional] :code:`True` or :code:`False`
-        :type L1_hermitian_transpose: bool
         :param L2_hermitian_transpose: [optional] :code:`True` or :code:`False`
         :type L2_hermitian_transpose: bool
 
         :rtype: PETSc scalar
     """
-    L1_action = L1.apply_mat if L1_hermitian_transpose == False else \
-        L1.apply_hermitian_transpose_mat
     if L2_hermitian_transpose == False:
-        F1 = L1_action(L2.U.matMult(L2.Sigma))
+        F1 = L1.apply_mat(L2.U.matMult(L2.Sigma))
         L2.V.hermitianTranspose()
         F = L2.V.matMult(F1)
         L2.V.hermitianTranspose()
@@ -88,7 +87,7 @@ def compute_trace(comm, L1, L2, L1_hermitian_transpose=False, \
         L2.Sigma.hermitianTranspose()
         F1 = L2.V.matMult(L2.Sigma)
         L2.Sigma.hermitianTranspose()
-        F2 = L1_action(F1)
+        F2 = L1.apply_mat(F1)
         F1.destroy()
         L2.U.hermitianTranspose()
         F = L2.U.matMult(F2)
@@ -97,7 +96,7 @@ def compute_trace(comm, L1, L2, L1_hermitian_transpose=False, \
     trace = comm.allreduce(np.sum(F.getDiagonal().getArray()), op=MPI.SUM)
     return trace
 
-def assemble_woodbury_low_rank_operator(comm, R, B, C, Kd):
+def _assemble_woodbury_low_rank_operator(comm, R, B, C, Kd):
     r"""
         Assemble low-rank operator representation of 
 
@@ -116,8 +115,8 @@ def assemble_woodbury_low_rank_operator(comm, R, B, C, Kd):
     M.axpy(1.0,Id,structure=PETSc.Mat.Structure.SAME)
     Linv = compute_dense_inverse(comm,M)
     KLinv = Kd.matMult(Linv)
-    M = LowRankLinearOperator(comm, RB, KLinv, RHTC)
-    return M, Linv, KLinv
+    linOp = LowRankLinearOperator(comm, RB, KLinv, RHTC)
+    return linOp, Linv
 
 class optimization_objects:
 
@@ -157,15 +156,29 @@ class optimization_objects:
                 LowRankLinearOperator(self.comm, self.U[-1], \
                                       self.S[-1], self.V[-1]))
 
-    def evaluate_exponential(self,val):
+    def evaluate_exponential(self, val):
         alpha, beta = self.stab_params[:2]
         try:    value = np.exp(alpha*(val.real + beta)).real
         except: value = 1e12
         return value
     
-    def evaluate_gradient_exponential(self,val):
+    def evaluate_gradient_exponential(self, val):
         alpha = self.stab_params[0]
         return alpha*self.evaluate_exponential(val)
+    
+    def compute_finite_difference(self, p, grad_B, compute_dB):
+
+        grad_p = np.zeros_like(p)
+        for j in range (len(p)):
+            pjp = p.copy()
+            pjm = p.copy()
+            pjp[j] += 1e-5
+            pjm[j] -= 1e-5
+            dB = compute_dB(pjp, pjm)/(2e-5)
+            dB.conjugate()
+            grad_p[j] = _compute_double_contraction(self.comm, dB, grad_B).real
+            dB.destroy()
+        return grad_p
 
 
 def create_objective_and_gradient(manifold,opt_obj):
@@ -204,18 +217,15 @@ def create_objective_and_gradient(manifold,opt_obj):
         J = 0
         for i in range (len(opt_obj.freqs)):
             Ji = 0
-            M, _, _ = assemble_woodbury_low_rank_operator(opt_obj.comm, \
-                                                    opt_obj.R_ops[i], B, C, Kd)
-            # Tr(RR^*)
-            Ji += compute_trace(opt_obj.comm, opt_obj.R_ops[i], \
-                                opt_obj.R_ops[i], False, True)
-            # -Tr(MR^*) - Tr(RM^*)
-            Ji += -2.0*compute_trace(opt_obj.comm, opt_obj.R_ops[i], \
-                                     M, False, True)
-            # Tr(MM^*)
-            Ji += compute_trace(opt_obj.comm, M, M, False, True)
-            Ji *= opt_obj.weights[i]
-            J += Ji
+            M, _ = _assemble_woodbury_low_rank_operator(opt_obj.comm, \
+                                                        opt_obj.R_ops[i], \
+                                                        B, C, Kd)
+            
+            Ji += _compute_trace(opt_obj.comm, opt_obj.R_ops[i], \
+                                opt_obj.R_ops[i], True)
+            Ji += -2.0*_compute_trace(opt_obj.comm, opt_obj.R_ops[i], M, True)
+            Ji += _compute_trace(opt_obj.comm, M, M, True)
+            J += opt_obj.weights[i]*Ji
             M.destroy()
         
         # Stability-promoting component of the cost function
@@ -262,83 +272,82 @@ def create_objective_and_gradient(manifold,opt_obj):
                                      array=K[r0:r1,], comm=opt_obj.comm)
         grad_K = Kd.copy()
         grad_K.scale(0.0)
+        sizesLinvT = ((nsloc, ns), (nsloc, ns))
+        sizesMUT = ((naloc, na), B.getSizes()[0])
+        sizesSigmaT = ((nsloc, ns), (naloc, na))
+        sizesCT = ((nsloc, ns), C.getSizes()[0])
+        LinvT = PETSc.Mat().createDense(sizesLinvT, comm=opt_obj.comm)
+        MUT = PETSc.Mat().createDense(sizesMUT, comm=opt_obj.comm)
+        MSigmaT = PETSc.Mat().createDense(sizesSigmaT, comm=opt_obj.comm)
+        BT = PETSc.Mat().createDense(sizesMUT, comm=opt_obj.comm)
+        CT = PETSc.Mat().createDense(sizesCT, comm=opt_obj.comm)
+        mats = [LinvT, MUT, MSigmaT, BT, CT]
+        for mat in mats: mat.setUp()
         for i in range (len(opt_obj.freqs)):
-
-            wi = opt_obj.weights[i]
-
-            M, Linv, KLinv = assemble_woodbury_low_rank_operator(opt_obj.comm, \
-                                                    opt_obj.R_ops[i], B, C, Kd)
             
-            # Gradient with respect to K
-            Linv.hermitianTranspose()
-            F1 = M.V.matMult(Linv)
-            Linv.hermitianTranspose()
-            F2 = M.apply_mat(F1)
-            F2.axpy(-1.0,opt_obj.R_ops[i].apply_mat(F1))
-            M.U.hermitianTranspose()
-            grad_K_i = M.U.matMult(F2)
-            KLinv.hermitianTranspose()
-            grad_K_i.axpy(-1.0, M.U.matMult(C.matMult(KLinv.matMult(grad_K_i))))
-            KLinv.hermitianTranspose()
-            M.U.hermitianTranspose()
-            F1.destroy()
-            F2.destroy()
-            grad_K.axpy(2.0*wi,grad_K_i)
-            grad_K_i.destroy()
+            wi = opt_obj.weights[i]
+            M, Linv = _assemble_woodbury_low_rank_operator(opt_obj.comm, \
+                                                    opt_obj.R_ops[i], B, C, Kd)
+            Linv.setTransposePrecursor(LinvT)
+            M.U.setTransposePrecursor(MUT)
+            M.Sigma.setTransposePrecursor(MSigmaT)
+            B.setTransposePrecursor(BT)
+            C.setTransposePrecursor(CT)
+            Linv.hermitianTranspose(LinvT)
+            M.U.hermitianTranspose(MUT)
+            M.Sigma.hermitianTranspose(MSigmaT)
+            B.hermitianTranspose(BT)
+            C.hermitianTranspose(CT)
 
-            # Gradient with respect to p
-            KLinv.hermitianTranspose()
-            F1 = M.V.matMult(KLinv)
-            KLinv.hermitianTranspose()
+            # Gradient with respect to K
+            F1 = M.V.matMult(LinvT)
             F2 = M.apply_mat(F1)
-            F2.axpy(-1.0,opt_obj.R_ops[i].apply_mat(F1))
+            F3 = opt_obj.R_ops[i].apply_mat(F1)
+            F2.axpy(-1.0, F3)
+            grad_K_i = MUT.matMult(F2)
+            F4 = MSigmaT.matMult(grad_K_i)
+            F5 = C.matMult(F4)
+            F6 = MUT.matMult(F5)
+            grad_K_i.axpy(-1.0, F6)
+            grad_K.axpy(2.0*wi, grad_K_i)
+            mats = [F1, F2, F3, F4, F5, F6, grad_K_i]
+            for mat in mats: mat.destroy()
+            
+            # Gradient with respect to p
+            F1 = M.V.matMult(MSigmaT)
+            F2 = M.apply_mat(F1)
+            F3 = opt_obj.R_ops[i].apply_mat(F1)
+            F2.axpy(-1.0, F3)
             grad_B_i = opt_obj.R_ops[i].apply_hermitian_transpose_mat(F2)
-            B.hermitianTranspose()
-            KLinv.hermitianTranspose()
-            grad_B_i.axpy(-1.0, M.V.matMult(KLinv.matMult(B.matMult(grad_B_i))))
-            B.hermitianTranspose()
-            KLinv.hermitianTranspose()
-            F1.destroy()
-            F2.destroy()
-            for j in range (len(p)):
-                pjp = p.copy()
-                pjm = p.copy()
-                pjp[j] += 1e-5
-                pjm[j] -= 1e-5
-                dB = opt_obj.compute_dB(pjp, pjm)/(2e-5)
-                dB.conjugate()
-                grad_p[j] += 2*wi*compute_double_contraction(opt_obj.comm, \
-                                                             dB, grad_B_i).real
-                dB.destroy()
-            grad_B_i.destroy()
+            F4 = BT.matMult(grad_B_i)
+            F5 = MSigmaT.matMult(F4)
+            F6 = M.V.matMult(F5)
+            grad_B_i.axpy(-1.0, F6)
+            grad_p += 2*wi*opt_obj.compute_finite_difference(p, grad_B_i, \
+                                                             opt_obj.compute_dB)
+            mats = [F1, F2, F3, F4, F5, F6, grad_B_i]
+            for mat in mats: mat.destroy()
+            
 
             # Gradient with respect to s
-            F1 = M.U.matMult(KLinv)
+            F1 = M.U.matMult(M.Sigma)
             F2 = M.apply_hermitian_transpose_mat(F1)
-            F2.axpy(-1.0,opt_obj.R_ops[i].apply_hermitian_transpose_mat(F1))
+            F3 = opt_obj.R_ops[i].apply_hermitian_transpose_mat(F1)
+            F2.axpy(-1.0, F3)
             grad_C_i = opt_obj.R_ops[i].apply_mat(F2)
-            C.hermitianTranspose()
-            grad_C_i.axpy(-1.0,M.U.matMult(KLinv.matMult(C.matMult(grad_C_i))))
-            C.hermitianTranspose()
-            F1.destroy()
-            F2.destroy()
-            for j in range (len(s)):
-                sjp = s.copy()
-                sjm = s.copy()
-                sjp[j] += 1e-5
-                sjm[j] -= 1e-5
-                dC = opt_obj.compute_dC(sjp, sjm)/(2e-5)
-                dC.conjugate()
-                grad_s[j] += 2*wi*compute_double_contraction(opt_obj.comm, \
-                                                             dC, grad_C_i).real
-                dC.destroy()
-            grad_C_i.destroy()
-
+            F4 = CT.matMult(grad_C_i)
+            F5 = M.Sigma.matMult(F4)
+            F6 = M.U.matMult(F5)
+            grad_C_i.axpy(-1.0, F6)
+            grad_s += 2*wi*opt_obj.compute_finite_difference(s, grad_C_i, \
+                                                             opt_obj.compute_dC)
+            mats = [F1, F2, F3, F4, F5, F6, grad_C_i]
+            for mat in mats: mat.destroy()
             M.destroy()
-
+        
         # Stability-promoting penalty
         lin_op = LowRankUpdatedLinearOperator(opt_obj.comm, opt_obj.A, B, Kd, C)
-        V, D_, W = compute_left_and_right_eigendecomposition(lin_op,\
+        V, D_, W = _compute_left_and_right_eigendecomposition(lin_op,\
                                                     opt_obj.stab_params[2], \
                                                     opt_obj.stab_params[3])
         D = D_.getDiagonal().getArray()
@@ -349,57 +358,59 @@ def create_objective_and_gradient(manifold,opt_obj):
         for i in range (i0, i1):
             M.setValues(i,i,M_[i - i0])
         M.assemble(None)
-        # lin_op.destroy()
+        lin_op.destroy()
+
+        sizesVT = (V.getSizes()[-1], V.getSizes()[0])
+        sizesWT = (W.getSizes()[-1], W.getSizes()[0])
+        sizesKdT = (Kd.getSizes()[-1], Kd.getSizes()[0])
+        WT = PETSc.Mat().createDense(sizesWT, comm=opt_obj.comm)
+        VT = PETSc.Mat().createDense(sizesVT, comm=opt_obj.comm)
+        KdT = PETSc.Mat().createDense(sizesKdT, comm=opt_obj.comm)
+        mats = [VT, WT, KdT]
+        for mat in mats: mat.setUp()
+        W.setTransposePrecursor(WT)
+        W.hermitianTranspose(WT)
+        V.setTransposePrecursor(VT)
+        V.hermitianTranspose(VT)
+        Kd.setTransposePrecursor(KdT)
+        Kd.hermitianTranspose(KdT)
 
         # Gradient with respect to K
-        V.hermitianTranspose()
-        B.hermitianTranspose()
-        grad_K.axpy(-1.0, B.matMult(W.matMult(M.matMult(V.matMult(C)))))
-        B.hermitianTranspose()
-        V.hermitianTranspose()
-
+        F1 = VT.matMult(C)
+        F2 = M.matMult(F1)
+        F3 = W.matMult(F2)
+        F4 = BT.matMult(F3)
+        grad_K.axpy(-1.0, F4)
+        mats = [F1, F2, F3, F4]
+        for mat in mats: mat.destroy()
+        
         # Gradient with respect to p
-        V.hermitianTranspose()
-        Kd.hermitianTranspose()
-        grad_B = W.matMult(M.matMult(V.matMult(C.matMult(Kd))))
-        Kd.hermitianTranspose()
-        V.hermitianTranspose()
-        for j in range (len(p)):
-            pjp = p.copy()
-            pjm = p.copy()
-            pjp[j] += 1e-5
-            pjm[j] -= 1e-5
-            dB = opt_obj.compute_dB(pjp, pjm)/(2e-5)
-            dB.conjugate()
-            grad_p[j] -= compute_double_contraction(opt_obj.comm, \
-                                                    dB, grad_B).real
-            dB.destroy()
-        grad_B.destroy()
+        F1 = C.matMult(KdT)
+        F2 = VT.matMult(F1)
+        F3 = M.matMult(F2)
+        grad_B = W.matMult(F3)
+        grad_p += -opt_obj.compute_finite_difference(p, grad_B, \
+                                                     opt_obj.compute_dB)
+        mats = [F1, F2, F3, grad_B]
+        for mat in mats: mat.destroy()
 
         # Gradient with respect to s
-        W.hermitianTranspose()
-        grad_C = V.matMult(M.matMult(W.matMult(B.matMult(Kd))))
-        W.hermitianTranspose()
-        for j in range (len(s)):
-            sjp = s.copy()
-            sjm = s.copy()
-            sjp[j] += 1e-5
-            sjm[j] -= 1e-5
-            dC = opt_obj.compute_dC(sjp, sjm)/(2e-5)
-            dC.conjugate()
-            grad_s[j] -= compute_double_contraction(opt_obj.comm, \
-                                                    dC, grad_C).real
-            dC.destroy()
-        grad_C.destroy()
-        
+        F1 = B.matMult(Kd)
+        F2 = WT.matMult(F1)
+        F3 = M.matMult(F2)
+        grad_C = V.matMult(F3)
+        grad_s += -opt_obj.compute_finite_difference(s, grad_C, \
+                                                     opt_obj.compute_dC)
+        mats = [F1, F2, F3, grad_C]
+        for mat in mats: mat.destroy()
+
         grad_K_seq = distributed_to_sequential_matrix(opt_obj.comm, grad_K)
-        grad_K.destroy()
-        grad_K = grad_K_seq.getDenseArray().copy().real
-        grad_K_seq.destroy()
-        B.destroy()
-        C.destroy()
+        grad_K_ = grad_K_seq.getDenseArray().copy().real
+
+        mats = [VT, WT, KdT, BT, CT, MUT, grad_K_seq, V, W, B, C]
+        for mat in mats: mat.destroy()
         
-        return grad_p.real, grad_K, grad_s.real
+        return grad_p, grad_K_, grad_s
     
     return cost, euclidean_gradient, euclidean_hessian
 

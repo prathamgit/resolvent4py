@@ -23,23 +23,21 @@ class LowRankLinearOperator(LinearOperator):
             has block structure)
         :type nblocks: int
     """
-    
     def __init__(self, comm, U, Sigma, V, nblocks=None):
         
         dimensions = (U.getSizes()[0],V.getSizes()[0])
         super().__init__(comm, 'LowRankLinearOperator', dimensions, nblocks)
-        self.U = U.copy()
-        self.Sigma = Sigma.copy()
-        self.V = V.copy()
+        self.U = U
+        self.Sigma = Sigma
+        self.V = V
         self.real = self.check_if_real_valued()
         self.block_cc = self.check_if_complex_conjugate_structure() if \
             self.get_nblocks() != None else None
         
-
-    def apply(self, x):
+    def apply(self, x, y=None):
         z = self.V.createVecRight()
         q = self.Sigma.createVecLeft()
-        y = self.U.createVecLeft()
+        y = self.U.createVecLeft() if y == None else y
         self.V.multHermitian(x,z)
         self.Sigma.mult(z,q)
         self.U.mult(q,y)
@@ -47,20 +45,20 @@ class LowRankLinearOperator(LinearOperator):
         q.destroy()
         return y
 
-    def apply_mat(self, X):
+    def apply_mat(self, X, Y=None):
         self.V.hermitianTranspose()
         F1 = self.V.matMult(X)
-        self.V.hermitianTranspose()
         F2 = self.Sigma.matMult(F1)
-        Y = self.U.matMult(F2)
+        Y = self.U.matMult(F2) if Y == None else self.U.matMult(F2, Y)
+        self.V.hermitianTranspose()
         F1.destroy()
         F2.destroy()
         return Y
     
-    def apply_hermitian_transpose(self, x):
+    def apply_hermitian_transpose(self, x, y=None):
         z = self.U.createVecRight()
         q = self.Sigma.createVecRight()
-        y = self.V.createVecLeft()
+        y = self.V.createVecLeft() if y == None else y
         self.U.multHermitian(x,z)
         self.Sigma.multHermitian(z,q)
         self.V.mult(q,y)
@@ -68,19 +66,17 @@ class LowRankLinearOperator(LinearOperator):
         q.destroy()
         return y
     
-    def apply_hermitian_transpose_mat(self, X):
+    def apply_hermitian_transpose_mat(self, X, Y=None):
         self.U.hermitianTranspose()
+        self.Sigma.hermitianTranspose()
         F1 = self.U.matMult(X)
+        F2 = self.Sigma.matMult(F1)
+        Y = self.V.matMult(F2) if Y == None else self.U.matMult(F2, Y)
         self.U.hermitianTranspose()
         self.Sigma.hermitianTranspose()
-        F2 = self.Sigma.matMult(F1)
-        self.Sigma.hermitianTranspose()
-        Y = self.V.matMult(F2)
         F1.destroy()
         F2.destroy()
         return Y
     
     def destroy(self):
-        self.U.destroy()
-        self.Sigma.destroy()
-        self.V.destroy()
+        pass

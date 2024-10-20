@@ -24,11 +24,13 @@ def read_vector(comm, filename):
 
 def read_coo_matrix(comm, filenames, sizes):
     fname_rows, fname_cols, fname_vals = filenames
-    rows = np.asarray(read_vector(comm,fname_rows).getArray().real,dtype=np.int64)
-    cols = np.asarray(read_vector(comm,fname_cols).getArray().real,dtype=np.int64)
+    rows = np.asarray(read_vector(comm,fname_rows).getArray().real,\
+                      dtype=np.int64)
+    cols = np.asarray(read_vector(comm,fname_cols).getArray().real,\
+                      dtype=np.int64)
     vals = read_vector(comm,fname_vals).getArray()
     rows_ptr, cols, vals = convert_coo_to_csr(comm,[rows,cols,vals],sizes)
-    M = PETSc.Mat().createAIJ(sizes,comm=MPI.COMM_WORLD)
+    M = PETSc.Mat().createAIJ(sizes, comm=comm)
     M.setPreallocationCSR((rows_ptr,cols))
     M.setValuesCSR(rows_ptr,cols,vals,True)
     M.assemble(False)

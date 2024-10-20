@@ -60,9 +60,9 @@ class LowRankUpdatedLinearOperator(LinearOperator):
         super().__init__(comm, 'LowRankUpdatedLinearOperator', \
                          A.get_dimensions(), nblocks)
         self.A = A
-        self.B = B.copy()
-        self.K = K.copy()
-        self.C = C.copy()
+        self.B = B
+        self.K = K
+        self.C = C
         self.real = self.check_if_real_valued()
         self.block_cc = self.check_if_complex_conjugate_structure() if \
             self.get_nblocks() != None else None
@@ -173,14 +173,6 @@ class LowRankUpdatedLinearOperator(LinearOperator):
         return y
     
     def destroy(self):
-        r"""
-            Destroys all attributes of the class, except for :code:`A`,
-            which is itself a class with its own :code:`destroy()` method.
-        """
-        self.B.destroy()
-        self.K.destroy()
-        self.C.destroy()
-
         if self.X != None:
             self.X.destroy()
             self.D.destroy()

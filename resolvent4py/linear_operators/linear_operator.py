@@ -103,12 +103,16 @@ class LinearOperator(metaclass=abc.ABCMeta):
     
     # Methods that must be implemented by subclasses
     @abc.abstractmethod
-    def apply(self,x):
+    def apply(self, x, y=None):
         r"""
+            Compute :math:`Lx = y`
+
             :param x: a PETSc vector
             :type x: `Vec`_
+            :param y: [optional] a PETSc vector to store the result
+            :type y: `Vec`_
 
-            :return: :math:`Lx`
+            :return: :math:`Lx` if :code:`y == None`
             :rtype: `Vec`_
         """
 
@@ -119,32 +123,44 @@ class LinearOperator(metaclass=abc.ABCMeta):
         """
     
     # Methods that don't necessarily need to be implemented by subclasses
-    @abc.abstractmethod
-    def apply_hermitian_transpose(self,x):
+    @raise_not_implemented_error
+    def apply_hermitian_transpose(self, x, y=None):
         r"""
+            Compute :math:`L^*x = y`
+
             :param x: a PETSc vector
             :type x: `Vec`_
+            :param y: [optional] a PETSc vector to store the result
+            :type y: `Vec`_
 
-            :return: :math:`L^* x`
+            :return: :math:`L^*x` if :code:`y == None`
             :rtype: `Vec`_
         """
 
     @raise_not_implemented_error
-    def solve(self, x):
+    def solve(self, x, y=None):
         r"""
+            Compute :math:`L^{-1}x = y`
+
             :param x: a PETSc vector
             :type x: `Vec`_
+            :param y: [optional] a PETSc vector to store the result
+            :type y: `Vec`_
 
-            :return: :math:`L^{-1}x`
+            :return: :math:`L^{-1}x` if :code:`y == None`
             :rtype: `Vec`_
         """
     
     @raise_not_implemented_error
-    def solve_hermitian_transpose(self, x):
+    def solve_hermitian_transpose(self, x, y=None):
         r"""
+            Compute :math:`L^{-*}x = y`
+
             :param x: a PETSc vector
             :type x: `Vec`_
+            :param y: [optional] a PETSc vector to store the result
+            :type y: `Vec`_
 
-            :return: :math:`L^{-*}x`
+            :return: :math:`Lx` if :code:`y == None`
             :rtype: `Vec`_
         """

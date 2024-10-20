@@ -19,7 +19,6 @@ class MatrixLinearOperator(LinearOperator):
             has block structure). This must be an odd number.
         :type nblocks: int
     """
-
     def __init__(self, comm, A, ksp=None, nblocks=None):
 
         self.A = A
@@ -29,19 +28,19 @@ class MatrixLinearOperator(LinearOperator):
         self.block_cc = self.check_if_complex_conjugate_structure() if \
             self.get_nblocks() != None else None
         
-    def apply(self, x):
-        y = self.create_left_vector()
+    def apply(self, x, y=None):
+        y = self.create_left_vector() if y == None else y
         self.A.mult(x,y)
         return y
     
-    def apply_hermitian_transpose(self, x):
-        y = self.create_right_vector()
+    def apply_hermitian_transpose(self, x, y=None):
+        y = self.create_right_vector() if y == None else y
         self.A.multHermitian(x,y)
         return y
     
-    def solve(self, x):
+    def solve(self, x, y=None):
         if self.ksp != None:
-            y = self.create_left_vector()
+            y = self.create_left_vector() if y == None else y
             self.ksp.solve(x,y)
             return y
         else:
@@ -50,10 +49,10 @@ class MatrixLinearOperator(LinearOperator):
                 f"Please provide a PETSc KSP object at initialization to use "
                 f"the solve() method."
             )
-        
-    def solve_hermitian_transpose(self, x):
+    
+    def solve_hermitian_transpose(self, x, y=None):
         if self.ksp != None:
-            y = self.create_right_vector()
+            y = self.create_right_vector() if y == None else y
             x.conjugate()
             self.ksp.solveTranspose(x,y)
             x.conjugate()
@@ -67,5 +66,4 @@ class MatrixLinearOperator(LinearOperator):
             )
         
     def destroy(self):
-        self.A.destroy()
-        self.ksp.destroy() if self.ksp != None else None
+        pass

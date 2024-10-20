@@ -16,7 +16,7 @@ class ProjectedLinearOperator(LinearOperator):
             I - \Phi\left(\Psi^*\Phi\right)^{-1}\Psi^*  & \text{if }\ 
                 \text{complement} = \text{True}
             \end{cases}
-
+        
         If the :code:`A.solve()` method is enabled, then the :code:`solve()` 
         method for this class returns
 
@@ -47,15 +47,14 @@ class ProjectedLinearOperator(LinearOperator):
         super().__init__(comm, 'ProjectedLinearOperator', \
                          A.get_dimensions(), nblocks)
         self.A = A
-        self.Phi = Phi.copy()
-        self.Psi = Psi.copy()
+        self.Phi = Phi
+        self.Psi = Psi
         self.complement = complement
         self.enforce_biorthogonality()
         self.real = self.check_if_real_valued()
         self.block_cc = self.check_if_complex_conjugate_structure() if \
             self.get_nblocks() != None else None
         
-
     def enforce_biorthogonality(self):
         r"""
             Enforce biorthogonality
@@ -123,9 +122,4 @@ class ProjectedLinearOperator(LinearOperator):
                 self.apply_projection_hermitian_transpose(x)))
 
     def destroy(self):
-        r"""
-            Destroys all attributes of the class, except for :code:`A`,
-            which is itself a class with its own :code:`destroy()` method.
-        """
-        self.Phi.destroy()
-        self.Psi.destroy()
+        pass
