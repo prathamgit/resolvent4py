@@ -81,14 +81,14 @@ class LinearOperator(metaclass=abc.ABCMeta):
     
     def check_if_complex_conjugate_structure(self):
         r"""
-            Given a vector x
+            Given a vector
 
             .. math::
                 x = \left(\ldots,x_{-1},x_{0},x_{1},\ldots\right)
 
             with vector-valued entries that satisfy \
             :math:`x_{-i} = \overline{x_i}`, check if the vector :math:`Lx` \
-            also satisfies :math:`(Lx)_{-i}=\overline{(Lx)_{i}}`.
+            satisfies :math:`(Lx)_{-i}=\overline{(Lx)_{i}}`.
 
             :rtype: bool
         """
