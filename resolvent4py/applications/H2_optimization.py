@@ -26,20 +26,26 @@ def _compute_left_and_right_eigendecomposition(lin_op, krylov_dim, n_evals):
     Da, W = eigendecomposition(lin_op, lin_op.solve_hermitian_transpose, \
                                 krylov_dim, n_evals)
     
-    df = -1./Df.getDiagonal().getArray()
-    da = -1./Da.getDiagonal().getArray()
-    idces = []
-    for j in range (len(df)):
-        idces.append(np.argmin(np.abs(da - df[j].conj())))
+    Dfseq = distributed_to_sequential_matrix(lin_op.get_comm(), Df)
+    Daseq = distributed_to_sequential_matrix(lin_op.get_comm(), Da)
+
     D = compute_dense_inverse(lin_op.get_comm(), Df)
     D.scale(-1.0)
 
+    df = -1./Dfseq.getDiagonal().getArray()
+    da = -1./Daseq.getDiagonal().getArray()
+    idces = []
+    for j in range (len(df)):
+        idces.append(np.argmin(np.abs(da - df[j].conj())))
+    
     W_ = SLEPc.BV().createFromMat(W)
     W_.setFromOptions()
     for j in range (len(idces)):
         w = W.getColumnVector(idces[j])
         W_.insertVec(j, w)
+        petscprint(lin_op.get_comm(), "%d/%d"%(j,len(idces)))
 
+    print(idces)
     W.destroy()
     Wmat = W_.getMat()
     W = Wmat.copy()
@@ -47,6 +53,7 @@ def _compute_left_and_right_eigendecomposition(lin_op, krylov_dim, n_evals):
     W_.destroy()
     W.hermitianTranspose()
     M = W.matMult(V_)
+    # M.view()
     Minv = compute_dense_inverse(lin_op.get_comm(), M)
     W.hermitianTranspose()
     V = V_.matMult(Minv)
@@ -234,11 +241,9 @@ def create_objective_and_gradient(manifold,opt_obj):
                                    opt_obj.stab_params[2], \
                                    opt_obj.stab_params[3])
         D = -1./D_.getDiagonal().getArray()
-        Jd = None
-        if rank == 0:
-            Jd = np.sum([opt_obj.evaluate_exponential(D[k]) \
-                         for k in range (len(D))])
-        J += opt_obj.comm.bcast(Jd, root=0)
+        Jd = np.sum([opt_obj.evaluate_exponential(D[k]) \
+                     for k in range (len(D))])
+        J += opt_obj.comm.allreduce(Jd, op=MPI.SUM)
         D_.destroy()
         lin_op.destroy()
 
@@ -285,6 +290,7 @@ def create_objective_and_gradient(manifold,opt_obj):
         for mat in mats: mat.setUp()
         for i in range (len(opt_obj.freqs)):
             
+            petscprint(opt_obj.comm, "Iteration %d"%i)
             wi = opt_obj.weights[i]
             M, Linv = _assemble_woodbury_low_rank_operator(opt_obj.comm, \
                                                     opt_obj.R_ops[i], B, C, Kd)
@@ -419,6 +425,7 @@ def test_euclidean_gradient(M, opt_obj, params, eps):
 
     xa, K, xs = params
     comm = opt_obj.comm
+    rank = comm.Get_rank()
     
     cost, grad, _ = create_objective_and_gradient(M,opt_obj)
     J = cost(*params)
@@ -427,45 +434,69 @@ def test_euclidean_gradient(M, opt_obj, params, eps):
     petscprint(comm,"Cost = %1.15e"%J)
     
     # Check Sb gradient
-    delta = np.random.randn(*xa.shape)
-    delta /= np.linalg.norm(delta)
-    params_ = (xa + eps*delta, K, xs)   
+    if rank == 0:
+        delta = np.random.randn(*xa.shape)
+        delta /= np.linalg.norm(delta)
+        params_ = (xa + eps*delta, K, xs)
+        print(grad_xa)
+    else:
+        params_ = None
+    
+    params_ = comm.bcast(params_,root=0)
     dfd = (cost(*params_) - J)/eps
-    dgrad = (delta.conj().T@grad_xa).real
-    error = np.abs(dfd - dgrad)
-    percent_error = (error/np.abs(dfd)*100).real
-    
-    petscprint(comm,"------ Error xa grad -------------")
-    petscprint(comm,"dfd = %1.5e,\t dfgrad = %1.5e,\t error = %1.5e,\t percent error = %1.5e"%(dfd,dgrad,error,percent_error))
-    petscprint(comm,"---------------------------------")
-    
+
+    if rank == 0:
+        dgrad = (delta.conj().T@grad_xa).real
+        error = np.abs(dfd - dgrad)
+        percent_error = (error/np.abs(dfd)*100).real
+        
+        petscprint(comm,"------ Error xa grad -------------")
+        petscprint(comm,"dfd = %1.5e,\t dfgrad = %1.5e,\t error = %1.5e,\t percent error = %1.5e"%(dfd,dgrad,error,percent_error))
+        petscprint(comm,"---------------------------------")
+        
     
     # Check K gradient
-    delta = np.random.randn(*K.shape)
-    delta /= np.sqrt(np.trace(delta.T@delta))
-    params_ = (xa, K + eps*delta, xs)   
+    if rank == 0:
+        delta = np.random.randn(*K.shape)
+        delta /= np.sqrt(np.trace(delta.T@delta))
+        params_ = (xa, K + eps*delta, xs)   
+        print(grad_K)
+    else:
+        params_ = None
+    
+    params_ = comm.bcast(params_,root=0)
     dfd = (cost(*params_) - J)/eps
-    dgrad = np.trace(delta.conj().T@grad_K).real
-    error = np.abs(dfd - dgrad)
-    percent_error = (error/np.abs(dfd)*100).real
-    
-    petscprint(comm,"------ Error K grad -------------")
-    petscprint(comm,"dfd = %1.5e,\t dfgrad = %1.5e,\t error = %1.5e,\t percent error = %1.5e"%(dfd,dgrad,error,percent_error))
-    petscprint(comm,"---------------------------------")
-    
+
+    if rank == 0:
+        dgrad = np.trace(delta.conj().T@grad_K).real
+        error = np.abs(dfd - dgrad)
+        percent_error = (error/np.abs(dfd)*100).real
+        
+        petscprint(comm,"------ Error K grad -------------")
+        petscprint(comm,"dfd = %1.5e,\t dfgrad = %1.5e,\t error = %1.5e,\t percent error = %1.5e"%(dfd,dgrad,error,percent_error))
+        petscprint(comm,"---------------------------------")
+        
     
     # Check Sc gradient
-    delta = np.random.randn(*xs.shape)
-    delta /= np.linalg.norm(delta)
-    params_ = (xa, K, xs + eps*delta)   
+    if rank == 0:
+        delta = np.random.randn(*xs.shape)
+        delta /= np.linalg.norm(delta)
+        params_ = (xa, K, xs + eps*delta)   
+        print(grad_xs)
+    else:
+        params_ = None
+
+    params_ = comm.bcast(params_,root=0)
     dfd = (cost(*params_) - J)/eps
-    dgrad = (delta.conj().T@grad_xs).real
-    error = np.abs(dfd - dgrad)
-    percent_error = (error/np.abs(dfd)*100).real
-    
-    petscprint(comm,"------ Error xs grad -------------")
-    petscprint(comm,"dfd = %1.5e,\t dfgrad = %1.5e,\t error = %1.5e,\t percent error = %1.5e"%(dfd,dgrad,error,percent_error))
-    petscprint(comm,"---------------------------------")
-    
+
+    if rank == 0:
+        dgrad = (delta.conj().T@grad_xs).real
+        error = np.abs(dfd - dgrad)
+        percent_error = (error/np.abs(dfd)*100).real
+        
+        petscprint(comm,"------ Error xs grad -------------")
+        petscprint(comm,"dfd = %1.5e,\t dfgrad = %1.5e,\t error = %1.5e,\t percent error = %1.5e"%(dfd,dgrad,error,percent_error))
+        petscprint(comm,"---------------------------------")
+        
     
 

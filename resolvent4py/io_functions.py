@@ -16,18 +16,28 @@ def read_vector(comm, filename):
         :return: vector with the data read from the file
         :rtype: PETSc.Vec
     """
-    viewer = PETSc.Viewer().createBinary(filename,"r",comm=comm)
+    viewer = PETSc.Viewer().createBinary(filename, "r", comm=comm)
     vec = PETSc.Vec().create(comm)
     vec.load(viewer)
     viewer.destroy()
     return vec
 
 def read_coo_matrix(comm, filenames, sizes):
+    r"""
+        Read COO matrix from file
+
+        :param comm: MPI communicator (MPI.COMM_WORLD or MPI.COMM_SELF)
+        :param filenames: 3-tuple with the filenames of the row indices, 
+            column indices and values
+        
+        :return: sparse matrix of AIJ type
+        :rtype: PETSc.Mat
+    """
     fname_rows, fname_cols, fname_vals = filenames
-    rows = np.asarray(read_vector(comm,fname_rows).getArray().real,\
-                      dtype=np.int64)
-    cols = np.asarray(read_vector(comm,fname_cols).getArray().real,\
-                      dtype=np.int64)
+    rows = read_vector(comm,fname_rows).getArray().real
+    rows = np.asarray(rows,dtype=np.int64)
+    cols = read_vector(comm,fname_cols).getArray().real
+    cols = np.asarray(cols,dtype=np.int64)
     vals = read_vector(comm,fname_vals).getArray()
     rows_ptr, cols, vals = convert_coo_to_csr(comm,[rows,cols,vals],sizes)
     M = PETSc.Mat().createAIJ(sizes, comm=comm)

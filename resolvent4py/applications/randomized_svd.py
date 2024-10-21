@@ -77,7 +77,7 @@ def randomized_svd(lin_op, lin_op_action, n_rand, n_loops, n_svals):
     v = PETSc.Mat().createDense((n_rand,n_svals),None,\
                                 v[:,:n_svals],comm=MPI.COMM_SELF)
     s = s[:n_svals]
-
+    
     Qfwd.multInPlace(v,0,n_svals)
     Qfwd.setActiveColumns(0,n_svals)
     Qadj.multInPlace(u,0,n_svals)
@@ -91,7 +91,7 @@ def randomized_svd(lin_op, lin_op_action, n_rand, n_loops, n_svals):
     Qadj_mat = Qadj_.copy()
     Qadj.restoreMat(Qadj_)
     Qadj.destroy()
-    
+
     sizes_S = Qfwd_mat.getSizes()[-1]
     S = PETSc.Mat().createDense((sizes_S, sizes_S), comm=lin_op.get_comm())
     S.setUp()

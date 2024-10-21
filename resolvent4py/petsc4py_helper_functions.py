@@ -142,30 +142,25 @@ def compute_dense_inverse(comm, M):
         :return: the inverse of :math:`M`
         :rtype: PETSc.Mat.Type.DENSE
     """
-
     # Gather data in M on all processors
-    sizes = M.getSizes()
-    M_array = M.getDenseArray().reshape(-1)
+    M_array = M.getDenseArray().copy().reshape(-1)
     size_vec_local = len(M_array)
     size_vec_global = sum(comm.allgather(size_vec_local))
-    M_vec = PETSc.Vec().createWithArray(M_array,\
-                                        (size_vec_local,size_vec_global),
-                                        None, comm=comm)
-    scatter, M_vec_seq = PETSc.Scatter().toAll(M_vec)
-    scatter.scatter(M_vec,M_vec_seq,addv=PETSc.InsertMode.INSERT)
-
+    size_vec = (size_vec_local, size_vec_global)
+    M_vec = PETSc.Vec().createWithArray(M_array, size_vec, None, comm=comm)
+    scatter, Mseq_vec = PETSc.Scatter().toAll(M_vec)
+    scatter.scatter(M_vec,Mseq_vec,addv=PETSc.InsertMode.INSERT)
     # Compute the inverse using scipy and scatter back to all
-    M_array = M_vec_seq.getArray().reshape((sizes[0][-1],sizes[0][-1]))
-    M_vec_seq.setValues(np.arange(M_vec_seq.getSize()),\
-                        sp.linalg.inv(M_array).reshape(-1))
-    M_vec_seq.assemble()
-    scatter.scatter(M_vec_seq,M_vec,addv=PETSc.InsertMode.INSERT,\
+    sizes = M.getSizes()
+    Mseq_array = Mseq_vec.getArray().reshape((sizes[0][-1],sizes[0][-1]))
+    Mseq_vec.setValues(np.arange(Mseq_vec.getSize()),\
+                        sp.linalg.inv(Mseq_array).reshape(-1))
+    Mseq_vec.assemble()
+    scatter.scatter(Mseq_vec,M_vec,addv=PETSc.InsertMode.INSERT,\
                     mode=PETSc.ScatterMode.REVERSE)
-    
-    M_array = M_vec.getArray().reshape((sizes[0][0],sizes[-1][-1]))
-    X = PETSc.Mat().createDense(sizes,None,M_array,comm=comm)
-
-    return X
+    Minv_array = M_vec.getArray().reshape((sizes[0][0],sizes[-1][-1]))
+    Minv = PETSc.Mat().createDense(sizes,None,Minv_array,comm=comm)
+    return Minv
 
 
 def sequential_to_distributed_matrix(Mat_seq, Mat_dist):

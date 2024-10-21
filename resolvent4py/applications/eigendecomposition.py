@@ -24,13 +24,13 @@ def arnoldi_iteration(lin_op, lin_op_action, krylov_dim):
 
         :return: a 2-tuple with an orthonormal basis for the Krylov subspace
             and the Hessenberg matrix
-        :rtype: (SLEPc BV, numpy)
+        :rtype: (SLEPc BV, numpy.ndarray)
     """
     
     comm = lin_op.get_comm()
     sizes = lin_op.get_dimensions()[0]
     nblocks = lin_op.get_nblocks()
-
+    
     # Initialize the BV structure and the Hessenberg matrix
     Q = SLEPc.BV().create(comm=comm)
     Q.setSizes(sizes,krylov_dim)
