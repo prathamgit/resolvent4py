@@ -3,7 +3,7 @@ import scipy as sp
 
 from petsc4py import PETSc
 from .comms import scatter_array_from_root_to_all
-from .comms import convert_coo_to_csr
+from .linalg import convert_coo_to_csr
 
 def generate_random_petsc_sparse_matrix(comm, sizes, complex=None):
     r"""

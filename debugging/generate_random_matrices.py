@@ -8,8 +8,6 @@ sys.path.append('../')
 
 import resolvent4py as lin
 
-
-
 path = 'data/'
 
 N, Nb, Nc, r = 100, 5, 3, 2

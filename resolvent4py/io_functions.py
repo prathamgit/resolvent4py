@@ -1,9 +1,7 @@
 from petsc4py import PETSc
-from mpi4py import MPI
 import numpy as np
-import pickle
 
-from .petsc4py_helper_functions import convert_coo_to_csr
+from .linalg import convert_coo_to_csr
 
 def read_vector(comm, filename):
     r"""

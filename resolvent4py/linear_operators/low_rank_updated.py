@@ -1,7 +1,8 @@
 from petsc4py import PETSc
 from .linear_operator import LinearOperator
-from ..petsc4py_helper_functions import compute_dense_inverse
-from ..petsc4py_helper_functions import mat_solve_hermitian_transpose
+from ..linalg import compute_dense_inverse
+from ..linalg import mat_solve_hermitian_transpose
+from ..miscellaneous import create_dense_matrix
 
 class LowRankUpdatedLinearOperator(LinearOperator):
     r"""
@@ -67,12 +68,13 @@ class LowRankUpdatedLinearOperator(LinearOperator):
         self.block_cc = self.check_if_complex_conjugate_structure() if \
             self.get_nblocks() != None else None
         
-        self.X, self.D, self.Y = None, None, None
         if woodbury_factors == None:
             try:
                 self.compute_woodbury_factors()
             except:
                 self.X, self.D, self.Y = None, None, None
+        else:
+            self.X, self.D, self.Y = woodbury_factors
             
 
     def compute_woodbury_factors(self):
@@ -82,10 +84,9 @@ class LowRankUpdatedLinearOperator(LinearOperator):
 
             :rtype: None
         """
-
         self.X = self.B.duplicate()
         self.A.ksp.matSolve(self.B,self.X)
-        self.Y = mat_solve_hermitian_transpose(self.A.ksp,self.C)
+        self.Y = mat_solve_hermitian_transpose(self.A.ksp, self.C)
         self.C.hermitianTranspose()
         M = self.C.matMult(self.X).matMult(self.K)
         Id = PETSc.Mat().createConstantDiagonal(M.getSizes(),1.0,\
@@ -103,10 +104,10 @@ class LowRankUpdatedLinearOperator(LinearOperator):
             :param F3: a dense PETSc matrix
             :type F3: PETSc.Mat.Type.DENSE
             :param x: a PETSc vector
-            :type x: `Vec`_
+            :type x: PETSc.Vec.Type.STANDARD
 
             :return: :math:`F_1 F_2 F_3^* x`
-            :rtype: `Vec`_
+            :rtype: PETSc.Vec.Type.STANDARD
         """
         z = F3.createVecRight()
         q = F2.createVecLeft()
@@ -115,6 +116,35 @@ class LowRankUpdatedLinearOperator(LinearOperator):
         F2.mult(z,q)
         F1.mult(q,y)
         return y
+    
+    def apply_low_rank_factors_mat(self, F1, F2, F3, X, Y=None):
+        r"""
+            :param F1: a dense PETSc matrix
+            :type F1: PETSc.Mat.Type.DENSE
+            :param F2: a dense PETSc matrix
+            :type F2: PETSc.Mat.Type.DENSE
+            :param F3: a dense PETSc matrix
+            :type F3: PETSc.Mat.Type.DENSE
+            :param X: a PETSc matrix
+            :type X: PETSc.Mat.Type.DENSE
+
+            :return: :math:`F_1 F_2 F_3^* X`
+            :rtype: PETSc.Mat.Type.DENSE
+        """
+        colsizes = X.getSizes()[-1]
+        Q = create_dense_matrix(self.get_comm(), (F3.getSizes()[-1], colsizes))
+        Z = create_dense_matrix(self.get_comm(), (F2.getSizes()[0], colsizes))
+        Y = create_dense_matrix(self.get_comm(), (F1.getSizes()[0], colsizes)) \
+            if Y == None else Y
+        
+        F3.hermitianTranspose()
+        F3.matMult(X, Q)
+        F3.hermitianTranspose()
+        F2.matMult(Q, Z)
+        F1.matMult(Z, Y)
+        Q.destroy()
+        Z.destroy()
+        return Y
     
     def apply_low_rank_factors_hermitian_transpose(self, F1, F2, F3, x):
         r"""
@@ -125,10 +155,10 @@ class LowRankUpdatedLinearOperator(LinearOperator):
             :param F3: a dense PETSc matrix
             :type F3: PETSc.Mat.Type.DENSE
             :param x: a PETSc vector
-            :type x: `Vec`_
+            :type x: PETSc.Vec.Type.STANDARD
 
             :return: :math:`F_3 F_2^* F_1^* x`
-            :rtype: `Vec`_
+            :rtype: PETSc.Vec.Type.STANDARD
         """
         z = F1.createVecRight()
         q = F2.createVecRight()
@@ -137,40 +167,98 @@ class LowRankUpdatedLinearOperator(LinearOperator):
         F2.multHermitian(z,q)
         F3.mult(q,y)
         return y
+    
+    def apply_low_rank_factors_hermitian_transpose_mat(self, F1, F2, F3, X, \
+                                                       Y=None):
+        r"""
+            :param F1: a dense PETSc matrix
+            :type F1: PETSc.Mat.Type.DENSE
+            :param F2: a dense PETSc matrix
+            :type F2: PETSc.Mat.Type.DENSE
+            :param F3: a dense PETSc matrix
+            :type F3: PETSc.Mat.Type.DENSE
+            :param X: a PETSc matrix
+            :type X: PETSc.Mat.Type.DENSE
 
-    def apply(self, x):
-        y = self.A.apply(x)
-        z = self.apply_low_rank_factors(self.B,self.K,self.C,x)
+            :return: :math:`F_3 F_2^* F_1^* X`
+            :rtype: PETSc.Mat.Type.DENSE
+        """
+        colsizes = X.getSizes()[-1]
+        Q = create_dense_matrix(self.get_comm(), (F1.getSizes()[-1], colsizes))
+        Z = create_dense_matrix(self.get_comm(), (F2.getSizes()[-1], colsizes))
+        Y = create_dense_matrix(self.get_comm(), (F3.getSizes()[0], colsizes)) \
+            if Y == None else Y
+        F1.hermitianTranspose()
+        F1.matMult(X, Q)
+        F1.hermitianTranspose()
+        F2.hermitianTranspose()
+        F2.matMult(Q, Z)
+        F2.hermitianTranspose()
+        F3.matMult(Z, Y)
+        Q.destroy()
+        Z.destroy()
+        return Y
+
+    def apply(self, x, y=None):
+        y = self.A.apply(x, y)
+        z = self.apply_low_rank_factors(self.B, self.K, self.C, x)
         y.axpy(1.0,z)
         z.destroy()
         return y
     
-    def apply_hermitian_transpose(self, x):
-        y = self.A.apply_hermitian_transpose(x)
-        z = self.apply_low_rank_factors_hermitian_transpose(self.B,\
-                                                            self.K,\
-                                                            self.C,\
-                                                            x)
+    def apply_mat(self, X, Y=None):
+        Y = self.A.apply_mat(X, Y)
+        Z = self.apply_low_rank_factors_mat(self.B, self.K, self.C, X)
+        Y.axpy(1.0, Z)
+        Z.destroy()
+        return Y
+    
+    def apply_hermitian_transpose(self, x, y=None):
+        y = self.A.apply_hermitian_transpose(x, y)
+        z = self.apply_low_rank_factors_hermitian_transpose(self.B, self.K,\
+                                                            self.C, x)
         y.axpy(1.0,z)
         z.destroy()
         return y
     
-    def solve(self, x):
-        y = self.A.solve(x)
+    def apply_hermitian_transpose_mat(self, X, Y=None):
+        Y = self.A.apply_hermitian_transpose_mat(X, Y)
+        Z = self.apply_low_rank_factors_hermitian_transpose_mat(self.B, self.K,\
+                                                                self.C, X)
+        Y.axpy(1.0,Z)
+        Z.destroy()
+        return Y
+    
+    def solve(self, x, y=None):
+        y = self.A.solve(x, y)
         z = self.apply_low_rank_factors(self.X,self.D,self.Y,x)
         y.axpy(-1.0,z)
         z.destroy()
         return y
+    
+    def solve_mat(self, X, Y=None):
+        Y = self.A.solve_mat(X, Y)
+        Z = self.apply_low_rank_factors_mat(self.X,self.D,self.Y,X)
+        Y.axpy(-1.0, Z)
+        Z.destroy()
+        return Y
         
-    def solve_hermitian_transpose(self, x):
-        y = self.A.solve_hermitian_transpose(x)
-        z = self.apply_low_rank_factors_hermitian_transpose(self.X,\
-                                                            self.D,
-                                                            self.Y,\
-                                                            x)
-        y.axpy(-1.0,z)
+    def solve_hermitian_transpose(self, x, y=None):
+        y = self.A.solve_hermitian_transpose(x) if y == None else \
+            self.A.solve_hermitian_transpose(x, y)
+        z = self.apply_low_rank_factors_hermitian_transpose(self.X, self.D,
+                                                            self.Y, x)
+        y.axpy(-1.0, z)
         z.destroy()
         return y
+    
+    def solve_hermitian_transpose_mat(self, X, Y=None):
+        Y = self.A.solve_hermitian_transpose_mat(X, Y)
+        Z = self.apply_low_rank_factors_hermitian_transpose_mat(self.X, self.D,
+                                                            self.Y, X)
+        Y.axpy(-1.0, Z)
+        Z.destroy()
+        return Y
     
     def destroy(self):
         if self.X != None:

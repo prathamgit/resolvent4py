@@ -49,3 +49,16 @@ def copy_mat_from_bv(bv):
     mat = bv_mat.copy()
     bv.restoreMat(bv_mat)
     return mat
+
+def create_dense_matrix(comm, sizes):
+    r"""
+        Create dense matrix
+
+        :param comm: MPI communicator
+        :param sizes: `MatSizeSpec`_
+        
+        :rtype: PETSc.Mat.Type.DENSE
+    """
+    M = PETSc.Mat().createDense(sizes, comm=comm)
+    M.setUp()
+    return M

@@ -28,13 +28,17 @@ Psi = res4py.read_dense_matrix(comm,path + 'Psi.dat',((Nl,N),(rl,r)))
 
 ksp = res4py.create_mumps_solver(comm,A)
 lin_op_ = res4py.MatrixLinearOperator(comm,A,ksp)
+Y = lin_op_.solve_hermitian_transpose_mat(B)
 lin_op_.destroy()
+
+#Y.view()
+
+
 
 # print(A.norm())
 
 # lin_op__ = res4py.LowRankUpdatedLinearOperator(comm,lin_op_,B,K,C,None)
 # lin_op = res4py.ProjectedLinearOperator(comm,lin_op__,Phi,Psi,False)
-
 
 # x = res4py.read_vector(comm,path + 'x.dat')
 # y = lin_op.apply(x)

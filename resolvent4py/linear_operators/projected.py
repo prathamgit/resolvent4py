@@ -1,5 +1,5 @@
 from .linear_operator import LinearOperator
-from ..petsc4py_helper_functions import compute_dense_inverse
+from ..linalg import compute_dense_inverse
 
 class ProjectedLinearOperator(LinearOperator):
     r"""

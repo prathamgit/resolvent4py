@@ -15,7 +15,7 @@ def _matrix_matrix_product(lin_op_action, X, Y):
         :type X: `BV`_
         :param Y: a SLEPc BV
         :type Y: `BV`_
-        
+
         :rtype: None
     """
     _, ncols = X.getSizes()
@@ -41,16 +41,16 @@ def randomized_svd(lin_op, lin_op_action, n_rand, n_loops, n_svals):
         :param n_svals: number of singular triplets to return
         :type n_svals: int
 
-        :return: a 3-tuple with the :code:`n_svals` singular values and 
-            corresponding left and right singular vectors
+        :return: :math:`(U,\,\Sigma,\, V)` a 3-tuple with the leading 
+            :code:`n_svals` singular values and corresponding left and \
+            right singular vectors
         :rtype: (PETSc Mat, PETSc Mat, PETSc Mat)
     """
-
     if lin_op_action == lin_op.apply:
         lin_op_action_adj = lin_op.apply_hermitian_transpose
     if lin_op_action == lin_op.solve:
         lin_op_action_adj = lin_op.solve_hermitian_transpose
-
+    
     X = SLEPc.BV().create(comm=lin_op.get_comm())
     X.setSizes(lin_op.get_dimensions()[0],n_rand)
     X.setFromOptions()
@@ -98,5 +98,4 @@ def randomized_svd(lin_op, lin_op_action, n_rand, n_loops, n_svals):
     for i in range (*S.getOwnershipRange()):
         S.setValues(i,i,s[i])
     S.assemble(None)
-
     return (Qfwd_mat, S, Qadj_mat)

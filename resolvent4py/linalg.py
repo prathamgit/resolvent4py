@@ -22,9 +22,9 @@ def compute_local_size(Nglob):
     Nloc = Nglob//size + 1 if np.mod(Nglob,size) > rank else Nglob//size
     return Nloc
 
-def mat_solve_hermitian_transpose(ksp, X):
+def mat_solve_hermitian_transpose(ksp, X, Y=None):
     r"""
-        Solve :math:`A^{-1}X = Y`, where :math:`X` is a PETSc matrix of type
+        Solve :math:`A^{-1}X = Z`, where :math:`X` is a PETSc matrix of type
         :code:`PETSc.Mat.Type.DENSE`
         
         :param ksp: a KPS solver structure
@@ -35,17 +35,25 @@ def mat_solve_hermitian_transpose(ksp, X):
         :return: a matrix of the same type and size as :math:`X`
         :rtype: PETSc.Mat.Type.DENSE
     """
-    Y = SLEPc.BV().createFromMat(X)
-    Y.setType(SLEPc.BV.Type.MAT)
-    for i in range (Y.getSizes()[-1]):
-        y = Y.getColumn(i)
+    sizes = X.getSizes()
+    Yarray = np.zeros((sizes[0][0], sizes[-1][-1]), dtype=np.complex128)
+    Y = X.duplicate() if Y == None else Y
+    y = X.createVecLeft()
+    for i in range (X.getSizes()[-1][-1]):
+        x = X.getColumnVector(i)
+        x.conjugate()
+        ksp.solveTranspose(x, y)
+        x.conjugate()
         y.conjugate()
-        ksp.solveTranspose(y,y)
-        y.conjugate()
-        Y.restoreColumn(i,y)
-    Z = copy_mat_from_bv(Y)
-    Y.destroy()
-    return Z
+        Yarray[:,i] = y.getArray()
+        x.destroy()
+    y.destroy()
+    offset, _ = Y.getOwnershipRange()
+    rows = np.arange(Yarray.shape[0], dtype=np.int64) + offset
+    cols = np.arange(Yarray.shape[-1], dtype=np.int64)
+    Y.setValues(rows, cols, Yarray.reshape(-1))
+    Y.assemble(None)
+    return Y
 
 def compute_dense_inverse(comm, M):
     r"""
@@ -77,6 +85,64 @@ def compute_dense_inverse(comm, M):
     Minv_array = M_vec.getArray().reshape((sizes[0][0], sizes[-1][-1]))
     Minv = PETSc.Mat().createDense(sizes, None, Minv_array, comm=comm)
     return Minv
+
+def compute_trace(comm, L1, L2, L2_hermitian_transpose=False):
+    r"""
+        If :code:`L2_hermitian_transpose==False`, compute 
+        :math:`\text{Tr}(L_1 L_2)`, else :math:`\text{Tr}(L_1 L_2^*)`.
+        Here, :math:`L_1` and :math:`L_2` are low-rank linear operators
+        (see :meth:`resolvent4py.linear_operators.LowRankLinearOperator`). 
+
+        :param comm: MPI communicator
+        :param L1: low-rank linear operator
+        :param L2: low-rank linear operator
+        :param L2_hermitian_transpose: [optional] :code:`True` or :code:`False`
+        :type L2_hermitian_transpose: bool
+
+        :rtype: PETSc scalar
+    """
+    if L2_hermitian_transpose == False:
+        F1 = L2.U.matMult(L2.Sigma)
+        F2 = L1.apply_mat(F1)
+        L2.V.hermitianTranspose()
+        F = L2.V.matMult(F2)
+        L2.V.hermitianTranspose()
+        F1.destroy()
+        F2.destroy()
+    else:
+        L2.Sigma.hermitianTranspose()
+        F1 = L2.V.matMult(L2.Sigma)
+        L2.Sigma.hermitianTranspose()
+        F2 = L1.apply_mat(F1)
+        F1.destroy()
+        L2.U.hermitianTranspose()
+        F = L2.U.matMult(F2)
+        L2.U.hermitianTranspose()
+        F2.destroy()
+    trace = comm.allreduce(np.sum(F.getDiagonal().getArray()), op=MPI.SUM)
+    return trace
+
+def hermitian_transpose(comm, Mat, in_place=False):
+    r"""
+        Return the hermitian transpose of the matrix :code:`Mat`.
+
+        :param comm: MPI communicator
+        :param Mat: PETSc matrix of any kind
+        :param in_place: [optional] in place transposition if :code:`True` and
+            out of place otherwise
+        :type in_place: bool
+    """
+    if in_place == False:
+        sizes = Mat.getSizes()
+        MatHT = PETSc.Mat().create(comm)
+        MatHT.setType(Mat.getType())
+        MatHT.setSizes((sizes[-1], sizes[0]))
+        MatHT.setUp()
+        Mat.setTransposePrecursor(MatHT)
+        Mat.hermitianTranspose(MatHT)
+    else:
+        MatHT = Mat.hermitianTranspose()
+    return MatHT
 
 def convert_coo_to_csr(comm, arrays, sizes):
     r"""

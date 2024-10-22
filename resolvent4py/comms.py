@@ -1,6 +1,4 @@
 import numpy as np
-import scipy as sp
-
 from mpi4py import MPI
 from petsc4py import PETSc
 from .miscellaneous import get_mpi_type
@@ -8,13 +6,13 @@ from .miscellaneous import get_mpi_type
 def sequential_to_distributed_matrix(Mat_seq, Mat_dist):
     r"""
         Populate a distributed dense matrix from a sequential dense matrix
-
+        
         :param Mat_seq: a sequential dense matrix
         :type Mat_seq: PETSc.Mat.Type.DENSE
         :param Mat_dist: a distributed dense matrix
         :type Mat_dist: PETSc.Mat.Type.DENSE
 
-        :rtype: PETSc.Mat.Type.DENSE
+        :return: None
     """
     array = Mat_seq.getDenseArray()
     r0, r1 = Mat_dist.getOwnershipRange()
@@ -23,9 +21,27 @@ def sequential_to_distributed_matrix(Mat_seq, Mat_dist):
     Mat_dist.setValues(rows,cols,array[r0:r1,].reshape(-1))
     Mat_dist.assemble(None)
 
+def sequential_to_distributed_vector(vec_seq, vec_dist):
+    r"""
+        Populate a distributed vector from a sequential vector
+
+        :param vec_seq: a sequential vector
+        :type vec_seq: PETSc.Vec.Type.SEQ
+        :param vec_dist: a distributed vector
+        :type vec_dist: PETSc.Mat.Type.MPI
+
+        :return: None
+    """
+    array = vec_seq.getArray()
+    r0, r1 = vec_dist.getOwnershipRange()
+    rows = np.arange(r0,r1)
+    vec_dist.setValues(rows,array[r0:r1,])
+    vec_dist.assemble(None)
+
 def distributed_to_sequential_matrix(comm, Mat_dist):
     r"""
         Populate a sequential dense matrix from a distributed dense matrix
+        (equivalent to a gatherall operation)
 
         :param comm: MPI communicator
         :param Mat_dist: a distributed dense matrix
@@ -44,31 +60,30 @@ def distributed_to_sequential_matrix(comm, Mat_dist):
     Mat_seq = PETSc.Mat().createDense((nr,nc), None, recvbuf, MPI.COMM_SELF)
     return Mat_seq
 
-def distributed_to_sequential_matrix(comm, Mat_dist):
+def distributed_to_sequential_vector(comm, vec_dist):
     r"""
-        Populate a sequential dense matrix from a distributed dense matrix
+        Populate a sequential vector from a distributed vector 
+        (equivalent to a gatherall operation)
 
         :param comm: MPI communicator
-        :param Mat_dist: a distributed dense matrix
-        :type Mat_dist: PETSc.Mat
-
-        :rtype: PETSc.Mat
+        :param vec_dist: a distributed dense matrix
+        :type vec_dist: PETSc.Mat.Type.MPI
+        
+        :rtype: PETSc.Vec.Type.SEQ
     """
-    array = Mat_dist.getDenseArray().reshape(-1)
+    array = vec_dist.getArray().copy()
     counts = comm.allgather(len(array))
     disps = np.concatenate(([0],np.cumsum(counts[:-1])))
     recvbuf = np.zeros(np.sum(counts), dtype=array.dtype)
     comm.Allgatherv(array, (recvbuf, counts, disps, get_mpi_type(array.dtype)))
-    sizes = Mat_dist.getSizes()
-    nr, nc = sizes[0][-1], sizes[-1][-1]
-    recvbuf = recvbuf.reshape((nr,nc))
-    Mat_seq = PETSc.Mat().createDense((nr,nc), None, recvbuf, MPI.COMM_SELF)
-    return Mat_seq
+    vec_seq = PETSc.Vec().createWithArray(recvbuf, comm=MPI.COMM_SELF)
+    return vec_seq
 
 def scatter_array_from_root_to_all(comm, array, locsize=None):
     r"""
         Scatter numpy array from root to all other processors
 
+        :param comm: MPI communicator
         :param array: numpy array to be scattered from root to the rest of
             the MPI pool
         :type array: numpy.array

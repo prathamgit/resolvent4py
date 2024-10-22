@@ -2,10 +2,8 @@ import abc
 import numpy as np
 from petsc4py import PETSc
 from ..error_handling_functions import raise_not_implemented_error
-from ..petsc4py_helper_functions import generate_random_petsc_vector
-from ..petsc4py_helper_functions import enforce_complex_conjugacy
-
-
+from ..random import generate_random_petsc_vector
+from ..linalg import enforce_complex_conjugacy
 
 class LinearOperator(metaclass=abc.ABCMeta):
     r"""
@@ -90,30 +88,43 @@ class LinearOperator(metaclass=abc.ABCMeta):
             :math:`x_{-i} = \overline{x_i}`, check if the vector :math:`Lx` \
             satisfies :math:`(Lx)_{-i}=\overline{(Lx)_{i}}`.
 
+            :return: :code:`True` if the linear operator has complex-conjugate
+                structure, :code:`False` otherwise.
             :rtype: bool
         """
         x = generate_random_petsc_vector(self._comm, self._dimensions[-1])
         enforce_complex_conjugacy(self._comm, x, self._nblocks)
         Lx = self.apply(x)
-        result = True if np.linalg.norm(Lx.getArray().imag) <= 1e-15 else False
+        result = True if np.linalg.norm(Lx.getArray().imag) <= 1e-14 else False
         x.destroy()
         Lx.destroy()
         return result
 
-    
     # Methods that must be implemented by subclasses
     @abc.abstractmethod
     def apply(self, x, y=None):
         r"""
-            Compute :math:`Lx = y`
+            Compute :math:`y = Lx`
 
             :param x: a PETSc vector
-            :type x: `Vec`_
+            :type x: PETSc.Vec.Type.STANDARD
             :param y: [optional] a PETSc vector to store the result
-            :type y: `Vec`_
+            :type y: PETSc.Vec.Type.STANDARD
 
-            :return: :math:`Lx` if :code:`y == None`
-            :rtype: `Vec`_
+            :rtype: PETSc.Vec.Type.STANDARD
+        """
+    
+    @abc.abstractmethod
+    def apply_mat(self, X, Y=None):
+        r"""
+            Compute :math:`Y = LX`
+
+            :param X: a PETSc matrix
+            :type X: PETSc.Mat.Type.DENSE
+            :param Y: [optional] a PETSc matrix to store the result
+            :type Y: PETSc.Mat.Type.DENSE
+
+            :rtype: PETSc.Mat.Type.DENSE
         """
 
     @abc.abstractmethod
@@ -126,41 +137,77 @@ class LinearOperator(metaclass=abc.ABCMeta):
     @raise_not_implemented_error
     def apply_hermitian_transpose(self, x, y=None):
         r"""
-            Compute :math:`L^*x = y`
+            Compute :math:`y = L^*x`
 
             :param x: a PETSc vector
-            :type x: `Vec`_
+            :type x: PETSc.Vec.Type.STANDARD
             :param y: [optional] a PETSc vector to store the result
-            :type y: `Vec`_
+            :type y: PETSc.Vec.Type.STANDARD
 
-            :return: :math:`L^*x` if :code:`y == None`
-            :rtype: `Vec`_
+            :rtype: PETSc.Vec.Type.STANDARD
+        """
+
+    @raise_not_implemented_error
+    def apply_hermitian_transpose_mat(self, X, Y=None):
+        r"""
+            Compute :math:`Y = L^*X`
+
+            :param X: a PETSc matrix
+            :type X: PETSc.Mat.Type.DENSE
+            :param Y: [optional] a PETSc matrix to store the result
+            :type Y: PETSc.Mat.Type.DENSE
+
+            :rtype: PETSc.Mat.Type.DENSE
         """
 
     @raise_not_implemented_error
     def solve(self, x, y=None):
         r"""
-            Compute :math:`L^{-1}x = y`
+            Compute :math:`y = L^{-1}x`
 
             :param x: a PETSc vector
-            :type x: `Vec`_
+            :type x: PETSc.Vec.Type.STANDARD
             :param y: [optional] a PETSc vector to store the result
-            :type y: `Vec`_
+            :type y: PETSc.Vec.Type.STANDARD
 
-            :return: :math:`L^{-1}x` if :code:`y == None`
-            :rtype: `Vec`_
+            :rtype: PETSc.Vec.Type.STANDARD
+        """
+
+    @raise_not_implemented_error
+    def solve_mat(self, X, Y=None):
+        r"""
+            Compute :math:`Y = L^{-1}X`
+            
+            :param X: a PETSc matrix
+            :type X: PETSc.Mat.Type.DENSE
+            :param Y: [optional] a PETSc matrix to store the result
+            :type Y: PETSc.Mat.Type.DENSE
+
+            :rtype: PETSc.Mat.Type.DENSE
         """
     
     @raise_not_implemented_error
     def solve_hermitian_transpose(self, x, y=None):
         r"""
-            Compute :math:`L^{-*}x = y`
+            Compute :math:`y = L^{-*}x`
 
             :param x: a PETSc vector
-            :type x: `Vec`_
+            :type x: PETSc.Vec.Type.STANDARD
             :param y: [optional] a PETSc vector to store the result
-            :type y: `Vec`_
+            :type y: PETSc.Vec.Type.STANDARD
 
-            :return: :math:`Lx` if :code:`y == None`
-            :rtype: `Vec`_
+            :rtype: PETSc.Vec.Type.STANDARD
+        """
+
+    @raise_not_implemented_error
+    def solve_hermitian_transpose_mat(self, X, Y=None):
+        r"""
+            Compute :math:`Y = L^{-*}X`
+            
+            :param X: a PETSc matrix
+            :type X: PETSc.Mat.Type.DENSE
+            :param Y: [optional] a PETSc matrix to store the result
+            :type Y: PETSc.Mat.Type.DENSE
+            
+            :rtype: PETSc.Mat.Type.DENSE
         """

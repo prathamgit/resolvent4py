@@ -8,7 +8,7 @@ def create_mumps_solver(comm,A):
         :param comm: MPI communicator (:code:`MPI.COMM_WORLD` or 
             :code:`MPI.COMM_SELF`)
         :param A: PETSc matrix
-        :type A: PETSc.Mat.Type.MATAIJ
+        :type A: PETSc.Mat.Type.AIJ
         :return ksp: PETSc KSP solver
         :rtype ksp: `KSP`_
     """
