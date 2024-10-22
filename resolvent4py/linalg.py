@@ -86,40 +86,48 @@ def compute_dense_inverse(comm, M):
     Minv = PETSc.Mat().createDense(sizes, None, Minv_array, comm=comm)
     return Minv
 
-def compute_trace(comm, L1, L2, L2_hermitian_transpose=False):
+def compute_matrix_product_contraction(comm, M, P):
+    r"""
+        Compute :math:`\sum_{i,j} M_{i,j}P_{i,j}`
+        
+        :param comm: MPI communicator
+        :param M: PETSc matrix
+        :type M: PETSc.Mat.Type.DENSE
+        :param P: PETSc matrix
+        :type P: PETSc.Mat.Type.DENSE
+
+        :rtype: PETSc scalar
+    """
+    M_array = M.getDenseArray()
+    P_array = P.getDenseArray()
+    value = comm.allreduce(np.sum(M_array*P_array), op=MPI.SUM)
+    return value
+
+def compute_trace_product(comm, L1, L2, L2_hermitian_transpose=False):
     r"""
         If :code:`L2_hermitian_transpose==False`, compute 
         :math:`\text{Tr}(L_1 L_2)`, else :math:`\text{Tr}(L_1 L_2^*)`.
-        Here, :math:`L_1` and :math:`L_2` are low-rank linear operators
-        (see :meth:`resolvent4py.linear_operators.LowRankLinearOperator`). 
 
         :param comm: MPI communicator
         :param L1: low-rank linear operator
-        :param L2: low-rank linear operator
+        :param L2: any linear operator
         :param L2_hermitian_transpose: [optional] :code:`True` or :code:`False`
         :type L2_hermitian_transpose: bool
 
         :rtype: PETSc scalar
     """
-    if L2_hermitian_transpose == False:
-        F1 = L2.U.matMult(L2.Sigma)
-        F2 = L1.apply_mat(F1)
-        L2.V.hermitianTranspose()
-        F = L2.V.matMult(F2)
-        L2.V.hermitianTranspose()
-        F1.destroy()
-        F2.destroy()
-    else:
-        L2.Sigma.hermitianTranspose()
-        F1 = L2.V.matMult(L2.Sigma)
-        L2.Sigma.hermitianTranspose()
-        F2 = L1.apply_mat(F1)
-        F1.destroy()
-        L2.U.hermitianTranspose()
-        F = L2.U.matMult(F2)
-        L2.U.hermitianTranspose()
-        F2.destroy()
-    trace = comm.allreduce(np.sum(F.getDiagonal().getArray()), op=MPI.SUM)
+    L2_action = L2.apply_mat if L2_hermitian_transpose == False else \
+        L2.apply_hermitian_transpose_mat
+    F1 = L1.U.matMult(L1.Sigma)
+    F2 = L2_action(F1)
+    L1.V.hermitianTranspose()
+    F3 = L1.V.matMult(F2)
+    L1.V.hermitianTranspose()
+    F3diag = F3.getDiagonal().getArray()
+    trace = comm.allreduce(np.sum(F3diag), op=MPI.SUM)
+    F1.destroy()
+    F2.destroy()
+    F3.destroy()
     return trace
 
 def hermitian_transpose(comm, Mat, in_place=False):

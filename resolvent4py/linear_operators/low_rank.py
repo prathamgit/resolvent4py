@@ -1,4 +1,6 @@
 from .linear_operator import LinearOperator
+import numpy as np
+from mpi4py import MPI
 
 class LowRankLinearOperator(LinearOperator):
     r"""
@@ -77,6 +79,6 @@ class LowRankLinearOperator(LinearOperator):
         F1.destroy()
         F2.destroy()
         return Y
-    
+        
     def destroy(self):
         pass

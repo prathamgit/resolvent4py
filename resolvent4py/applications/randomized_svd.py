@@ -50,6 +50,7 @@ def randomized_svd(lin_op, lin_op_action, n_rand, n_loops, n_svals):
         if lin_op.block_cc:
             enforce_complex_conjugacy(lin_op.get_comm(), xj, \
                                       lin_op.get_nblocks())
+        X.restoreColumn(j, xj)
     X.orthogonalize(None)
 
 
@@ -66,7 +67,7 @@ def randomized_svd(lin_op, lin_op_action, n_rand, n_loops, n_svals):
     while j < n_loops:
         Qadj_mat = Qadj.getMat()
         Qfwd_mat = Qfwd.getMat()
-        lin_op_action(Qadj_mat, Qadj_mat)
+        lin_op_action(Qadj_mat, Qfwd_mat)
         Qfwd.restoreMat(Qfwd_mat)
         Qfwd.orthogonalize(None)
         Qfwd_mat = Qfwd.getMat()
