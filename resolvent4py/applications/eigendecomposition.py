@@ -8,6 +8,7 @@ import scipy as sp
 from ..linalg import compute_dense_inverse
 from ..linalg import enforce_complex_conjugacy
 from ..miscellaneous import copy_mat_from_bv
+from ..miscellaneous import create_dense_matrix
 from ..comms import sequential_to_distributed_matrix
 from ..comms import distributed_to_sequential_matrix
 
@@ -100,13 +101,11 @@ def eigendecomposition(lin_op, lin_op_action, krylov_dim, n_evals):
 
     evals_vec = PETSc.Vec().createWithArray(evals, comm=MPI.COMM_SELF)
     Dseq = PETSc.Mat().createDiagonal(evals_vec)
-    Dseq = D.convert(PETSc.Mat.Type.DENSE)
+    Dseq.convert(PETSc.Mat.Type.DENSE)
     sizes_D = Qmat.getSizes()[-1]
-    D = PETSc.Mat().createDense((sizes_D, sizes_D), comm=lin_op.get_comm())
-    D.setUp()
+    D = create_dense_matrix(lin_op.get_comm(), (sizes_D, sizes_D))
     sequential_to_distributed_matrix(Dseq, D)
     return (D, Qmat)
-
 
 def right_and_left_eigendecomposition(lin_op, lin_op_action, krylov_dim, \
                                       n_evals, process_evals=None):
@@ -138,7 +137,7 @@ def right_and_left_eigendecomposition(lin_op, lin_op_action, krylov_dim, \
         lin_op_action_adj = lin_op.solve_hermitian_transpose
     elif lin_op_action == lin_op.apply:
         lin_op_action_adj = lin_op.apply_hermitian_transpose
-    process_evals = lambda x: x if process_evals == None else process_evals
+    process_evals = (lambda x: x) if process_evals == None else process_evals
 
     # Compute the right and left eigendecompositions
     Dfwd, Qfwd = eigendecomposition(lin_op, lin_op_action, krylov_dim, n_evals)
@@ -149,28 +148,29 @@ def right_and_left_eigendecomposition(lin_op, lin_op_action, krylov_dim, \
     Dadj_seq = distributed_to_sequential_matrix(lin_op.get_comm(), Dadj)
     Dfwd_seq_ = process_evals(Dfwd_seq.getDiagonal().getArray().copy())
     Dadj_seq_ = process_evals(Dadj_seq.getDiagonal().getArray().copy())
-    idces = [np.argmin(np.abs(Dadj_seq_ - val.conj())) for val in Dadj_seq_]
-    W = SLEPc.BV().createFromMat(Qadj)
-    W.setFromOptions()
+    idces = [np.argmin(np.abs(Dfwd_seq_ - val.conj())) for val in Dadj_seq_]
+    Qadj_array = Qadj.getDenseArray().copy()
     for j in range (len(idces)):
-        w = W.getColumnVector(idces[j])
-        W.insertVec(j, w)
-        w.destroy()
-    Wmat = copy_mat_from_bv(W)
-    Qadj.destroy()
+        q = Qadj.getColumnVector(idces[j])
+        Qadj_array[:,j] = q.getArray()
+        q.destroy()
+    offset, _ = Qadj.getOwnershipRange()
+    rows = np.arange(Qadj_array.shape[0], dtype=np.int64) + offset
+    cols = np.arange(Qadj_array.shape[-1], dtype=np.int64)
+    Qadj.setValues(rows, cols, Qadj_array.reshape(-1))
+    Qadj.assemble(None)
     # Biorthogonalize the eigenvectors
-    Wmat.hermitianTranspose()
-    M = Wmat.matMult(Qfwd)
-    Wmat.hermitianTranspose()
+    Qadj.hermitianTranspose()
+    M = Qadj.matMult(Qfwd)
+    Qadj.hermitianTranspose()
     Minv = compute_dense_inverse(lin_op.get_comm(), M)
-    Vmat = Qfwd.matMult(Minv)
+    V = Qfwd.matMult(Minv)
     Qfwd.destroy()
     # Assemble the processed eigenvalue matrix
     evals_vec = PETSc.Vec().createWithArray(Dfwd_seq_, comm=MPI.COMM_SELF)
     Dseq = PETSc.Mat().createDiagonal(evals_vec)
-    Dseq = D.convert(PETSc.Mat.Type.DENSE)
-    sizes_D = Wmat.getSizes()[-1]
-    D = PETSc.Mat().createDense((sizes_D, sizes_D), comm=lin_op.get_comm())
-    D.setUp()
+    Dseq.convert(PETSc.Mat.Type.DENSE)
+    sizes_D = Qadj.getSizes()[-1]
+    D = create_dense_matrix(lin_op.get_comm(), (sizes_D, sizes_D))
     sequential_to_distributed_matrix(Dseq, D)
-    return (Vmat, D, Wmat)
+    return (V, D, Qadj)

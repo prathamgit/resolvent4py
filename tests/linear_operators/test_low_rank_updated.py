@@ -62,7 +62,7 @@ if rank == 0:
     for (k, obj) in enumerate(objs):
         res4py.write_to_file(MPI.COMM_SELF, fnames_factors[k], obj)
 
-    x = np.random.randn(A.shape[0]) + 1j*np.random.randn(A.shape[0]) 
+    x = np.random.randn(A.shape[0]) + 1j*np.random.randn(A.shape[0])
     xvec = PETSc.Vec().createWithArray(x, comm=MPI.COMM_SELF)
     Ax = PETSc.Vec().createWithArray(A@x, comm=MPI.COMM_SELF)
     ATx = PETSc.Vec().createWithArray(A.conj().T@x, comm=MPI.COMM_SELF)
