@@ -22,7 +22,7 @@ from ..linalg import hermitian_transpose
 from ..miscellaneous import petscprint
 
 
-def compute_woodbury_update(comm, R, B, K, C):
+def _compute_woodbury_update(comm, R, B, K, C):
     r"""
         Assemble low-rank operator representation of 
 
@@ -122,8 +122,13 @@ class optimization_objects:
 
 def create_objective_and_gradient(manifold,opt_obj):
     r"""
+        Create functions to evaluate the cost function and the gradient
+
         :param manifold: one of the pymanopt manifolds
         :param opt_obj: instance of the optimization objects class
+
+        :return: (cost function, gradient, hessian=:code:`None`)
+        :rtype: (Collable, Collable, None)
     """
     
     euclidean_hessian = None
@@ -151,7 +156,7 @@ def create_objective_and_gradient(manifold,opt_obj):
         for i in range (len(opt_obj.freqs)):
             wi = opt_obj.weights[i]
             Ri = opt_obj.R_ops[i]
-            Mi, _ = compute_woodbury_update(comm, Ri, B, K, C)
+            Mi, _ = _compute_woodbury_update(comm, Ri, B, K, C)
             J += wi*compute_trace_product(comm, Ri, Ri, True)
             J -= 2.0*wi*compute_trace_product(comm, Ri, Mi, True)
             J += wi*compute_trace_product(comm, Mi, Mi, True)
@@ -198,7 +203,7 @@ def create_objective_and_gradient(manifold,opt_obj):
             
             wi = opt_obj.weights[i]
             Ri = opt_obj.R_ops[i]
-            M, Linv = compute_woodbury_update(comm, Ri, B, K, C)
+            M, Linv = _compute_woodbury_update(comm, Ri, B, K, C)
             
             # Create matrices to hold the hermitian transposes
             LinvT = hermitian_transpose(comm, Linv)
@@ -306,7 +311,7 @@ def create_objective_and_gradient(manifold,opt_obj):
 
 
 def test_euclidean_gradient(M, opt_obj, params, eps):
-
+    
     xa, K, xs = params
     comm = opt_obj.comm
     rank = comm.Get_rank()
