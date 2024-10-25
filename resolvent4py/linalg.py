@@ -1,11 +1,14 @@
 import numpy as np
 import scipy as sp
 import pickle
+import gc
 
-from slepc4py import SLEPc
 from petsc4py import PETSc
 from mpi4py import MPI
-from .miscellaneous import copy_mat_from_bv
+from .miscellaneous import get_mpi_type
+from .miscellaneous import petscprint
+
+from memory_profiler import profile
 
 def compute_local_size(Nglob):
     r"""
@@ -49,8 +52,8 @@ def mat_solve_hermitian_transpose(ksp, X, Y=None):
         x.destroy()
     y.destroy()
     offset, _ = Y.getOwnershipRange()
-    rows = np.arange(Yarray.shape[0], dtype=np.int64) + offset
-    cols = np.arange(Yarray.shape[-1], dtype=np.int64)
+    rows = np.arange(Yarray.shape[0], dtype=np.int32) + offset
+    cols = np.arange(Yarray.shape[-1], dtype=np.int32)
     Y.setValues(rows, cols, Yarray.reshape(-1))
     Y.assemble(None)
     return Y
@@ -152,6 +155,7 @@ def hermitian_transpose(comm, Mat, in_place=False):
         MatHT = Mat.hermitianTranspose()
     return MatHT
 
+# @profile
 def convert_coo_to_csr(comm, arrays, sizes):
     r"""
         Convert arrays = [row indices, col indices, values] for COO matrix 
@@ -168,37 +172,69 @@ def convert_coo_to_csr(comm, arrays, sizes):
             matrix assembly
         :rtype: list
     """
-    pool_rank, pool_size = comm.Get_rank(), comm.Get_size()
+
+    rank = comm.Get_rank()
+    pool = np.arange(comm.Get_size())
     rows, cols, vals = arrays
     idces = np.argsort(rows).reshape(-1)
     rows, cols, vals = rows[idces], cols[idces], vals[idces]
 
-    mat_row_sizes_local = np.asarray(comm.allgather(sizes[0][0]),dtype=np.int64)
+    mat_row_sizes_local = np.asarray(comm.allgather(sizes[0][0]),dtype=np.int32)
     mat_row_displ = np.concatenate(([0],np.cumsum(mat_row_sizes_local[:-1])))
-    ownership_ranges = np.zeros((comm.Get_size(),2),dtype=np.int64)
+    ownership_ranges = np.zeros((comm.Get_size(),2),dtype=np.int32)
     ownership_ranges[:,0] = mat_row_displ
     ownership_ranges[:-1,1] = ownership_ranges[1:,0]
     ownership_ranges[-1,1] = sizes[0][-1]
 
-    my_rows, my_cols, my_vals = [], [], []
-    for i in range (pool_size):
+    send_rows, send_cols = [], []
+    send_vals, lengths = [], []
+    for i in pool:
         idces = np.argwhere((rows >= ownership_ranges[i,0]) & \
                             (rows < ownership_ranges[i,1])).reshape(-1)
-        rows_i, cols_i, vals_i = rows[idces], cols[idces], vals[idces]
-        if i != pool_rank:
-            comm.send(pickle.dumps([rows_i, cols_i, vals_i]),dest=i)
-            rows_i, cols_i, vals_i = pickle.loads(comm.recv(source=i))
-        my_rows.extend(rows_i)
-        my_cols.extend(cols_i)
-        my_vals.extend(vals_i)
+        lengths.append(np.asarray([len(idces)],dtype=np.int32))
+        send_rows.append(rows[idces])
+        send_cols.append(cols[idces])
+        send_vals.append(vals[idces])
+    
+    recv_bufs = [np.empty(1, dtype=np.int32) for _ in pool]
+    recv_reqs = [comm.Irecv(bf,source=i) for (bf,i) in zip(recv_bufs,pool)]
+    send_reqs = [comm.Isend(sz,dest=i) for (i,sz) in enumerate(lengths)]
+    MPI.Request.waitall(send_reqs + recv_reqs)
+    lengths = [buf[0] for buf in recv_bufs]
 
-    my_rows = np.asarray(my_rows,dtype=np.int64) - ownership_ranges[pool_rank,0]
-    my_cols = np.asarray(my_cols,dtype=np.int64)
+    dtypes = [np.int32, np.int32, np.complex128]
+    my_arrays = []
+    for (j,array) in enumerate([send_rows, send_cols, send_vals]):
+        
+        dtype = dtypes[j]
+        mpi_type = get_mpi_type(np.dtype(dtype))
+        recv_bufs = [[np.empty(lengths[i],dtype=dtype), mpi_type] for i in pool]
+        recv_reqs = [comm.Irecv(bf,source=i) for (bf,i) in zip(recv_bufs,pool)]
+        send_reqs = [comm.Isend(array[i],dest=i) for i in pool]
+        MPI.Request.waitall(send_reqs + recv_reqs)
+        my_arrays.append([recv_bufs[i][0] for i in pool])
+
+    my_rows, my_cols, my_vals = [], [], []
+    for i in pool:
+        my_rows.extend(my_arrays[0][i])
+        my_cols.extend(my_arrays[1][i])
+        my_vals.extend(my_arrays[2][i])
+
+    my_rows = np.asarray(my_rows,dtype=np.int32) - ownership_ranges[rank,0]
+    my_cols = np.asarray(my_cols,dtype=np.int32)
     my_vals = np.asarray(my_vals,dtype=np.complex128)
 
-    _, rows_counts = np.unique(my_rows,return_counts=True)
-    my_rows_ptr = np.concatenate(([0],np.cumsum(rows_counts)))
+    idces = np.argsort(my_rows).reshape(-1)
+    my_rows = my_rows[idces]
+    my_cols = my_cols[idces]
+    my_vals = my_vals[idces]
 
+    ni = 0
+    my_rows_ptr = np.zeros(sizes[0][0]+1,dtype=np.int32)
+    for i in range (sizes[0][0]):
+        ni += np.count_nonzero(my_rows == i)
+        my_rows_ptr[i+1] = ni
+    
     return my_rows_ptr, my_cols, my_vals
 
 

@@ -9,6 +9,7 @@ from ..linalg import compute_dense_inverse
 from ..linalg import enforce_complex_conjugacy
 from ..miscellaneous import copy_mat_from_bv
 from ..miscellaneous import create_dense_matrix
+from ..miscellaneous import petscprint
 from ..comms import sequential_to_distributed_matrix
 from ..comms import distributed_to_sequential_matrix
 
@@ -53,6 +54,9 @@ def arnoldi_iteration(lin_op, lin_op_action, krylov_dim):
     # Perform Arnoldi iteration
     for k in range(1,krylov_dim+1):
         v = lin_op_action(q)
+        string = "Arnoldi iteration (%d/%d) - ||Aq|| "%(k, krylov_dim) + \
+                    "= %1.15e"%(v.norm())
+        petscprint(comm, string)
         for j in range (k):
             qj = Q.getColumn(j)
             H[j,k-1] = v.dot(qj)
