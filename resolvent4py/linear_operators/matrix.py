@@ -1,5 +1,6 @@
 from .linear_operator import LinearOperator
 from ..linalg import mat_solve_hermitian_transpose
+from ..miscellaneous import create_dense_matrix
 from petsc4py import PETSc
 
 class MatrixLinearOperator(LinearOperator):
@@ -22,13 +23,9 @@ class MatrixLinearOperator(LinearOperator):
         :type nblocks: int
     """
     def __init__(self, comm, A, ksp=None, nblocks=None):
-
         self.A = A
         self.ksp = ksp
         super().__init__(comm, 'MatrixLinearOperator', A.getSizes(), nblocks)
-        # self.real = self.check_if_real_valued()
-        # self.block_cc = self.check_if_complex_conjugate_structure() if \
-        #     self.get_nblocks() != None else None
         
     def apply(self, x, y=None):
         y = self.create_left_vector() if y == None else y
@@ -46,7 +43,7 @@ class MatrixLinearOperator(LinearOperator):
     
     def apply_hermitian_transpose_mat(self, X, Y=None):
         self.A.hermitianTranspose()
-        Y = self.A.matMult(X) if Y == None else self.A.matMult(X, Y)
+        Y = self.A.matMult(X, Y)
         self.A.hermitianTranspose()
         return Y
     
@@ -66,8 +63,7 @@ class MatrixLinearOperator(LinearOperator):
         if self.ksp != None:
             if Y == None:
                 sizes = (self.get_dimensions()[0], X.getSizes()[-1])
-                Y = PETSc.Mat().createDense(sizes, comm=self.get_comm())
-                Y.setUp()
+                Y = create_dense_matrix(self.get_comm(), sizes)
             self.ksp.matSolve(X, Y)
             return Y
         else:
