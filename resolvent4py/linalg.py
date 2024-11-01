@@ -1,14 +1,11 @@
 import numpy as np
 import scipy as sp
-import pickle
-import gc
 
 from petsc4py import PETSc
 from mpi4py import MPI
 from .miscellaneous import get_mpi_type
 from .miscellaneous import petscprint
 
-from memory_profiler import profile
 
 def compute_local_size(Nglob):
     r"""
@@ -133,7 +130,7 @@ def compute_trace_product(comm, L1, L2, L2_hermitian_transpose=False):
     F3.destroy()
     return trace
 
-def hermitian_transpose(comm, Mat, in_place=False):
+def hermitian_transpose(comm, Mat, in_place=False, MatHT=None):
     r"""
         Return the hermitian transpose of the matrix :code:`Mat`.
 
@@ -142,20 +139,24 @@ def hermitian_transpose(comm, Mat, in_place=False):
         :param in_place: [optional] in place transposition if :code:`True` and
             out of place otherwise
         :type in_place: bool
+        :param MatHT: [optional] matrix with the correct layout to hold the
+            hermitian transpose of :code:`Mat`
+        :param Mat: PETSc matrix of any kind
     """
     if in_place == False:
-        sizes = Mat.getSizes()
-        MatHT = PETSc.Mat().create(comm)
-        MatHT.setType(Mat.getType())
-        MatHT.setSizes((sizes[-1], sizes[0]))
-        MatHT.setUp()
+        if MatHT == None:
+            sizes = Mat.getSizes()
+            MatHT = PETSc.Mat().create(comm)
+            MatHT.setType(Mat.getType())
+            MatHT.setSizes((sizes[-1], sizes[0]))
+            MatHT.setUp()
         Mat.setTransposePrecursor(MatHT)
         Mat.hermitianTranspose(MatHT)
+        return MatHT
     else:
-        MatHT = Mat.hermitianTranspose()
-    return MatHT
+        MatHT_ = Mat.hermitianTranspose()
+        return MatHT_
 
-# @profile
 def convert_coo_to_csr(comm, arrays, sizes):
     r"""
         Convert arrays = [row indices, col indices, values] for COO matrix 
@@ -326,3 +327,16 @@ def check_complex_conjugacy(comm, vec, nblocks):
     vec_seq.destroy()
     cc = comm.bcast(cc, root=0)
     return cc
+
+
+def create_AIJ_identity(comm, sizes):
+    r"""
+        :param comm: MPI Communicator
+        :param sizes: `MatSizeSpec`_
+
+        :return: identity matrix
+        :rtype: PETSc.Mat.Type.AIJ
+    """
+    Id = PETSc.Mat().createConstantDiagonal(sizes, 1.0, comm)
+    Id.convert(PETSc.Mat.Type.AIJ)
+    return Id

@@ -1,6 +1,7 @@
 from .linear_operator import LinearOperator
 import numpy as np
 from mpi4py import MPI
+from ..linalg import hermitian_transpose
 
 class LowRankLinearOperator(LinearOperator):
     r"""
@@ -27,14 +28,11 @@ class LowRankLinearOperator(LinearOperator):
     """
     def __init__(self, comm, U, Sigma, V, nblocks=None):
         
-        dimensions = (U.getSizes()[0],V.getSizes()[0])
-        super().__init__(comm, 'LowRankLinearOperator', dimensions, nblocks)
         self.U = U
         self.Sigma = Sigma
         self.V = V
-        self.real = self.check_if_real_valued()
-        self.block_cc = self.check_if_complex_conjugate_structure() if \
-            self.get_nblocks() != None else None
+        dimensions = (U.getSizes()[0],V.getSizes()[0])
+        super().__init__(comm, 'LowRankLinearOperator', dimensions, nblocks)
         
     def apply(self, x, y=None):
         z = self.V.createVecRight()
@@ -73,7 +71,7 @@ class LowRankLinearOperator(LinearOperator):
         self.Sigma.hermitianTranspose()
         F1 = self.U.matMult(X)
         F2 = self.Sigma.matMult(F1)
-        Y = self.V.matMult(F2) if Y == None else self.U.matMult(F2, Y)
+        Y = self.V.matMult(F2) if Y == None else self.V.matMult(F2, Y)
         self.U.hermitianTranspose()
         self.Sigma.hermitianTranspose()
         F1.destroy()
@@ -81,4 +79,6 @@ class LowRankLinearOperator(LinearOperator):
         return Y
         
     def destroy(self):
-        pass
+        self.U.destroy()
+        self.Sigma.destroy()
+        self.V.destroy()

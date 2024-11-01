@@ -26,9 +26,9 @@ class MatrixLinearOperator(LinearOperator):
         self.A = A
         self.ksp = ksp
         super().__init__(comm, 'MatrixLinearOperator', A.getSizes(), nblocks)
-        self.real = self.check_if_real_valued()
-        self.block_cc = self.check_if_complex_conjugate_structure() if \
-            self.get_nblocks() != None else None
+        # self.real = self.check_if_real_valued()
+        # self.block_cc = self.check_if_complex_conjugate_structure() if \
+        #     self.get_nblocks() != None else None
         
     def apply(self, x, y=None):
         y = self.create_left_vector() if y == None else y

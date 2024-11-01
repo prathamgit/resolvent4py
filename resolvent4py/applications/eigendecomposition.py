@@ -45,9 +45,9 @@ def arnoldi_iteration(lin_op, lin_op_action, krylov_dim):
     H = np.zeros((krylov_dim,krylov_dim),dtype=np.complex128)
     # Draw the first vector at random
     q = Q.createVec()
-    q.setArray(np.random.randn(sizes[0])) if lin_op.real == True else \
+    q.setArray(np.random.randn(sizes[0])) if lin_op._real == True else \
         q.setArray(np.random.randn(sizes[0]) + 1j*np.random.randn(sizes[0]))
-    enforce_complex_conjugacy(comm, nblocks) if lin_op.block_cc == True \
+    enforce_complex_conjugacy(comm, nblocks) if lin_op._block_cc == True \
         else None
     q.scale(1./q.norm())
     Q.insertVec(0,q)
@@ -56,7 +56,7 @@ def arnoldi_iteration(lin_op, lin_op_action, krylov_dim):
         v = lin_op_action(q)
         string = "Arnoldi iteration (%d/%d) - ||Aq|| "%(k, krylov_dim) + \
                     "= %1.15e"%(v.norm())
-        petscprint(comm, string)
+        # petscprint(comm, string)
         for j in range (k):
             qj = Q.getColumn(j)
             H[j,k-1] = v.dot(qj)

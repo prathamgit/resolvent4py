@@ -7,12 +7,13 @@ import numpy as np
 from ..linalg import enforce_complex_conjugacy
 from ..miscellaneous import create_dense_matrix
 from ..miscellaneous import copy_mat_from_bv
+from ..miscellaneous import petscprint
 
 def randomized_svd(lin_op, lin_op_action, n_rand, n_loops, n_svals):
     r"""
         Compute the randomized SVD of the linear operator :math:`L` 
         specified by :code:`lin_op`. 
-
+        
         :param lin_op: any child class of the :code:`LinearOperator` class
         :param lin_op_action: one of :code:`lin_op.apply_mat` or 
             :code:`lin_op.solve_mat`
@@ -35,24 +36,22 @@ def randomized_svd(lin_op, lin_op_action, n_rand, n_loops, n_svals):
     
     # Assemble random BV
     rowsizes = lin_op.get_dimensions()[0]
-    X = SLEPc.BV().create(comm=lin_op.get_comm())
-    X.setSizes(rowsizes,n_rand)
+    X = SLEPc.BV().create(comm=lin_op._comm)
+    X.setSizes(rowsizes, n_rand)
     X.setFromOptions()
     X.setRandomNormal()
     for j in range (n_rand):
         xj = X.getColumn(j)
-        if lin_op.real:
-            rows = np.arange(rowsizes[0], dtype=np.int64) + \
-                xj.getOwnershipRange()[0]
+        if lin_op._real:
+            row_offset = xj.getOwnershipRange()[0]
+            rows = np.arange(rowsizes[0], dtype=np.int64) + row_offset
             array = xj.getArray()
-            xj.setValues(rows, array)
-            xj.assemble(None)
-        if lin_op.block_cc:
-            enforce_complex_conjugacy(lin_op.get_comm(), xj, \
-                                      lin_op.get_nblocks())
+            xj.setValues(rows, array.real)
+            xj.assemble()
+        if lin_op._block_cc:
+            enforce_complex_conjugacy(lin_op._comm, xj, lin_op._nblocks)
         X.restoreColumn(j, xj)
     X.orthogonalize(None)
-
 
     Qadj = X.duplicate()
     X_mat = X.getMat()

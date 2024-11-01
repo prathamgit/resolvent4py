@@ -2,6 +2,7 @@ from petsc4py import PETSc
 from .linear_operator import LinearOperator
 from ..linalg import compute_dense_inverse
 from ..linalg import mat_solve_hermitian_transpose
+from ..linalg import hermitian_transpose
 from ..miscellaneous import create_dense_matrix
 
 class LowRankUpdatedLinearOperator(LinearOperator):
@@ -58,26 +59,23 @@ class LowRankUpdatedLinearOperator(LinearOperator):
 
     def __init__(self, comm, A, B, K, C, woodbury_factors=None, nblocks=None):
 
-        super().__init__(comm, 'LowRankUpdatedLinearOperator', \
-                         A.get_dimensions(), nblocks)
         self.A = A
         self.B = B
         self.K = K
         self.C = C
-        self.real = self.check_if_real_valued()
-        self.block_cc = self.check_if_complex_conjugate_structure() if \
-            self.get_nblocks() != None else None
-        
         if woodbury_factors == None:
             try:
-                self.compute_woodbury_factors()
+                self.compute_woodbury_factors(comm)
             except:
                 self.X, self.D, self.Y = None, None, None
         else:
             self.X, self.D, self.Y = woodbury_factors
+
+        super().__init__(comm, 'LowRankUpdatedLinearOperator', \
+                         A.get_dimensions(), nblocks)
             
 
-    def compute_woodbury_factors(self):
+    def compute_woodbury_factors(self, comm):
         r"""
             Compute Woodbury factors :code:`X`, :code:`D` and :code:`Y` 
             and set corresponding attributes.
@@ -85,15 +83,22 @@ class LowRankUpdatedLinearOperator(LinearOperator):
             :rtype: None
         """
         self.X = self.B.duplicate()
-        self.A.ksp.matSolve(self.B,self.X)
+        self.A.ksp.matSolve(self.B, self.X)
         self.Y = mat_solve_hermitian_transpose(self.A.ksp, self.C)
-        self.C.hermitianTranspose()
-        M = self.C.matMult(self.X).matMult(self.K)
-        Id = PETSc.Mat().createConstantDiagonal(M.getSizes(),1.0,\
-                                                comm=self.get_comm())
+        XK = self.X.matMult(self.K)
+        CHT = hermitian_transpose(comm, self.C)
+        M = CHT.matMult(XK)
+        Id = PETSc.Mat().createConstantDiagonal(M.getSizes(),1.0,comm=comm)
         M.axpy(1.0,Id,structure=PETSc.Mat.Structure.SAME)
-        self.D = self.K.matMult(compute_dense_inverse(self.get_comm(),M))
-        self.C.hermitianTranspose()
+        Minv = compute_dense_inverse(comm,M)
+        self.D = self.K.matMult(Minv)
+        Minv.destroy()
+        M.destroy()
+        XK.destroy()
+        CHT.destroy()
+        Id.destroy()
+
+
 
     def apply_low_rank_factors(self, F1, F2, F3, x):
         r"""
@@ -260,8 +265,15 @@ class LowRankUpdatedLinearOperator(LinearOperator):
         Z.destroy()
         return Y
     
-    def destroy(self):
+    def destroy_woodbury_factors(self):
         if self.X != None:
             self.X.destroy()
             self.D.destroy()
             self.Y.destroy()
+    
+    def destroy(self):
+        self.destroy_woodbury_factors()
+        self.B.destroy()
+        self.K.destroy()
+        self.C.destroy()
+        

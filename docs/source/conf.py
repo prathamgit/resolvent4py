@@ -38,6 +38,7 @@ rst_prolog = """
 .. |pkgname| replace:: resolvent4py
 .. _MatType: https://petsc.org/release/petsc4py/reference/petsc4py.PETSc.Mat.Type.html
 .. _MatSizeSpec: https://petsc.org/release/petsc4py/reference/petsc4py.typing.MatSizeSpec.html#petsc4py.typing.MatSizeSpec
+.. _VecSizeSpec: https://petsc.org/release/petsc4py/reference/petsc4py.typing.LayoutSizeSpec.html#petsc4py.typing.LayoutSizeSpec
 .. _KSPType: https://petsc.org/release/petsc4py/reference/petsc4py.PETSc.KSP.Type.html#petsc4py.PETSc.KSP.Type
 .. _KSP: https://petsc.org/release/petsc4py/reference/petsc4py.PETSc.KSP.html
 .. _Vec: https://petsc.org/release/petsc4py/reference/petsc4py.PETSc.Vec.html

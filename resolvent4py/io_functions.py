@@ -6,19 +6,22 @@ from .linalg import convert_coo_to_csr
 from .miscellaneous import petscprint
 from .linalg import compute_local_size
 
-def read_vector(comm, filename):
+def read_vector(comm, filename, sizes=None):
     r"""
         Read PETSc Vec from file
 
         :param comm: MPI communicator (MPI.COMM_WORLD or MPI.COMM_SELF)
         :param filename: name of the file that holds the vector
         :type filename: str
+        :param sizes: [optional] (local row size, global row size)
+        :type sizes: `VecSizeSpec`_
         
         :return: vector with the data read from the file
         :rtype: PETSc.Vec
     """
     viewer = PETSc.Viewer().createMPIIO(filename, "r", comm=comm)
     vec = PETSc.Vec().create(comm)
+    vec.setSizes(sizes) if sizes != None else None
     vec.load(viewer)
     viewer.destroy()
     return vec
@@ -35,24 +38,24 @@ def read_coo_matrix(comm, filenames, sizes):
         :rtype: PETSc.Mat
     """
     fname_rows, fname_cols, fname_vals = filenames
-    rows = read_vector(comm,fname_rows).getArray().real
-    rows = np.asarray(rows,dtype=np.int32)
-    cols = read_vector(comm,fname_cols).getArray().real
-    cols = np.asarray(cols,dtype=np.int32)
-    vals = read_vector(comm,fname_vals).getArray()
-    nnz = sum(comm.allgather(len(vals)))
-    petscprint(comm, "Number of non-zero entries = %d"%nnz)
+    rowsvec = read_vector(comm,fname_rows)
+    rows = np.asarray(rowsvec.getArray().real,dtype=np.int32)
+    colsvec = read_vector(comm,fname_cols)
+    cols = np.asarray(colsvec.getArray().real,dtype=np.int32)
+    valsvec = read_vector(comm,fname_vals)
+    vals = valsvec.getArray()
     idces = np.argwhere(np.abs(vals) <= 1e-16)
     rows = np.delete(rows, idces)
     cols = np.delete(cols, idces)
     vals = np.delete(vals, idces)
-    nnz = sum(comm.allgather(len(vals)))
-    petscprint(comm, "Number of non-zero entries = %d"%nnz)
     rows_ptr, cols, vals = convert_coo_to_csr(comm,[rows,cols,vals],sizes)
     M = PETSc.Mat().createAIJ(sizes, comm=comm)
     M.setPreallocationCSR((rows_ptr,cols))
     M.setValuesCSR(rows_ptr,cols,vals,True)
     M.assemble(False)
+    rowsvec.destroy()
+    colsvec.destroy()
+    valsvec.destroy()
     return M
 
 # def assemble_sparse_matrix(comm,arrays,sizes):

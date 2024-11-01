@@ -4,6 +4,7 @@ from petsc4py import PETSc
 from ..error_handling_functions import raise_not_implemented_error
 from ..random import generate_random_petsc_vector
 from ..linalg import enforce_complex_conjugacy
+from ..linalg import check_complex_conjugacy
 
 class LinearOperator(metaclass=abc.ABCMeta):
     r"""
@@ -25,7 +26,10 @@ class LinearOperator(metaclass=abc.ABCMeta):
         self._name = name
         self._dimensions = dimensions
         self._nblocks = nblocks
-
+        self._real = self.check_if_real_valued()
+        self._block_cc = self.check_if_complex_conjugate_structure() if \
+            self._nblocks != None else None
+    
     def get_comm(self):
         """The MPI communicator"""
         return self._comm
@@ -70,9 +74,11 @@ class LinearOperator(metaclass=abc.ABCMeta):
         """
         sizes = self.get_dimensions()[-1]
         array = np.random.randn(sizes[0])
-        x = PETSc.Vec().createWithArray(array, sizes, None, self.get_comm())
+        x = PETSc.Vec().createWithArray(array, sizes, None, self._comm)
         Lx = self.apply(x)
-        result = True if np.linalg.norm(Lx.getArray().imag) <= 1e-15 else False
+        Lxai = Lx.getArray().imag
+        norm = np.sqrt(sum(self._comm.allgather(np.linalg.norm(Lxai)**2)))
+        result = True if norm <= 1e-14 else False
         x.destroy()
         Lx.destroy()
         return result
@@ -94,8 +100,15 @@ class LinearOperator(metaclass=abc.ABCMeta):
         """
         x = generate_random_petsc_vector(self._comm, self._dimensions[-1])
         enforce_complex_conjugacy(self._comm, x, self._nblocks)
+        cc_x = check_complex_conjugacy(self._comm, x, self._nblocks)
+        if cc_x == False:
+            raise ValueError(
+                f"Error from {self.get_name()}.check_if_complex_conjugate"
+                f"_structure(): complex conjugacy was not enforced "
+                f"appropriately."
+            )
         Lx = self.apply(x)
-        result = True if np.linalg.norm(Lx.getArray().imag) <= 1e-14 else False
+        result = check_complex_conjugacy(self._comm, Lx, self._nblocks)
         x.destroy()
         Lx.destroy()
         return result
