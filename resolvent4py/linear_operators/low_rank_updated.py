@@ -335,7 +335,7 @@ class LowRankUpdatedLinearOperator(LinearOperator):
     def __init__(self, comm, A, B, K, C, woodbury_factors=None, nblocks=None):
 
         self.A = A
-        self.L = LowRankLinearOperator(B, K, C, nblocks)
+        self.L = LowRankLinearOperator(comm, B, K, C, nblocks)
         self.W = self.compute_woodbury_operator(comm, nblocks) \
             if woodbury_factors == None else \
                 LowRankLinearOperator(comm, *woodbury_factors, nblocks)
