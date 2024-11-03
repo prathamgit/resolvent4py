@@ -123,11 +123,12 @@ def compute_trace_product(comm, L1, L2, L2_hermitian_transpose=False):
     L1.V.hermitianTranspose()
     F3 = L1.V.matMult(F2)
     L1.V.hermitianTranspose()
-    F3diag = F3.getDiagonal().getArray()
-    trace = comm.allreduce(np.sum(F3diag), op=MPI.SUM)
+    F3diag = F3.getDiagonal()
+    trace = comm.allreduce(np.sum(F3diag.getArray()), op=MPI.SUM)
     F1.destroy()
     F2.destroy()
     F3.destroy()
+    F3diag.destroy()
     return trace
 
 def hermitian_transpose(comm, Mat, in_place=False, MatHT=None):

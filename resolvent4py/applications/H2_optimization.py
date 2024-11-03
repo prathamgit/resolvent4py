@@ -23,9 +23,38 @@ from ..linalg import compute_matrix_product_contraction
 from ..linalg import compute_trace_product
 from ..linalg import hermitian_transpose
 from ..miscellaneous import petscprint
+from ..miscellaneous import create_dense_matrix
+
+def _compute_trace_product(comm, L1, L2, L2_hermitian_transpose=False):
+    r"""
+        If :code:`L2_hermitian_transpose==False`, compute 
+        :math:`\text{Tr}(L_1 L_2)`, else :math:`\text{Tr}(L_1 L_2^*)`.
+
+        :param comm: MPI communicator
+        :param L1: low-rank linear operator
+        :param L2: any linear operator
+        :param L2_hermitian_transpose: [optional] :code:`True` or :code:`False`
+        :type L2_hermitian_transpose: bool
+
+        :rtype: PETSc scalar
+    """
+    L2_action = L2.apply_mat if L2_hermitian_transpose == False else \
+        L2.apply_hermitian_transpose_mat
+    F1 = L1.U.matMult(L1.Sigma)
+    F2 = L2_action(F1)
+    L1.V.hermitianTranspose()
+    F3 = L1.V.matMult(F2)
+    L1.V.hermitianTranspose()
+    F3diag = F3.getDiagonal()
+    trace = comm.allreduce(np.sum(F3diag.getArray()), op=MPI.SUM)
+    F1.destroy()
+    F2.destroy()
+    F3.destroy()
+    F3diag.destroy()
+    return trace
 
 
-def _compute_woodbury_update(comm, R, B, K, C):
+def _compute_woodbury_update(comm, R, B, K, C, RB, KLinv, RHTC, CHT, F1, F2):
     r"""
         Assemble low-rank operator representation of 
 
@@ -43,20 +72,18 @@ def _compute_woodbury_update(comm, R, B, K, C):
 
         :return: a 2-tuple with a low-rank operator representation of :math:`M` 
             and the PETSc dense matrix :math:`L^{-1}`
-
     """
-    RB = R.apply_mat(B)
-    RHTC = R.apply_hermitian_transpose_mat(C)
-    CHT = hermitian_transpose(comm, C)
+    RB = R.apply_mat(B, RB)
+    RHTC = R.apply_hermitian_transpose_mat(C, RHTC, (F1, F2))
     CHTRB = CHT.matMult(RB)
     L = CHTRB.matMult(K)
     Id = PETSc.Mat().createConstantDiagonal(L.getSizes(), 1.0, comm=comm)
     Id.convert(PETSc.Mat.Type.DENSE)
     L.axpy(1.0,Id,structure=PETSc.Mat.Structure.SAME)
     Linv = compute_dense_inverse(comm,L)
-    KLinv = K.matMult(Linv)
+    K.matMult(Linv, KLinv)
     M = LowRankLinearOperator(comm, RB, KLinv, RHTC)
-    mats = [CHT, CHTRB, Id, L]
+    mats = [CHTRB, L, Id]
     for mat in mats: mat.destroy()
     return M, Linv
 
@@ -124,6 +151,80 @@ class optimization_objects:
                                                            dB, grad_B).real
             dB.destroy()
         return grad_p
+    
+def cost_profile(params, opt_obj):
+    r"""
+        Evaluate the cost function
+
+        :param params: a 3-tuple (actuator parameters, feedback gains, 
+            sensor parameters)
+
+        :rtype: float
+    """
+    comm = opt_obj.comm
+    p, K_, s = params
+
+    t0 = tlib.time()
+
+    B = opt_obj.compute_B(p)
+    C = opt_obj.compute_C(s)
+    na = B.getSizes()[-1][-1]
+    ns = C.getSizes()[-1][-1]
+    sizes = ((compute_local_size(na), na), (compute_local_size(ns), ns))
+    Kseq = PETSc.Mat().createDense((na, ns), None, K_, MPI.COMM_SELF)
+    K = PETSc.Mat().createDense(sizes, None, None, comm)
+    sequential_to_distributed_matrix(Kseq, K)
+    sizes_RB = (opt_obj.R_ops[0]._dimensions[0], B.getSizes()[-1])
+    RB = create_dense_matrix(comm, sizes_RB)
+    sizes_RHTC = (opt_obj.R_ops[0]._dimensions[-1], C.getSizes()[-1])
+    RHTC = create_dense_matrix(comm, sizes_RHTC)
+    KLinv = create_dense_matrix(comm, (B.getSizes()[-1], C.getSizes()[-1]))
+    CHT = hermitian_transpose(comm, C, False)
+    F1, F2 = \
+        opt_obj.R_ops[0].create_intermediate_matrices_hermitian_transpose(\
+            C.getSizes())
+
+    # H2 component of the cost function
+    J = 0
+    for i in range (len(opt_obj.freqs)):
+        w = opt_obj.weights[i]
+        R = opt_obj.R_ops[i]
+        M, Linv = _compute_woodbury_update(comm, R, B, K, C, RB, KLinv, \
+                                            RHTC, CHT, F1, F2)
+        s = R.Sigma.getDiagonal()
+        ssq = s.getArray().real
+        value = np.dot(ssq, ssq)
+        s.destroy()
+        J += comm.allreduce(value, op=MPI.SUM)
+        J -= 2.0*w*compute_trace_product(comm, R, M, True)
+        J += w*compute_trace_product(comm, M, M, True)
+        Linv.destroy()
+        M.destroy_intermediate_vectors()
+        
+        process = psutil.Process(os.getpid())
+        value = process.memory_info().rss/(1024 * 1024)
+        value = sum(comm.allgather(value))
+        if opt_obj.comm.Get_rank() == 0:
+            print(f"Iteration {i} usage {value} MB")
+    
+    # # Stability-promoting component of the cost function
+    # if opt_obj.stab_params != None:
+    #     cl_op = LowRankUpdatedLinearOperator(comm, opt_obj.A, B, K, C)
+    #     krylov_dim, n_evals = opt_obj.stab_params[2], opt_obj.stab_params[3]
+    #     Dd, E = eigendecomposition(cl_op, cl_op.solve, krylov_dim, n_evals)
+    #     evals = -1./Dd.getDiagonal().getArray().copy()
+    #     Jd = np.sum([opt_obj.evaluate_exponential(val) for val in evals])
+    #     J += opt_obj.comm.allreduce(Jd, op=MPI.SUM)
+    #     Dd.destroy()
+    #     E.destroy()
+    #     cl_op.destroy_woodbury_operator()
+
+    mats = [RB, CHT, RHTC, KLinv, K, Kseq, B, C, F1, F2]
+    for mat in mats: mat.destroy()
+
+    t1 = tlib.time()
+    petscprint(opt_obj.comm, "Execution time = %1.5f [sec]"%(t1 - t0))
+    return J.real
 
 def create_objective_and_gradient(manifold,opt_obj):
     r"""
@@ -133,12 +234,11 @@ def create_objective_and_gradient(manifold,opt_obj):
         :param opt_obj: instance of the optimization objects class
 
         :return: (cost function, gradient, hessian=:code:`None`)
-        :rtype: (Collable, Collable, None)
+        :rtype: (Callable, Callable, None)
     """
     
     euclidean_hessian = None
 
-    
     @pymanopt.function.numpy(manifold)
     def cost(*params):
         r"""
@@ -162,23 +262,31 @@ def create_objective_and_gradient(manifold,opt_obj):
         Kseq = PETSc.Mat().createDense((na, ns), None, K_, MPI.COMM_SELF)
         K = PETSc.Mat().createDense(sizes, None, None, comm)
         sequential_to_distributed_matrix(Kseq, K)
+        sizes_RB = (opt_obj.R_ops[0]._dimensions[0], B.getSizes()[-1])
+        RB = create_dense_matrix(comm, sizes_RB)
+        sizes_RHTC = (opt_obj.R_ops[0]._dimensions[-1], C.getSizes()[-1])
+        RHTC = create_dense_matrix(comm, sizes_RHTC)
+        KLinv = create_dense_matrix(comm, (B.getSizes()[-1], C.getSizes()[-1]))
+        CHT = hermitian_transpose(comm, C, False)
 
         # H2 component of the cost function
         J = 0
         for i in range (len(opt_obj.freqs)):
-            wi = opt_obj.weights[i]
-            Ri = opt_obj.R_ops[i]
-            Mi, Linv = _compute_woodbury_update(comm, Ri, B, K, C)
-            J += wi*compute_trace_product(comm, Ri, Ri, True)
-            J -= 2.0*wi*compute_trace_product(comm, Ri, Mi, True)
-            J += wi*compute_trace_product(comm, Mi, Mi, True)
-            Mi.destroy()
+            w = opt_obj.weights[i]
+            R = opt_obj.R_ops[i]
+            M, Linv = _compute_woodbury_update(comm, R, B, K, C, RB, KLinv, \
+                                               RHTC, CHT)
+            J += w*compute_trace_product(comm, R, R, True)
+            J -= 2.0*w*compute_trace_product(comm, R, M, True)
+            J += w*compute_trace_product(comm, M, M, True)
             Linv.destroy()
-
-            # if opt_obj.comm.Get_rank() == 0:
-            #     process = psutil.Process(os.getpid())
-            #     print(f"Iteration {i} usage {process.memory_info().rss/(1024 * 1024)} MB"
-            #         f" for PID {os.getpid()}")
+            M.destroy_intermediate_vectors()
+            
+            process = psutil.Process(os.getpid())
+            value = process.memory_info().rss/(1024 * 1024)
+            value = sum(comm.allgather(value))
+            if opt_obj.comm.Get_rank() == 0:
+                print(f"Iteration {i} usage {value} MB")
         
         # Stability-promoting component of the cost function
         if opt_obj.stab_params != None:
@@ -190,168 +298,15 @@ def create_objective_and_gradient(manifold,opt_obj):
             J += opt_obj.comm.allreduce(Jd, op=MPI.SUM)
             Dd.destroy()
             E.destroy()
-            cl_op.destroy_woodbury_factors()
+            cl_op.destroy_woodbury_operator()
+
+        mats = [RB, CHT, RHTC, KLinv, K, Kseq, B, C]
+        for mat in mats: mat.destroy()
 
         t1 = tlib.time()
         petscprint(opt_obj.comm, "Execution time = %1.5f [sec]"%(t1 - t0))
-            
         return J.real
     
-    # @pymanopt.function.numpy(manifold)
-    # def euclidean_gradient(*params):
-    #     r"""
-    #         Evaluate the gradient of the cost function
-
-    #         :param params: a 3-tuple (actuator parameters p, feedback gains K, 
-    #             sensor parameters s)
-
-    #         :return: (:math:`\nabla_p J`, :math:`\nabla_K J`, 
-    #             :math:`\nabla_s J`)
-    #     """
-    #     t0 = tlib.time()
-    #     comm = opt_obj.comm
-    #     p, K_, s = params
-
-    #     B = opt_obj.compute_B(p)
-    #     C = opt_obj.compute_C(s)
-    #     na = B.getSizes()[-1][-1]
-    #     ns = C.getSizes()[-1][-1]
-    #     sizes = ((compute_local_size(na), na), (compute_local_size(ns), ns))
-    #     Kseq = PETSc.Mat().createDense((na, ns), None, K_, MPI.COMM_SELF)
-    #     K = PETSc.Mat().createDense(sizes, None, None, comm)
-    #     sequential_to_distributed_matrix(Kseq, K)
-    
-    #     grad_K = K.duplicate()
-    #     grad_K.zeroEntries()
-    #     grad_p = np.zeros_like(p)
-    #     grad_s = np.zeros_like(s)
-
-    #     BT = hermitian_transpose(comm, B)
-    #     CT = hermitian_transpose(comm, C)
-
-    #     for i in range (len(opt_obj.freqs)):
-            
-    #         wi = opt_obj.weights[i]
-    #         Ri = opt_obj.R_ops[i]
-    #         M, Linv = _compute_woodbury_update(comm, Ri, B, K, C)
-            
-    #         # Create matrices to hold the hermitian transposes
-    #         LinvT = hermitian_transpose(comm, Linv)
-    #         SigmaT = hermitian_transpose(comm, M.Sigma)
-    #         UT = hermitian_transpose(comm, M.U)
-
-    #         # Gradient with respect to K
-    #         F1 = M.V.matMult(LinvT)
-    #         F2 = M.apply_mat(F1)
-    #         F3 = Ri.apply_mat(F1)
-    #         F2.axpy(-1.0, F3)
-    #         grad_K_i = UT.matMult(F2)
-    #         F4 = SigmaT.matMult(grad_K_i)
-    #         F5 = C.matMult(F4)
-    #         F6 = UT.matMult(F5)
-    #         grad_K_i.axpy(-1.0, F6)
-    #         grad_K.axpy(2.0*wi, grad_K_i)
-    #         mats = [F1, F2, F3, F4, F5, F6, grad_K_i]
-    #         for mat in mats: mat.destroy()
-
-    #         # Gradient with respect to p
-    #         F1 = M.V.matMult(SigmaT)
-    #         F2 = M.apply_mat(F1)
-    #         F3 = Ri.apply_mat(F1)
-    #         F2.axpy(-1.0, F3)
-    #         grad_B_i = opt_obj.R_ops[i].apply_hermitian_transpose_mat(F2)
-    #         F4 = BT.matMult(grad_B_i)
-    #         F5 = SigmaT.matMult(F4)
-    #         F6 = M.V.matMult(F5)
-    #         grad_B_i.axpy(-1.0, F6)
-    #         grad_p += 2*wi*opt_obj.compute_dBdp(p, grad_B_i, opt_obj.compute_dB)
-    #         mats = [F1, F2, F3, F4, F5, F6, grad_B_i]
-    #         for mat in mats: mat.destroy()
-
-    #         # Gradient with respect to s
-    #         F1 = M.U.matMult(M.Sigma)
-    #         F2 = M.apply_hermitian_transpose_mat(F1)
-    #         F3 = opt_obj.R_ops[i].apply_hermitian_transpose_mat(F1)
-    #         F2.axpy(-1.0, F3)
-    #         grad_C_i = opt_obj.R_ops[i].apply_mat(F2)
-    #         F4 = CT.matMult(grad_C_i)
-    #         F5 = M.Sigma.matMult(F4)
-    #         F6 = M.U.matMult(F5)
-    #         grad_C_i.axpy(-1.0, F6)
-    #         grad_s += 2*wi*opt_obj.compute_dBdp(s, grad_C_i, opt_obj.compute_dC)
-    #         mats = [F1, F2, F3, F4, F5, F6, grad_C_i]
-    #         for mat in mats: mat.destroy()
-
-    #         mats = [LinvT, UT, SigmaT, Linv]
-    #         for mat in mats: mat.destroy()
-    #         M.destroy()
-
-    #         # if opt_obj.comm.Get_rank() == 0:
-    #         #     process = psutil.Process(os.getpid())
-    #         #     print(f"Iteration {i} usage {process.memory_info().rss/(1024 * 1024)} MB"
-    #         #         f" for PID {os.getpid()}")
-
-        
-    #     # Stability-promoting penalty
-    #     if opt_obj.stab_params != None:
-    #         cl_op = LowRankUpdatedLinearOperator(opt_obj.comm, opt_obj.A, B, \
-    #                                              K, C)
-    #         krylov_dim, n_evals = opt_obj.stab_params[2], opt_obj.stab_params[3]
-    #         V, D, W = right_and_left_eigendecomposition(cl_op, cl_op.solve, \
-    #                                                     krylov_dim, n_evals, \
-    #                                                     lambda x: -1./x)
-    #         Da = D.getDiagonal().getArray()
-    #         Ma = np.asarray([opt_obj.evaluate_gradient_exponential(v) \
-    #                          for v in Da])
-    #         Mvec = PETSc.Vec().createWithArray(Ma, comm=comm)
-    #         M = PETSc.Mat().createDiagonal(Mvec)
-    #         cl_op.destroy_woodbury_factors()
-
-    #         WT = hermitian_transpose(comm, W)
-    #         VT = hermitian_transpose(comm, V)
-    #         KT = hermitian_transpose(comm, K)
-
-    #         # Gradient with respect to K
-    #         F1 = VT.matMult(C)
-    #         F2 = M.matMult(F1)
-    #         F3 = W.matMult(F2)
-    #         F4 = BT.matMult(F3)
-    #         grad_K.axpy(-1.0, F4)
-    #         mats = [F1, F2, F3, F4]
-    #         for mat in mats: mat.destroy()
-            
-    #         # Gradient with respect to p
-    #         F1 = C.matMult(KT)
-    #         F2 = VT.matMult(F1)
-    #         F3 = M.matMult(F2)
-    #         grad_B = W.matMult(F3)
-    #         grad_p -= opt_obj.compute_dBdp(p, grad_B, opt_obj.compute_dB)
-    #         mats = [F1, F2, F3, grad_B]
-    #         for mat in mats: mat.destroy()
-
-    #         # Gradient with respect to s
-    #         F1 = B.matMult(K)
-    #         F2 = WT.matMult(F1)
-    #         F3 = M.matMult(F2)
-    #         grad_C = V.matMult(F3)
-    #         grad_s -= opt_obj.compute_dBdp(s, grad_C, opt_obj.compute_dC)
-    #         mats = [F1, F2, F3, grad_C]
-    #         for mat in mats: mat.destroy()
-
-    #         mats = [VT, WT, V, W, D]
-    #         for mat in mats: mat.destroy()
-
-    #     grad_K_seq = distributed_to_sequential_matrix(opt_obj.comm, grad_K)
-    #     grad_K_ = grad_K_seq.getDenseArray().copy().real
-
-    #     mats = [KT, grad_K_seq, B, C, BT, CT, grad_K, K]
-    #     for mat in mats: mat.destroy()
-
-    #     t1 = tlib.time()
-    #     petscprint(opt_obj.comm, "Execution time = %1.5f [sec]"%(t1 - t0))
-        
-    #     return grad_p, grad_K_, grad_s
-
     @pymanopt.function.numpy(manifold)
     def euclidean_gradient(*params):
         r"""
@@ -375,21 +330,26 @@ def create_objective_and_gradient(manifold,opt_obj):
         Kseq = PETSc.Mat().createDense((na, ns), None, K_, MPI.COMM_SELF)
         K = PETSc.Mat().createDense(sizes, None, None, comm)
         sequential_to_distributed_matrix(Kseq, K)
+        sizes_RB = (opt_obj.R_ops[0]._dimensions[0], B.getSizes()[-1])
+        RB = create_dense_matrix(comm, sizes_RB)
+        sizes_RHTC = (opt_obj.R_ops[0]._dimensions[-1], C.getSizes()[-1])
+        RHTC = create_dense_matrix(comm, sizes_RHTC)
+        KLinv = create_dense_matrix(comm, (B.getSizes()[-1], C.getSizes()[-1]))
+        BT = hermitian_transpose(comm, B)
+        CT = hermitian_transpose(comm, C)
 
         grad_K = K.duplicate()
         grad_K.zeroEntries()
         grad_p = np.zeros_like(p)
         grad_s = np.zeros_like(s)
 
-        BT = hermitian_transpose(comm, B)
-        CT = hermitian_transpose(comm, C)
-
         for i in range (len(opt_obj.freqs)):
             
             wi = opt_obj.weights[i]
-            Ri = opt_obj.R_ops[i]
-            M, Linv = _compute_woodbury_update(comm, Ri, B, K, C)
-            
+            R = opt_obj.R_ops[i]
+            M, Linv = _compute_woodbury_update(comm, R, B, K, C, RB, KLinv, \
+                                               RHTC, CT)
+
             if i == 0:
                 # Create matrices to hold the hermitian transposes
                 LinvT = hermitian_transpose(comm, Linv)
@@ -399,7 +359,7 @@ def create_objective_and_gradient(manifold,opt_obj):
                 # Gradient with respect to K
                 F1K = M.V.matMult(LinvT)
                 F2K = M.apply_mat(F1K)
-                F3K = Ri.apply_mat(F1K)
+                F3K = R.apply_mat(F1K)
                 F2K.axpy(-1.0, F3K)
                 grad_K_i = UT.matMult(F2K)
                 F4K = SigmaT.matMult(grad_K_i)
@@ -407,32 +367,44 @@ def create_objective_and_gradient(manifold,opt_obj):
                 F6K = UT.matMult(F5K)
                 grad_K_i.axpy(-1.0, F6K)
                 grad_K.axpy(2.0*wi, grad_K_i)
+                RF1, RF2 = R.create_intermediate_matrices(F1K.getSizes())
+                MF1, MF2 = M.create_intermediate_matrices(F1K.getSizes())
 
                 # Gradient with respect to p
                 F1p = M.V.matMult(SigmaT)
                 F2p = M.apply_mat(F1p)
-                F3p = Ri.apply_mat(F1p)
+                F3p = R.apply_mat(F1p)
                 F2p.axpy(-1.0, F3p)
-                grad_B_i = opt_obj.R_ops[i].apply_hermitian_transpose_mat(F2p)
+                grad_B_i = R.apply_hermitian_transpose_mat(F2p)
                 F4p = BT.matMult(grad_B_i)
                 F5p = SigmaT.matMult(F4p)
                 F6p = M.V.matMult(F5p)
                 grad_B_i.axpy(-1.0, F6p)
                 grad_p += 2*wi*opt_obj.compute_dBdp(p, grad_B_i, \
                                                     opt_obj.compute_dB)
+                RF3, RF4 = R.create_intermediate_matrices(F1p.getSizes())
+                MF3, MF4 = M.create_intermediate_matrices(F1p.getSizes())
+                RF5, RF6 = R.create_intermediate_matrices_hermitian_transpose(\
+                    F2p.getSizes())
 
                 # Gradient with respect to s
                 F1s = M.U.matMult(M.Sigma)
                 F2s = M.apply_hermitian_transpose_mat(F1s)
                 F3s = opt_obj.R_ops[i].apply_hermitian_transpose_mat(F1s)
                 F2s.axpy(-1.0, F3s)
-                grad_C_i = opt_obj.R_ops[i].apply_mat(F2s)
+                grad_C_i = R.apply_mat(F2s)
                 F4s = CT.matMult(grad_C_i)
                 F5s = M.Sigma.matMult(F4s)
                 F6s = M.U.matMult(F5s)
                 grad_C_i.axpy(-1.0, F6s)
                 grad_s += 2*wi*opt_obj.compute_dBdp(s, grad_C_i, \
                                                     opt_obj.compute_dC)
+                RF7, RF8 = R.create_intermediate_matrices_hermitian_transpose(\
+                    F1s.getSizes())
+                MF5, MF6 = M.create_intermediate_matrices_hermitian_transpose(\
+                    F1s.getSizes())
+                RF9, RF10 = R.create_intermediate_matrices_hermitian_transpose(\
+                    F2s.getSizes())
             
             else:
 
@@ -443,8 +415,8 @@ def create_objective_and_gradient(manifold,opt_obj):
 
                 # Gradient with respect to K
                 M.V.matMult(LinvT, F1K)
-                M.apply_mat(F1K, F2K)
-                Ri.apply_mat(F1K, F3K)
+                M.apply_mat(F1K, F2K, (MF1, MF2))
+                R.apply_mat(F1K, F3K, (RF1, RF2))
                 F2K.axpy(-1.0, F3K)
                 UT.matMult(F2K, grad_K_i)
                 SigmaT.matMult(grad_K_i, F4K)
@@ -455,10 +427,10 @@ def create_objective_and_gradient(manifold,opt_obj):
 
                 # Gradient with respect to p
                 M.V.matMult(SigmaT, F1p)
-                M.apply_mat(F1p, F2p)
-                Ri.apply_mat(F1p, F3p)
+                M.apply_mat(F1p, F2p, (MF3, MF4))
+                R.apply_mat(F1p, F3p, (RF3, RF4))
                 F2p.axpy(-1.0, F3p)
-                opt_obj.R_ops[i].apply_hermitian_transpose_mat(F2p, grad_B_i)
+                R.apply_hermitian_transpose_mat(F2p, grad_B_i, (RF5, RF6))
                 BT.matMult(grad_B_i, F4p)
                 SigmaT.matMult(F4p, F5p)
                 M.V.matMult(F5p, F6p)
@@ -468,10 +440,10 @@ def create_objective_and_gradient(manifold,opt_obj):
 
                 # Gradient with respect to s
                 M.U.matMult(M.Sigma, F1s)
-                M.apply_hermitian_transpose_mat(F1s, F2s)
-                opt_obj.R_ops[i].apply_hermitian_transpose_mat(F1s, F3s)
+                M.apply_hermitian_transpose_mat(F1s, F2s, (MF5, MF6))
+                R.apply_hermitian_transpose_mat(F1s, F3s, (RF7, RF8))
                 F2s.axpy(-1.0, F3s)
-                opt_obj.R_ops[i].apply_mat(F2s, grad_C_i)
+                R.apply_mat(F2s, grad_C_i, (RF9, RF10))
                 CT.matMult(grad_C_i, F4s)
                 M.Sigma.matMult(F4s, F5s)
                 M.U.matMult(F5s, F6s)
@@ -479,12 +451,21 @@ def create_objective_and_gradient(manifold,opt_obj):
                 grad_s += 2*wi*opt_obj.compute_dBdp(s, grad_C_i, \
                                                     opt_obj.compute_dC)
 
-            M.destroy()
-        
+            M.destroy_intermediate_vectors()
+            Linv.destroy()
+
+            process = psutil.Process(os.getpid())
+            value = process.memory_info().rss/(1024 * 1024)
+            value = sum(comm.allgather(value))
+            if opt_obj.comm.Get_rank() == 0:
+                print(f"Iteration {i} usage {value} MB")
+
         mats = [F1K, F2K, F3K, F4K, F5K, F6K, F1p, F2p, F3p, F4p, F5p, F6p, \
                 F1s, F2s, F3s, F4s, F5s, F6s, grad_K_i, grad_B_i, grad_C_i, \
-                LinvT, SigmaT, UT]
+                LinvT, SigmaT, UT, MF1, MF2, MF3, MF4, MF5, MF6, RF1, RF2, \
+                RF3, RF4, RF5, RF6, RF7, RF8, RF9, RF10]
         for mat in mats: mat.destroy()
+        
         
         
         # Stability-promoting penalty
@@ -500,7 +481,7 @@ def create_objective_and_gradient(manifold,opt_obj):
                              for v in Da])
             Mvec = PETSc.Vec().createWithArray(Ma, comm=comm)
             M = PETSc.Mat().createDiagonal(Mvec)
-            cl_op.destroy_woodbury_factors()
+            cl_op.destroy_woodbury_operator()
 
             WT = hermitian_transpose(comm, W)
             VT = hermitian_transpose(comm, V)

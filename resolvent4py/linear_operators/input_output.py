@@ -34,8 +34,8 @@ class InputOutputLinearOperator(LinearOperator):
             self.Btil._nblocks == self.Ctil._nblocks:
             nblocks = self.Ctil._nblocks
         super().__init__(comm, 'InputOutputLinearOperator', sizes, nblocks)
-        
-        
+    
+    
     def apply(self, x, y=None):
         y = self.create_left_vector() if y == None else y
         z1 = self.Btil.apply(x)

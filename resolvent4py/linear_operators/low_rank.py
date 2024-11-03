@@ -1,8 +1,4 @@
 from .linear_operator import LinearOperator
-import numpy as np
-from mpi4py import MPI
-from petsc4py import PETSc
-from ..linalg import hermitian_transpose
 from ..miscellaneous import create_dense_matrix
 
 class LowRankLinearOperator(LinearOperator):
@@ -33,9 +29,8 @@ class LowRankLinearOperator(LinearOperator):
         self.Sigma = Sigma
         self.V = V
         dimensions = (U.getSizes()[0],V.getSizes()[0])
-        super().__init__(comm, 'LowRankLinearOperator', dimensions, nblocks)
-
         self.create_intermediate_vectors()
+        super().__init__(comm, 'LowRankLinearOperator', dimensions, nblocks)
 
     def create_intermediate_vectors(self):
         r"""
@@ -111,14 +106,16 @@ class LowRankLinearOperator(LinearOperator):
     def apply_hermitian_transpose(self, x, y=None):
         y = self.V.createVecLeft() if y == None else y
         self.U.multHermitian(x,self.UTx)
-        self.Sigma.multHermitian(self.UTx,self.SigmaTx)
+        self.Sigma.multHermitian(self.UTx, self.SigmaTx)
         self.V.mult(self.SigmaTx,y)
         return y
     
     def apply_hermitian_transpose_mat(self, X, Y=None, intermediate_mats=None):
         if intermediate_mats == None:
             destroy = True
-            UTX, STX = self.create_intermediate_matrices(X.getSizes())
+            UTX, STX = \
+                self.create_intermediate_matrices_hermitian_transpose(\
+                    X.getSizes())
         else:
             destroy = False
             UTX, STX = intermediate_mats
