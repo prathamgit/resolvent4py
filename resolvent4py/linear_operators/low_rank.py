@@ -1,5 +1,8 @@
 from .linear_operator import LinearOperator
-from ..miscellaneous import create_dense_matrix
+# from ..linalg import bv_mult_array
+
+from mpi4py import MPI
+from petsc4py import PETSc
 
 class LowRankLinearOperator(LinearOperator):
     r"""
@@ -29,116 +32,41 @@ class LowRankLinearOperator(LinearOperator):
         self.Sigma = Sigma
         self.V = V
         dimensions = (U.getSizes()[0],V.getSizes()[0])
-        self.create_intermediate_vectors()
         super().__init__(comm, 'LowRankLinearOperator', dimensions, nblocks)
 
-    def create_intermediate_vectors(self):
-        r"""
-            Create intermediate vectors used during the computation of 
-            matrix-vector products :math:`U \Sigma V^* x` and 
-            :math:`V\Sigma^* U^* x`.
-        """
-        self.VTx = self.V.createVecRight()
-        self.Sigmax = self.Sigma.createVecLeft()
-        self.SigmaTx = self.Sigma.createVecRight()
-        self.UTx = self.U.createVecRight()
-
-    def create_intermediate_matrices(self, sizes):
-        r"""
-            Creates intermediate matrices
-            used during the computation of matrix-matrix products 
-            :math:`U \Sigma V^* X` 
-
-            :param sizes: size of the matrix :math:`X`
-            :type sizes: `MatSizeSpec`_
-            :return: a 2-tuple of PETSc matrices of type 
-                PETSc.Mat.Type.DENSE where the products :math:`V^* X` and 
-                :math:`\Sigma V^* X` can be stored
-        """
-        sizes_VTX = (self.V.getSizes()[-1], sizes[-1])
-        VTX = create_dense_matrix(self._comm, sizes_VTX)
-        sizes_SX = (self.Sigma.getSizes()[0], sizes[-1])
-        SigmaX = create_dense_matrix(self._comm, sizes_SX)
-        return (VTX, SigmaX)
-
-    def create_intermediate_matrices_hermitian_transpose(self, sizes):
-        r"""
-            Creates intermediate matrices
-            used during the computation of matrix-matrix products 
-            :math:`V \Sigma^* U^* X` 
-
-            :param sizes: size of the matrix :math:`X`
-            :type sizes: `MatSizeSpec`_
-            :return: a 2-tuple of PETSc matrices of type 
-                PETSc.Mat.Type.DENSE where the products :math:`U^* X` and 
-                :math:`\Sigma^* U^* X` can be stored
-        """
-        sizes_UTX = (self.U.getSizes()[-1], sizes[-1])
-        UTX = create_dense_matrix(self._comm, sizes_UTX)
-        sizes_STX = (self.Sigma.getSizes()[-1], sizes[-1])
-        SigmaTX = create_dense_matrix(self._comm, sizes_STX)
-        return (UTX, SigmaTX)
-
     def apply(self, x, y=None):
-        y = self.U.createVecLeft() if y == None else y
-        self.V.multHermitian(x,self.VTx)
-        self.Sigma.mult(self.VTx,self.Sigmax)
-        self.U.mult(self.Sigmax,y)
+        y = self.create_left_vector() if y == None else y
+        q = self.Sigma@self.V.dotVec(x)
+        self.U.multVec(1.0, 0.0, y, q)
         return y
-
-    def apply_mat(self, X, Y=None, intermediate_mats=None):
-        if intermediate_mats == None:
-            destroy = True
-            VTX, SX = self.create_intermediate_matrices(X.getSizes())
-        else:
-            destroy = False
-            VTX, SX = intermediate_mats
-        self.V.hermitianTranspose()
-        self.V.matMult(X, VTX)
-        self.Sigma.matMult(VTX, SX)
-        Y = self.U.matMult(SX, Y)
-        self.V.hermitianTranspose()
-        if destroy:
-            VTX.destroy()
-            SX.destroy()
-        return Y
     
     def apply_hermitian_transpose(self, x, y=None):
-        y = self.V.createVecLeft() if y == None else y
-        self.U.multHermitian(x,self.UTx)
-        self.Sigma.multHermitian(self.UTx, self.SigmaTx)
-        self.V.mult(self.SigmaTx,y)
+        y = self.create_right_vector() if y == None else y
+        q = self.Sigma.conj().T@self.U.dotVec(x)
+        self.V.multVec(1.0, 0.0, y, q)
         return y
     
-    def apply_hermitian_transpose_mat(self, X, Y=None, intermediate_mats=None):
-        if intermediate_mats == None:
-            destroy = True
-            UTX, STX = \
-                self.create_intermediate_matrices_hermitian_transpose(\
-                    X.getSizes())
-        else:
-            destroy = False
-            UTX, STX = intermediate_mats
-        self.U.hermitianTranspose()
-        self.Sigma.hermitianTranspose()
-        self.U.matMult(X, UTX)
-        self.Sigma.matMult(UTX, STX)
-        Y = self.V.matMult(STX, Y)
-        self.U.hermitianTranspose()
-        self.Sigma.hermitianTranspose()
-        if destroy:
-            UTX.destroy()
-            STX.destroy()
+    def apply_mat(self, X, Y=None):
+        M = X.dot(self.V)
+        L = self.Sigma@M.getDenseArray()
+        Lm = PETSc.Mat().createDense(L.shape, None, L, MPI.COMM_SELF)
+        Y = X.duplicate() if Y == None else Y
+        Y.mult(1.0, 0.0, self.U, Lm)
+        Lm.destroy()
+        M.destroy()
         return Y
     
-    def destroy_intermediate_vectors(self):
-        self.VTx.destroy()
-        self.Sigmax.destroy()
-        self.SigmaTx.destroy()
-        self.UTx.destroy()
+    def apply_hermitian_transpose_mat(self, X, Y=None):
+        M = X.dot(self.U)
+        L = self.Sigma.conj().T@M.getDenseArray()
+        Lm = PETSc.Mat().createDense(L.shape, None, L, MPI.COMM_SELF)
+        Y = X.duplicate() if Y == None else Y
+        Y.mult(1.0, 0.0, self.V, Lm)
+        Lm.destroy()
+        M.destroy()
+        return Y
 
     def destroy(self):
-        self.destroy_intermediate_vectors()
         self.U.destroy()
-        self.Sigma.destroy()
         self.V.destroy()
+        del self.Sigma

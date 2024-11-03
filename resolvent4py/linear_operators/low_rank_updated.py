@@ -1,9 +1,12 @@
-from petsc4py import PETSc
-from .linear_operator import LinearOperator
-from ..linalg import compute_dense_inverse
-from ..linalg import hermitian_transpose
-from ..miscellaneous import create_dense_matrix
+from ..linalg import bv_add
 from .low_rank import LowRankLinearOperator
+from .linear_operator import LinearOperator
+
+import numpy as np
+import scipy as sp
+from mpi4py import MPI
+from petsc4py import PETSc
+from slepc4py import SLEPc
 
 class LowRankUpdatedLinearOperator(LinearOperator):
     r"""
@@ -77,16 +80,19 @@ class LowRankUpdatedLinearOperator(LinearOperator):
         try:
             X = self.A.solve_mat(self.L.U)
             Y = self.A.solve_hermitian_transpose_mat(self.L.V)
-            XS = X.matMult(self.L.Sigma)
-            VHT = hermitian_transpose(comm, self.L.V)
-            M = VHT.matMult(XS)
-            Id = PETSc.Mat().createConstantDiagonal(M.getSizes(), 1.0, comm)
-            M.axpy(1.0, Id, structure=PETSc.Mat.Structure.SAME)
-            Minv = compute_dense_inverse(comm,M)
-            D = self.L.Sigma.matMult(Minv)
-            mats = [XS, VHT, M, Minv, Id]
-            for mat in mats: mat.destroy()
+            S = PETSc.Mat().createDense(self.L.Sigma.shape, None, \
+                                        self.L.Sigma, MPI.COMM_SELF)
+            XS = SLEPc.BV().create(comm)
+            XS.setSizes(X.getSizes()[0], self.L.Sigma.shape[-1])
+            XS.setType('mat')
+            XS.mult(1.0, 0.0, X, S)
+            M = XS.dot(self.L.V)
+            Ma = M.getDenseArray()
+            D = self.L.Sigma@sp.linalg.inv(np.eye(Ma.shape[0]) + Ma)
             W = LowRankLinearOperator(comm, X, D, Y, nblocks)
+            XS.destroy()
+            M.destroy()
+            S.destroy()
         except:
             W = None
         return W
@@ -95,28 +101,16 @@ class LowRankUpdatedLinearOperator(LinearOperator):
         self.Ax = self.A.create_left_vector()
         self.ATx = self.A.create_right_vector()
 
-    def create_intermediate_matrices_apply(self, sizes):
-        AX = create_dense_matrix(self._comm, (self._dimensions[0], sizes[-1]))
-        VTX, SX = self.L.create_intermediate_matrices(sizes)
-        return (AX, VTX, SX)
+    def create_intermediate_bv(self, m):
+        X = SLEPc.BV().create(self._comm)
+        X.setSizes(self._dimensions[0], m)
+        X.setType('mat')
 
-    def create_intermediate_matrices_hermitian_transpose_apply(self, sizes):
-        ATX = create_dense_matrix(self._comm,(self._dimensions[-1], sizes[-1]))
-        UTX, STX = self.L.create_intermediate_matrices_hermitian_transpose(\
-            sizes)
-        return (ATX, UTX, STX)
-    
-    def create_intermediate_matrices_solve(self, sizes):
-        AX = create_dense_matrix(self._comm, (self._dimensions[0], sizes[-1]))
-        VTX, SX = self.W.create_intermediate_matrices(sizes)
-        return (AX, VTX, SX)
+    def create_intermediate_bv_hermitian_transpose(self, m):
+        X = SLEPc.BV().create(self._comm)
+        X.setSizes(self._dimensions[-1], m)
+        X.setType('mat')
 
-    def create_intermediate_matrices_hermitian_transpose_solve(self, sizes):
-        ATX = create_dense_matrix(self._comm,(self._dimensions[-1], sizes[-1]))
-        UTX, STX = self.W.create_intermediate_matrices_hermitian_transpose(\
-            sizes)
-        return (ATX, UTX, STX)
-    
     def apply(self, x, y=None):
         self.Ax = self.A.apply(x, self.Ax)
         y = self.L.apply(x, y)
@@ -129,38 +123,27 @@ class LowRankUpdatedLinearOperator(LinearOperator):
         y.axpy(1.0, self.ATx)
         return y
     
-    def apply_mat(self, X, Y=None, intermediate_mats=None):
-        if intermediate_mats == None:
+    def apply_mat(self, X, Y=None, Z=None):
+        destroy = False
+        if Z == None:
             destroy = True
-            AX, VTX, SX = self.create_intermediate_matrices_apply(X.getSizes())
-        else:
-            destroy = False
-            AX, VTX, SX = intermediate_mats
-        AX = self.A.apply_mat(X, AX)
-        Y = self.L.apply_mat(X, Y, (VTX, SX))
-        Y.axpy(1.0, AX)
-        if destroy:
-            AX.destroy()
-            VTX.destroy()
-            SX.destroy()
+            Z = self.create_intermediate_bv(X.getSizes()[-1])
+        Z = self.A.apply_mat(X, Z)
+        Y = self.L.apply_mat(X, Y)
+        bv_add(1.0, Y, Z)
+        Z.destroy() if destroy else None
         return Y
     
-    def apply_hermitian_transpose_mat(self, X, Y=None, intermediate_mats=None):
-        if intermediate_mats == None:
+    def apply_hermitian_transpose_mat(self, X, Y=None, Z=None):
+        destroy = False
+        if Z == None:
             destroy = True
-            ATX, UTX, STX = \
-                self.create_intermediate_matrices_hermitian_transpose_apply(\
-                    X.getSizes())
-        else:
-            destroy = False
-            ATX, UTX, STX = intermediate_mats
-        ATX = self.A.apply_hermitian_transpose_mat(X, ATX)
-        Y = self.L.apply_hermitian_transpose_mat(X, Y, (UTX, STX))
-        Y.axpy(1.0, ATX)
-        if destroy:
-            ATX.destroy()
-            UTX.destroy()
-            STX.destroy()
+            Z = self.create_intermediate_bv_hermitian_transpose(\
+                X.getSizes()[-1])
+        Z = self.A.apply_hermitian_transpose_mat(X, Z)
+        Y = self.L.apply_hermitian_transpose_mat(X, Y)
+        bv_add(1.0, Y, Z)
+        Z.destroy() if destroy else None
         return Y
     
     def solve(self, x, y=None):
@@ -177,40 +160,29 @@ class LowRankUpdatedLinearOperator(LinearOperator):
         y.axpy(1.0, self.ATx)
         return y
     
-    def solve_mat(self, X, Y=None, intermediate_mats=None):
-        if intermediate_mats == None:
+    def solve_mat(self, X, Y=None, Z=None):
+        destroy = False
+        if Z == None:
             destroy = True
-            AX, VTX, SX = self.create_intermediate_matrices_solve(X.getSizes())
-        else:
-            destroy = False
-            AX, VTX, SX = intermediate_mats
-        AX = self.A.solve_mat(X, AX)
-        Y = self.W.apply_mat(X, Y, (VTX, SX))
+            Z = self.create_intermediate_bv(X.getSizes()[-1])
+        Z = self.A.solve_mat(X, Z)
+        Y = self.W.apply_mat(X, Y)
         Y.scale(-1.0)
-        Y.axpy(1.0, AX)
-        if destroy:
-            AX.destroy()
-            VTX.destroy()
-            SX.destroy()
+        bv_add(1.0, Y, Z)
+        Z.destroy() if destroy else None
         return Y
     
-    def solve_hermitian_transpose_mat(self, X, Y=None, intermediate_mats=None):
-        if intermediate_mats == None:
+    def solve_hermitian_transpose_mat(self, X, Y=None, Z=None):
+        destroy = False
+        if Z == None:
             destroy = True
-            ATX, UTX, STX = \
-                self.create_intermediate_matrices_hermitian_transpose_solve(\
-                    X.getSizes())
-        else:
-            destroy = False
-            ATX, UTX, STX = intermediate_mats
-        self.A.solve_hermitian_transpose_mat(X, ATX)
-        Y = self.W.apply_hermitian_transpose_mat(X, Y, (UTX, STX))
+            Z = self.create_intermediate_bv_hermitian_transpose(\
+                X.getSizes()[-1])
+        Z = self.A.solve_hermitian_transpose_mat(X, Z)
+        Y = self.W.apply_hermitian_transpose_mat(X, Y)
         Y.scale(-1.0)
-        Y.axpy(1.0, ATX)
-        if destroy:
-            ATX.destroy()
-            UTX.destroy()
-            STX.destroy()
+        bv_add(1.0, Y, Z)
+        Z.destroy() if destroy else None
         return Y
     
     def destroy_woodbury_operator(self):
@@ -218,8 +190,12 @@ class LowRankUpdatedLinearOperator(LinearOperator):
 
     def destroy_low_rank_update(self):
         self.L.destroy()
+
+    def destroy_intermediate_vectors(self):
+        self.Ax.destroy()
+        self.ATx.destroy()
         
     def destroy(self):
+        self.destroy_intermediate_vectors()
         self.destroy_woodbury_operator()
         self.destroy_low_rank_update()
-        

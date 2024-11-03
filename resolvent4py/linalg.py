@@ -2,7 +2,9 @@ import numpy as np
 import scipy as sp
 
 from petsc4py import PETSc
+from slepc4py import SLEPc
 from mpi4py import MPI
+
 from .miscellaneous import get_mpi_type
 from .miscellaneous import petscprint
 
@@ -21,6 +23,37 @@ def compute_local_size(Nglob):
     size, rank = MPI.COMM_WORLD.Get_size(), MPI.COMM_WORLD.Get_rank()
     Nloc = Nglob//size + 1 if np.mod(Nglob,size) > rank else Nglob//size
     return Nloc
+
+# def bv_mult_array(comm, X, M, Y=None):
+#     r"""
+#         Compute :math:`Y = X M`, where :math:`X` is a BV structure, 
+#         and :math:`M` a numpy matrix
+#     """
+#     Xm = X.getMat()
+#     L = Xm.getDenseArray()@M
+#     X.restoreMat(Xm)
+#     if Y == None:
+#         Y = SLEPc.BV().create(comm)
+#         Y.setSizes(X.getSizes()[0], M.shape[-1])
+#         Y.setFromOptions()
+#     Ym = Y.getMat()
+#     r0, r1 = Ym.getOwnershipRange()
+#     rows = np.arange(r0, r1, 1)
+#     cols = np.arange(L.shape[-1])
+#     Ym.setValues(rows, cols, L)
+#     Ym.assemble(None)
+#     Y.restoreMat(Ym)
+#     return Y
+
+def bv_add(alpha, X, Y):
+    r"""
+        Compute :math:`X = X + \alpha Y
+    """
+    Xm = X.getMat()
+    Ym = Y.getMat()
+    Xm.axpy(alpha, Ym)
+    X.restoreMat(Xm)
+    Y.restoreMat(Ym)
 
 def mat_solve_hermitian_transpose(ksp, X, Y=None):
     r"""

@@ -37,18 +37,19 @@ def arnoldi_iteration(lin_op, lin_op_action, krylov_dim):
     comm = lin_op.get_comm()
     sizes = lin_op.get_dimensions()[0]
     nblocks = lin_op.get_nblocks()
+    block_cc = lin_op._block_cc
     
     # Initialize the BV structure and the Hessenberg matrix
     Q = SLEPc.BV().create(comm=comm)
-    Q.setSizes(sizes,krylov_dim)
+    Q.setSizes(sizes, krylov_dim)
     Q.setFromOptions()
-    H = np.zeros((krylov_dim,krylov_dim),dtype=np.complex128)
+    H = np.zeros((krylov_dim, krylov_dim),dtype=np.complex128)
     # Draw the first vector at random
     q = Q.createVec()
-    q.setArray(np.random.randn(sizes[0])) if lin_op._real == True else \
-        q.setArray(np.random.randn(sizes[0]) + 1j*np.random.randn(sizes[0]))
-    enforce_complex_conjugacy(comm, nblocks) if lin_op._block_cc == True \
-        else None
+    qa = np.random.randn(sizes[0]) + 1j*np.random.randn(sizes[0])
+    qa = qa.real if lin_op._real == True else qa
+    q.setArray(qa)
+    enforce_complex_conjugacy(comm, q, nblocks) if block_cc == True else None
     q.scale(1./q.norm())
     Q.insertVec(0,q)
     # Perform Arnoldi iteration
@@ -71,7 +72,7 @@ def arnoldi_iteration(lin_op, lin_op_action, krylov_dim):
     return (Q, H)
 
 
-def eigendecomposition(lin_op, lin_op_action, krylov_dim, n_evals):
+def eig(lin_op, lin_op_action, krylov_dim, n_evals, process_evals=None):
     r"""
         Compute the eigendecomposition of the linear operator :math:`L` 
         specified by :code:`lin_op` and :code:`lin_op_action`.
@@ -90,7 +91,7 @@ def eigendecomposition(lin_op, lin_op_action, krylov_dim, n_evals):
 
         :return: a 2-tuple with the :code:`n_evals` largest-magnitude 
             eigenvalues and corresponding eigenvectors
-        :rtype: (PETSc.Mat.Type.DENSE, PETSc.Mat.Type.DENSE)
+        :rtype: (np.ndarray, SLEPc.BV)
     """
     Q, H = arnoldi_iteration(lin_op, lin_op_action, krylov_dim)
     evals, evecs = sp.linalg.eig(H)
@@ -100,19 +101,12 @@ def eigendecomposition(lin_op, lin_op_action, krylov_dim, n_evals):
     evecs_ = PETSc.Mat().createDense(evecs.shape,None,evecs,comm=MPI.COMM_SELF)
     Q.multInPlace(evecs_,0,n_evals)
     Q.setActiveColumns(0,n_evals)
-    Qmat = copy_mat_from_bv(Q)
-    Q.destroy()
+    process_evals = (lambda x: x) if process_evals == None else process_evals
+    evals = process_evals(evals)
+    return (np.diag(evals), Q)
 
-    evals_vec = PETSc.Vec().createWithArray(evals, comm=MPI.COMM_SELF)
-    Dseq = PETSc.Mat().createDiagonal(evals_vec)
-    Dseq.convert(PETSc.Mat.Type.DENSE)
-    sizes_D = Qmat.getSizes()[-1]
-    D = create_dense_matrix(lin_op.get_comm(), (sizes_D, sizes_D))
-    sequential_to_distributed_matrix(Dseq, D)
-    return (D, Qmat)
-
-def right_and_left_eigendecomposition(lin_op, lin_op_action, krylov_dim, \
-                                      n_evals, process_evals=None):
+def right_and_left_eig(lin_op, lin_op_action, krylov_dim, \
+                       n_evals, process_evals=None):
     r"""
         Compute the right and left eigendecomposition of the linear operator 
         :math:`L` specified by :code:`lin_op` and :code:`lin_op_action`.
@@ -141,40 +135,29 @@ def right_and_left_eigendecomposition(lin_op, lin_op_action, krylov_dim, \
         lin_op_action_adj = lin_op.solve_hermitian_transpose
     elif lin_op_action == lin_op.apply:
         lin_op_action_adj = lin_op.apply_hermitian_transpose
-    process_evals = (lambda x: x) if process_evals == None else process_evals
-
+    else:
+        raise ValueError (
+            f"lin_op_action must be one of lin_op.solve or lin_op.apply where "
+            f"lin_op is the first argument of the function."
+        )
     # Compute the right and left eigendecompositions
-    Dfwd, Qfwd = eigendecomposition(lin_op, lin_op_action, krylov_dim, n_evals)
-    Dadj, Qadj = eigendecomposition(lin_op, lin_op_action_adj, \
-                                    krylov_dim, n_evals)
+    Dfwd, Qfwd = eig(lin_op, lin_op_action, krylov_dim, n_evals, process_evals)
+    Dadj, Qadj = eig(lin_op, lin_op_action_adj, krylov_dim, \
+                     n_evals, process_evals)
     # Match the right and left eigenvalues/vectors
-    Dfwd_seq = distributed_to_sequential_matrix(lin_op.get_comm(), Dfwd)
-    Dadj_seq = distributed_to_sequential_matrix(lin_op.get_comm(), Dadj)
-    Dfwd_seq_ = process_evals(Dfwd_seq.getDiagonal().getArray().copy())
-    Dadj_seq_ = process_evals(Dadj_seq.getDiagonal().getArray().copy())
-    idces = [np.argmin(np.abs(Dfwd_seq_ - val.conj())) for val in Dadj_seq_]
-    Qadj_array = Qadj.getDenseArray().copy()
+    Dfwdd = np.diag(Dfwd)
+    Dadjd = np.diag(Dadj)
+    idces = [np.argmin(np.abs(Dfwdd - val.conj())) for val in Dadjd]
+    Qadj_ = Qadj.copy()
     for j in range (len(idces)):
-        q = Qadj.getColumnVector(idces[j])
-        Qadj_array[:,j] = q.getArray()
-        q.destroy()
-    offset, _ = Qadj.getOwnershipRange()
-    rows = np.arange(Qadj_array.shape[0], dtype=np.int64) + offset
-    cols = np.arange(Qadj_array.shape[-1], dtype=np.int64)
-    Qadj.setValues(rows, cols, Qadj_array.reshape(-1))
-    Qadj.assemble(None)
+        q_ = Qadj_.getColumn(idces[j])
+        Qadj.insertVec(j, q_)
+        Qadj_.restoreColumn(idces[j], q_)
+    Qadj_.destroy()
     # Biorthogonalize the eigenvectors
-    Qadj.hermitianTranspose()
-    M = Qadj.matMult(Qfwd)
-    Qadj.hermitianTranspose()
-    Minv = compute_dense_inverse(lin_op.get_comm(), M)
-    V = Qfwd.matMult(Minv)
-    Qfwd.destroy()
-    # Assemble the processed eigenvalue matrix
-    evals_vec = PETSc.Vec().createWithArray(Dfwd_seq_, comm=MPI.COMM_SELF)
-    Dseq = PETSc.Mat().createDiagonal(evals_vec)
-    Dseq.convert(PETSc.Mat.Type.DENSE)
-    sizes_D = Qadj.getSizes()[-1]
-    D = create_dense_matrix(lin_op.get_comm(), (sizes_D, sizes_D))
-    sequential_to_distributed_matrix(Dseq, D)
-    return (V, D, Qadj)
+    M = Qfwd.dot(Qadj)
+    Minv = sp.linalg.inv(M.getArray())
+    Minv = PETSc.Mat().createDense(Minv.shape, None, Minv, MPI.COMM_SELF)
+    M.destroy()
+    Qfwd.multInPlace(Minv, 0, Minv.shape[-1])
+    return (Qfwd, Dfwd, Qadj)

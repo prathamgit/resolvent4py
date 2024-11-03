@@ -27,12 +27,12 @@ if rank == 0:
     Sigma = np.random.randn(r,q) + 1j*np.random.randn(r,q)
     V = np.random.randn(N,q) + 1j*np.random.randn(N,q)
     A = U@Sigma@V.conj().T
-    Umat = PETSc.Mat().createDense((N, r), None, U, MPI.COMM_SELF)
-    Sigmamat = PETSc.Mat().createDense((r, q), None, Sigma, MPI.COMM_SELF)
-    Vmat = PETSc.Mat().createDense((N, q), None, V, MPI.COMM_SELF)
 
-    objs = [Umat, Sigmamat, Vmat]
-    fnames_ = ['U','Sigma','V']
+    np.save(path + 'Sigma.npy', Sigma)
+    Umat = PETSc.Mat().createDense((N, r), None, U, MPI.COMM_SELF)
+    Vmat = PETSc.Mat().createDense((N, q), None, V, MPI.COMM_SELF)
+    objs = [Umat, Vmat]
+    fnames_ = ['U','V']
     fnames_factors = [path + root + '.dat' for root in fnames_]
     for (k, obj) in enumerate(objs):
         res4py.write_to_file(MPI.COMM_SELF, fnames_factors[k], obj)
@@ -64,9 +64,9 @@ Nl = res4py.compute_local_size(N)
 rl = res4py.compute_local_size(r)
 ql = res4py.compute_local_size(q)
 sl = res4py.compute_local_size(s)
-U = res4py.read_dense_matrix(comm, fnames_factors[0], ((Nl, N), (rl, r)))
-Sig = res4py.read_dense_matrix(comm, fnames_factors[1], ((rl, r), (ql, q)))
-V = res4py.read_dense_matrix(comm, fnames_factors[2], ((Nl, N), (ql, q)))
+Sig = np.load(path + 'Sigma.npy')
+U = res4py.read_bv(comm, fnames_factors[0], ((Nl, N), r))
+V = res4py.read_bv(comm, fnames_factors[1], ((Nl, N), q))
 linop = res4py.LowRankLinearOperator(comm, U, Sig, V)
 x = res4py.read_vector(comm, fnames_vecs[0])
 actions = [linop.apply, linop.apply_hermitian_transpose]
@@ -77,12 +77,12 @@ for i in range (1,len(fnames_vecs)):
     string = f"Error for {strs[i-1]:30} = {y.norm():.15e}"
     res4py.petscprint(comm, string)
     y.destroy()
-X = res4py.read_dense_matrix(comm, fnames_mats[0], ((Nl, N), (sl, s)))
+X = res4py.read_bv(comm, fnames_mats[0], ((Nl, N), s))
 actions = [linop.apply_mat, linop.apply_hermitian_transpose_mat]
 strs = ['apply_mat', 'apply_hermitian_transpose_mat']
 for i in range (1,len(fnames_vecs)):
-    Y = res4py.read_dense_matrix(comm, fnames_mats[i], ((Nl, N), (sl, s)))
-    Y.axpy(-1.0, actions[i-1](X))
+    Y = res4py.read_bv(comm, fnames_mats[i], ((Nl, N), s))
+    res4py.bv_add(-1.0, Y, actions[i-1](X))
     string = f"Error for {strs[i-1]:30} = {Y.norm():.15e}"
     res4py.petscprint(comm, string)
     Y.destroy()

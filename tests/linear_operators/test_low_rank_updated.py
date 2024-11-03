@@ -45,22 +45,23 @@ if rank == 0:
     Sw = sp.linalg.inv(np.eye(Sigma.shape[-1]) + V.conj().T@Uw)
     Vw = Ainv.conj().T@V
     Uwmat = PETSc.Mat().createDense((N, q), None, Uw, MPI.COMM_SELF)
-    Swmat = PETSc.Mat().createDense((q, q), None, Sw, MPI.COMM_SELF)
     Vwmat = PETSc.Mat().createDense((N, q), None, Vw, MPI.COMM_SELF)
-    objs = [Uwmat, Swmat, Vwmat]
-    fnames_ = ['Uw','Sigmaw','Vw']
+    objs = [Uwmat, Vwmat]
+    fnames_ = ['Uw','Vw']
     fnames_factors_w = [path + root + '.dat' for root in fnames_]
     for (k, obj) in enumerate(objs):
         res4py.write_to_file(MPI.COMM_SELF, fnames_factors_w[k], obj)
+    np.save(path + 'Sigmaw.npy', Sw)
 
     A += U@Sigma@V.conj().T
     Ainv = sp.linalg.inv(A)
 
-    objs = [Umat, Sigmamat, Vmat]
-    fnames_ = ['U','Sigma','V']
+    objs = [Umat, Vmat]
+    fnames_ = ['U', 'V']
     fnames_factors = [path + root + '.dat' for root in fnames_]
     for (k, obj) in enumerate(objs):
         res4py.write_to_file(MPI.COMM_SELF, fnames_factors[k], obj)
+    np.save(path + 'Sigma.npy', Sigma)
 
     x = np.random.randn(A.shape[0]) + 1j*np.random.randn(A.shape[0])
     xvec = PETSc.Vec().createWithArray(x, comm=MPI.COMM_SELF)
@@ -100,9 +101,9 @@ sl = res4py.compute_local_size(s)
 A = res4py.read_coo_matrix(comm, fnames_jac, ((Nl, N),(Nl,N)))
 ksp = res4py.create_mumps_solver(comm, A)
 linop_ = res4py.MatrixLinearOperator(comm, A, ksp)
-U = res4py.read_dense_matrix(comm, fnames_factors[0], ((Nl, N), (rl, r)))
-Sig = res4py.read_dense_matrix(comm, fnames_factors[1], ((rl, r), (ql, q)))
-V = res4py.read_dense_matrix(comm, fnames_factors[2], ((Nl, N), (ql, q)))
+Sig = np.load(path + 'Sigma.npy')
+U = res4py.read_bv(comm, fnames_factors[0], ((Nl, N), r))
+V = res4py.read_bv(comm, fnames_factors[1], ((Nl, N), q))
 linop = res4py.LowRankUpdatedLinearOperator(comm, linop_, U, Sig, V)
 x = res4py.read_vector(comm, fnames_vecs[0])
 actions = [linop.apply, linop.apply_hermitian_transpose, \
@@ -115,14 +116,14 @@ for i in range (1,len(fnames_vecs)):
     string = f"Error for {strs[i-1]:30} = {y.norm():.15e}"
     res4py.petscprint(comm, string)
     y.destroy()
-X = res4py.read_dense_matrix(comm, fnames_mats[0], ((Nl, N), (sl, s)))
+X = res4py.read_bv(comm, fnames_mats[0], ((Nl, N), s))
 actions = [linop.apply_mat, linop.apply_hermitian_transpose_mat, \
            linop.solve_mat, linop.solve_hermitian_transpose_mat]
 strs = ['apply_mat', 'apply_hermitian_transpose_mat', 'solve_mat', \
         'solve_hermitian_transpose_mat']
 for i in range (1,len(fnames_vecs)):
-    Y = res4py.read_dense_matrix(comm, fnames_mats[i], ((Nl, N), (sl, s)))
-    Y.axpy(-1.0, actions[i-1](X))
+    Y = res4py.read_bv(comm, fnames_mats[i], ((Nl, N), s))
+    res4py.bv_add(-1.0, Y, actions[i-1](X))
     string = f"Error for {strs[i-1]:30} = {Y.norm():.15e}"
     res4py.petscprint(comm, string)
     Y.destroy()
@@ -130,9 +131,9 @@ for i in range (1,len(fnames_vecs)):
 res4py.petscprint(comm, " ")
 res4py.petscprint(comm, "---------------------------------")
 res4py.petscprint(comm, " ")
-Uw = res4py.read_dense_matrix(comm, fnames_factors_w[0], ((Nl, N), (ql, q)))
-Sigw = res4py.read_dense_matrix(comm, fnames_factors_w[1], ((ql, q), (ql, q)))
-Vw = res4py.read_dense_matrix(comm, fnames_factors_w[2], ((Nl, N), (ql, q)))
+Sigw = np.load(path + 'Sigmaw.npy')
+Uw = res4py.read_bv(comm, fnames_factors_w[0], ((Nl, N), q))
+Vw = res4py.read_bv(comm, fnames_factors_w[1], ((Nl, N), q))
 linop = res4py.LowRankUpdatedLinearOperator(comm, linop_, U, Sig, V, \
                                             (Uw, Sigw, Vw))
 x = res4py.read_vector(comm, fnames_vecs[0])
@@ -146,14 +147,14 @@ for i in range (1,len(fnames_vecs)):
     string = f"Error for {strs[i-1]:30} = {y.norm():.15e}"
     res4py.petscprint(comm, string)
     y.destroy()
-X = res4py.read_dense_matrix(comm, fnames_mats[0], ((Nl, N), (sl, s)))
+X = res4py.read_bv(comm, fnames_mats[0], ((Nl, N), s))
 actions = [linop.apply_mat, linop.apply_hermitian_transpose_mat, \
            linop.solve_mat, linop.solve_hermitian_transpose_mat]
 strs = ['apply_mat', 'apply_hermitian_transpose_mat', 'solve_mat', \
         'solve_hermitian_transpose_mat']
 for i in range (1,len(fnames_vecs)):
-    Y = res4py.read_dense_matrix(comm, fnames_mats[i], ((Nl, N), (sl, s)))
-    Y.axpy(-1.0, actions[i-1](X))
+    Y = res4py.read_bv(comm, fnames_mats[i], ((Nl, N), s))
+    res4py.bv_add(-1.0, Y, actions[i-1](X))
     string = f"Error for {strs[i-1]:30} = {Y.norm():.15e}"
     res4py.petscprint(comm, string)
     Y.destroy()

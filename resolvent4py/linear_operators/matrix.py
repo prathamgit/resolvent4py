@@ -1,7 +1,7 @@
 from .linear_operator import LinearOperator
 from ..linalg import mat_solve_hermitian_transpose
-from ..miscellaneous import create_dense_matrix
 from petsc4py import PETSc
+from slepc4py import SLEPc
 
 class MatrixLinearOperator(LinearOperator):
     r"""
@@ -26,14 +26,25 @@ class MatrixLinearOperator(LinearOperator):
         self.A = A
         self.ksp = ksp
         super().__init__(comm, 'MatrixLinearOperator', A.getSizes(), nblocks)
-        
+    
     def apply(self, x, y=None):
         y = self.create_left_vector() if y == None else y
         self.A.mult(x,y)
         return y
     
     def apply_mat(self, X, Y=None):
-        Y = self.A.matMult(X) if Y == None else self.A.matMult(X, Y)
+        Xm = X.getMat()
+        if Y != None:
+            Ym = Y.getMat()
+            Ym = self.A.matMult(Xm, Ym) 
+            Y.restoreMat(Ym)
+        else:
+            Ym = Xm.duplicate()
+            Ym = self.A.matMult(Xm, Ym) 
+            Y = SLEPc.BV().createFromMat(Ym)
+            Y.setType('mat')
+            Ym.destroy()
+        X.restoreMat(Xm)
         return Y
 
     def apply_hermitian_transpose(self, x, y=None):
@@ -43,7 +54,18 @@ class MatrixLinearOperator(LinearOperator):
     
     def apply_hermitian_transpose_mat(self, X, Y=None):
         self.A.hermitianTranspose()
-        Y = self.A.matMult(X, Y)
+        Xm = X.getMat()
+        if Y != None:
+            Ym = Y.getMat()
+            Ym = self.A.matMult(Xm, Ym) 
+            Y.restoreMat(Ym)
+        else:
+            Ym = Xm.duplicate()
+            Ym = self.A.matMult(Xm, Ym) 
+            Y = SLEPc.BV().createFromMat(Ym)
+            Y.setType('mat')
+            Ym.destroy()
+        X.restoreMat(Xm)
         self.A.hermitianTranspose()
         return Y
     
@@ -61,10 +83,18 @@ class MatrixLinearOperator(LinearOperator):
 
     def solve_mat(self, X, Y=None):
         if self.ksp != None:
-            if Y == None:
-                sizes = (self.get_dimensions()[0], X.getSizes()[-1])
-                Y = create_dense_matrix(self.get_comm(), sizes)
-            self.ksp.matSolve(X, Y)
+            Xm = X.getMat()
+            if Y != None:
+                Ym = Y.getMat()
+                self.ksp.matSolve(Xm, Ym) 
+                Y.restoreMat(Ym)
+            else:
+                Ym = Xm.duplicate()
+                self.ksp.matSolve(Xm, Ym) 
+                Y = SLEPc.BV().createFromMat(Ym)
+                Y.setType('mat')
+                Ym.destroy()
+            X.restoreMat(Xm)
             return Y
         else:
             raise Exception(
@@ -90,7 +120,18 @@ class MatrixLinearOperator(LinearOperator):
         
     def solve_hermitian_transpose_mat(self, X, Y=None):
         if self.ksp != None:
-            Y = mat_solve_hermitian_transpose(self.ksp, X, Y)
+            Xm = X.getMat()
+            if Y != None:
+                Ym = Y.getMat()
+                Ym = mat_solve_hermitian_transpose(self.ksp, Xm, Ym)
+                Y.restoreMat(Ym)
+            else:
+                Ym = Xm.duplicate()
+                Ym = mat_solve_hermitian_transpose(self.ksp, Xm, Ym)
+                Y = SLEPc.BV().createFromMat(Ym)
+                Y.setType('mat')
+                Ym.destroy()
+            X.restoreMat(Xm)
             return Y
         else:
             raise Exception(
@@ -100,4 +141,5 @@ class MatrixLinearOperator(LinearOperator):
             )
         
     def destroy(self):
-        pass
+        self.A.destroy()
+        self.ksp.destroy()

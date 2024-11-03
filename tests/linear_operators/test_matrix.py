@@ -78,14 +78,14 @@ for i in range (1,len(fnames_vecs)):
     string = f"Error for {strs[i-1]:30} = {y.norm():.15e}"
     res4py.petscprint(comm, string)
     y.destroy()
-X = res4py.read_dense_matrix(comm, fnames_mats[0], ((Nl, N), (sl, s)))
+X = res4py.read_bv(comm, fnames_mats[0], ((Nl, N), s))
 actions = [linop.apply_mat, linop.apply_hermitian_transpose_mat, \
            linop.solve_mat, linop.solve_hermitian_transpose_mat]
 strs = ['apply_mat', 'apply_hermitian_transpose_mat', 'solve_mat', \
         'solve_hermitian_transpose_mat']
 for i in range (1,len(fnames_vecs)):
-    Y = res4py.read_dense_matrix(comm, fnames_mats[i], ((Nl, N), (sl, s)))
-    Y.axpy(-1.0, actions[i-1](X))
+    Y = res4py.read_bv(comm, fnames_mats[i], ((Nl, N), s))
+    res4py.bv_add(-1.0, Y, actions[i-1](X))
     string = f"Error for {strs[i-1]:30} = {Y.norm():.15e}"
     res4py.petscprint(comm, string)
     Y.destroy()

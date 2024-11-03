@@ -50,7 +50,7 @@ def distributed_to_sequential_matrix(comm, Mat_dist):
         :rtype: PETSc.Mat.Type.DENSE
     """
     array = Mat_dist.getDenseArray().copy().reshape(-1)
-    counts = comm.allgather(len(array))
+    counts = np.asarray(comm.allgather(len(array)))
     disps = np.concatenate(([0],np.cumsum(counts[:-1])))
     recvbuf = np.zeros(np.sum(counts), dtype=array.dtype)
     comm.Allgatherv(array, (recvbuf, counts, disps, get_mpi_type(array.dtype)))
