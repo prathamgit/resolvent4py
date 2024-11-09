@@ -22,7 +22,6 @@ def create_mumps_solver(comm,A):
     pc.setType('lu')
     pc.setFactorSolverType('mumps')
     pc.setUp()
-    
     return ksp
 
 def check_lu_factorization(comm, A, ksp):

@@ -24,3 +24,9 @@ Low-Rank-Updated Linear Operator
 .. automodule:: resolvent4py.linear_operators.low_rank_updated
    :members:
    :noindex:
+
+Product Linear Operator
+--------------------------------
+.. automodule:: resolvent4py.linear_operators.product
+   :members:
+   :noindex:

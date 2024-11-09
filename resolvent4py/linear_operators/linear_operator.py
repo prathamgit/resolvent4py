@@ -31,25 +31,41 @@ class LinearOperator(metaclass=abc.ABCMeta):
             self._nblocks != None else None
     
     def get_comm(self):
-        """The MPI communicator"""
+        r"""
+            The MPI communicator
+
+            :rtype: `MPICOMM`_
+        """
         return self._comm
     
     def get_name(self):
-        """The name of the linear operator"""
+        r"""
+            The name of the linear operator
+
+            :rtype: str
+        """
         return self._name
     
     def get_dimensions(self):
-        """The dimensions of the linear operator"""
+        r"""
+            The dimensions of the linear operator
+
+            :rtype: `MatSizeSpec`_
+        """
         return self._dimensions
     
     def get_nblocks(self):
-        """The number of blocks of the linear operator"""
+        r"""
+            The number of blocks of the linear operator
+            
+            :rtype: int
+        """
         return self._nblocks
     
     def create_right_vector(self):
         r"""
             :return: a PETSc vector that :math:`L` can be multiplied against
-            :rtype: `Vec`_
+            :rtype: `StandardVec`_
         """
         vec = PETSc.Vec().create(comm=self._comm)
         vec.setSizes(self._dimensions[-1])
@@ -59,7 +75,7 @@ class LinearOperator(metaclass=abc.ABCMeta):
     def create_left_vector(self):
         r"""
             :return: a PETSc vector where :math:`Lx` can be stored into
-            :rtype: `Vec`_
+            :rtype: `StandardVec`_
         """
         vec = PETSc.Vec().create(comm=self._comm)
         vec.setSizes(self._dimensions[0])
@@ -92,7 +108,8 @@ class LinearOperator(metaclass=abc.ABCMeta):
 
             with vector-valued entries that satisfy \
             :math:`x_{-i} = \overline{x_i}`, check if the vector :math:`Lx` \
-            satisfies :math:`(Lx)_{-i}=\overline{(Lx)_{i}}`.
+            satisfies :math:`(Lx)_{-i}=\overline{(Lx)_{i}}`. (Here, the \
+            overline denote complex conjugation.)
 
             :return: :code:`True` if the linear operator has complex-conjugate
                 structure, :code:`False` otherwise.
@@ -120,11 +137,11 @@ class LinearOperator(metaclass=abc.ABCMeta):
             Compute :math:`y = Lx`
 
             :param x: a PETSc vector
-            :type x: PETSc.Vec.Type.STANDARD
+            :type x: `StandardVec`_
             :param y: [optional] a PETSc vector to store the result
-            :type y: PETSc.Vec.Type.STANDARD
+            :type y: `StandardVec`_
 
-            :rtype: PETSc.Vec.Type.STANDARD
+            :rtype: `StandardVec`_
         """
     
     @abc.abstractmethod
@@ -132,12 +149,12 @@ class LinearOperator(metaclass=abc.ABCMeta):
         r"""
             Compute :math:`Y = LX`
 
-            :param X: a PETSc matrix
-            :type X: PETSc.Mat.Type.DENSE
-            :param Y: [optional] a PETSc matrix to store the result
-            :type Y: PETSc.Mat.Type.DENSE
+            :param X: a SLEPc BV
+            :type X: `BV`_
+            :param Y: [optional] a SLEPc BV to store the result
+            :type Y: `BV`_
 
-            :rtype: PETSc.Mat.Type.DENSE
+            :rtype: `BV`_
         """
 
     @abc.abstractmethod
@@ -153,11 +170,11 @@ class LinearOperator(metaclass=abc.ABCMeta):
             Compute :math:`y = L^*x`
 
             :param x: a PETSc vector
-            :type x: PETSc.Vec.Type.STANDARD
+            :type x: `StandardVec`_
             :param y: [optional] a PETSc vector to store the result
-            :type y: PETSc.Vec.Type.STANDARD
+            :type y: `StandardVec`_
 
-            :rtype: PETSc.Vec.Type.STANDARD
+            :rtype: `StandardVec`_
         """
 
     @raise_not_implemented_error
@@ -165,12 +182,12 @@ class LinearOperator(metaclass=abc.ABCMeta):
         r"""
             Compute :math:`Y = L^*X`
 
-            :param X: a PETSc matrix
-            :type X: PETSc.Mat.Type.DENSE
-            :param Y: [optional] a PETSc matrix to store the result
-            :type Y: PETSc.Mat.Type.DENSE
+            :param X: a SLEPc BV
+            :type X: `BV`_
+            :param Y: [optional] a SLEPc BV to store the result
+            :type Y: `BV`_
 
-            :rtype: PETSc.Mat.Type.DENSE
+            :rtype: `BV`_
         """
 
     @raise_not_implemented_error
@@ -179,11 +196,11 @@ class LinearOperator(metaclass=abc.ABCMeta):
             Compute :math:`y = L^{-1}x`
 
             :param x: a PETSc vector
-            :type x: PETSc.Vec.Type.STANDARD
+            :type x: `StandardVec`_
             :param y: [optional] a PETSc vector to store the result
-            :type y: PETSc.Vec.Type.STANDARD
+            :type y: `StandardVec`_
 
-            :rtype: PETSc.Vec.Type.STANDARD
+            :rtype: `StandardVec`_
         """
 
     @raise_not_implemented_error
@@ -191,12 +208,12 @@ class LinearOperator(metaclass=abc.ABCMeta):
         r"""
             Compute :math:`Y = L^{-1}X`
             
-            :param X: a PETSc matrix
-            :type X: PETSc.Mat.Type.DENSE
-            :param Y: [optional] a PETSc matrix to store the result
-            :type Y: PETSc.Mat.Type.DENSE
+            :param X: a SLEPc BV
+            :type X: `BV`_
+            :param Y: [optional] a SLEPc BV to store the result
+            :type Y: `BV`_
 
-            :rtype: PETSc.Mat.Type.DENSE
+            :rtype: `BV`_
         """
     
     @raise_not_implemented_error
@@ -205,11 +222,11 @@ class LinearOperator(metaclass=abc.ABCMeta):
             Compute :math:`y = L^{-*}x`
 
             :param x: a PETSc vector
-            :type x: PETSc.Vec.Type.STANDARD
+            :type x: `StandardVec`_
             :param y: [optional] a PETSc vector to store the result
-            :type y: PETSc.Vec.Type.STANDARD
+            :type y: `StandardVec`_
 
-            :rtype: PETSc.Vec.Type.STANDARD
+            :rtype: `StandardVec`_
         """
 
     @raise_not_implemented_error
@@ -217,10 +234,10 @@ class LinearOperator(metaclass=abc.ABCMeta):
         r"""
             Compute :math:`Y = L^{-*}X`
             
-            :param X: a PETSc matrix
-            :type X: PETSc.Mat.Type.DENSE
-            :param Y: [optional] a PETSc matrix to store the result
-            :type Y: PETSc.Mat.Type.DENSE
+            :param X: a SLEPc BV
+            :type X: `BV`_
+            :param Y: [optional] a SLEPc BV to store the result
+            :type Y: `BV`_
             
-            :rtype: PETSc.Mat.Type.DENSE
+            :rtype: `BV`_
         """

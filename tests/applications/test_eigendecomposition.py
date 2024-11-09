@@ -42,11 +42,8 @@ A = res4py.read_coo_matrix(comm, fnames_jac, ((Nl, N),(Nl,N)))
 ksp = res4py.create_mumps_solver(comm, A)
 linop = res4py.MatrixLinearOperator(comm, A, ksp)
 
-V, D, W = res4py.right_and_left_eigendecomposition(linop, linop.solve, 100,\
-                                                   10, lambda x: 1./x)
-
-Dvec = D.getDiagonal()
-Dseq = res4py.distributed_to_sequential_vector(comm, Dvec).getArray()
+V, D, W = res4py.right_and_left_eig(linop, linop.apply, 100, 10)
+Dseq = np.diag(D)
 
 if rank == 0:
     plt.figure()
@@ -54,11 +51,11 @@ if rank == 0:
     plt.plot(Dseq.real, Dseq.imag, 'rx')
     plt.savefig("evals.png")
 
-for i in range (D.getSizes()[-1][-1]):
-    w = W.getColumnVector(i)
-    v = V.getColumnVector(i)
+for i in range (len(Dseq)):
+    w = W.getColumn(i)
+    v = V.getColumn(i)
     Av = linop.apply(v)
     error = np.abs(Av.dot(w) - Dseq[i])
     res4py.petscprint(comm, "Error = %1.15e"%error)
-    w.destroy()
-    v.destroy()
+    W.restoreColumn(i, w)
+    V.restoreColumn(i, v)

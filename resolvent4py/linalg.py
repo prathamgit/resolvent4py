@@ -24,27 +24,6 @@ def compute_local_size(Nglob):
     Nloc = Nglob//size + 1 if np.mod(Nglob,size) > rank else Nglob//size
     return Nloc
 
-# def bv_mult_array(comm, X, M, Y=None):
-#     r"""
-#         Compute :math:`Y = X M`, where :math:`X` is a BV structure, 
-#         and :math:`M` a numpy matrix
-#     """
-#     Xm = X.getMat()
-#     L = Xm.getDenseArray()@M
-#     X.restoreMat(Xm)
-#     if Y == None:
-#         Y = SLEPc.BV().create(comm)
-#         Y.setSizes(X.getSizes()[0], M.shape[-1])
-#         Y.setFromOptions()
-#     Ym = Y.getMat()
-#     r0, r1 = Ym.getOwnershipRange()
-#     rows = np.arange(r0, r1, 1)
-#     cols = np.arange(L.shape[-1])
-#     Ym.setValues(rows, cols, L)
-#     Ym.assemble(None)
-#     Y.restoreMat(Ym)
-#     return Y
-
 def bv_add(alpha, X, Y):
     r"""
         Compute :math:`X = X + \alpha Y
@@ -54,6 +33,11 @@ def bv_add(alpha, X, Y):
     Xm.axpy(alpha, Ym)
     X.restoreMat(Xm)
     Y.restoreMat(Ym)
+
+def bv_conj(X):
+    Xm = X.getMat()
+    Xm.conjugate()
+    X.restoreMat(Xm)
 
 def mat_solve_hermitian_transpose(ksp, X, Y=None):
     r"""
@@ -119,50 +103,8 @@ def compute_dense_inverse(comm, M):
     Minv = PETSc.Mat().createDense(sizes, None, Minv_array, comm=comm)
     return Minv
 
-def compute_matrix_product_contraction(comm, M, P):
-    r"""
-        Compute :math:`\sum_{i,j} M_{i,j}P_{i,j}`
-        
-        :param comm: MPI communicator
-        :param M: PETSc matrix
-        :type M: PETSc.Mat.Type.DENSE
-        :param P: PETSc matrix
-        :type P: PETSc.Mat.Type.DENSE
 
-        :rtype: PETSc scalar
-    """
-    M_array = M.getDenseArray()
-    P_array = P.getDenseArray()
-    value = comm.allreduce(np.sum(M_array*P_array), op=MPI.SUM)
-    return value
 
-def compute_trace_product(comm, L1, L2, L2_hermitian_transpose=False):
-    r"""
-        If :code:`L2_hermitian_transpose==False`, compute 
-        :math:`\text{Tr}(L_1 L_2)`, else :math:`\text{Tr}(L_1 L_2^*)`.
-
-        :param comm: MPI communicator
-        :param L1: low-rank linear operator
-        :param L2: any linear operator
-        :param L2_hermitian_transpose: [optional] :code:`True` or :code:`False`
-        :type L2_hermitian_transpose: bool
-
-        :rtype: PETSc scalar
-    """
-    L2_action = L2.apply_mat if L2_hermitian_transpose == False else \
-        L2.apply_hermitian_transpose_mat
-    F1 = L1.U.matMult(L1.Sigma)
-    F2 = L2_action(F1)
-    L1.V.hermitianTranspose()
-    F3 = L1.V.matMult(F2)
-    L1.V.hermitianTranspose()
-    F3diag = F3.getDiagonal()
-    trace = comm.allreduce(np.sum(F3diag.getArray()), op=MPI.SUM)
-    F1.destroy()
-    F2.destroy()
-    F3.destroy()
-    F3diag.destroy()
-    return trace
 
 def hermitian_transpose(comm, Mat, in_place=False, MatHT=None):
     r"""

@@ -42,10 +42,8 @@ A = res4py.read_coo_matrix(comm, fnames_jac, ((Nl, N),(Nl,N)))
 ksp = res4py.create_mumps_solver(comm, A)
 linop = res4py.MatrixLinearOperator(comm, A, ksp)
 
-U, S, V = res4py.randomized_svd(linop, linop.solve_mat, 10, 2, 1)
-
-Svec = S.getDiagonal()
-Sseq = res4py.distributed_to_sequential_vector(comm, Svec).getArray()
+U, S, V = res4py.randomized_svd(linop, linop.solve_mat, 2, 3, 1)
+Sseq = np.diag(S)
 
 if rank == 0:
     plt.figure()
@@ -54,18 +52,14 @@ if rank == 0:
     plt.gca().set_yscale('log')
     plt.savefig("svals.png")
 
-    print(np.abs(u[:,0]))
-    print(np.abs(v[:,0]))
+    # print(np.abs(u[:,0]))
+    # print(np.abs(v[:,0]))
 
-for i in range (S.getSizes()[-1][-1]):
-    u = U.getColumnVector(i)
-    v = V.getColumnVector(i)
+for i in range (len(Sseq)):
+    u = U.getColumn(i)
+    v = V.getColumn(i)
     Au = linop.apply(u)
     error = np.abs(Au.dot(v) - 1./Sseq[i])
     res4py.petscprint(comm, "Error = %1.15e"%error)
-    u.abs()
-    u.view()
-    v.abs()
-    v.view()
-    u.destroy()
-    v.destroy()
+    U.restoreColumn(i, u)
+    V.restoreColumn(i, v)

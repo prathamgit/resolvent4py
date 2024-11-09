@@ -38,7 +38,6 @@ def petscprint(comm, arg):
         if MPI.COMM_WORLD.Get_rank() == 0:
             print(arg)
 
-
 def copy_mat_from_bv(bv):
     r"""
         Extract a PETSc Mat from a SLEPc BV. This function returns a copy

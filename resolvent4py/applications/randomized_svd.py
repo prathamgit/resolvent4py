@@ -11,8 +11,8 @@ from ..miscellaneous import petscprint
 
 def randomized_svd(lin_op, lin_op_action, n_rand, n_loops, n_svals):
     r"""
-        Compute the randomized SVD of the linear operator :math:`L` 
-        specified by :code:`lin_op`. 
+        Compute the SVD of the linear operator :math:`L` 
+        specified by :code:`lin_op` using a randomized SVD algorithm.
         
         :param lin_op: any child class of the :code:`LinearOperator` class
         :param lin_op_action: one of :code:`lin_op.apply_mat` or 
@@ -27,18 +27,19 @@ def randomized_svd(lin_op, lin_op_action, n_rand, n_loops, n_svals):
         :return: :math:`(U,\,\Sigma,\, V)` a 3-tuple with the leading 
             :code:`n_svals` singular values and corresponding left and \
             right singular vectors
-        :rtype: (PETSc Mat, PETSc Mat, PETSc Mat)
+        :rtype: (SLEPc.BV with :code:`n_svals` columns, 
+            numpy.ndarray of size :code:`n_svals x n_svals`, 
+            SLEPc.BV with :code:`n_svals` columns)
     """
     if lin_op_action == lin_op.apply_mat:
         lin_op_action_adj = lin_op.apply_hermitian_transpose_mat
     if lin_op_action == lin_op.solve_mat:
         lin_op_action_adj = lin_op.solve_hermitian_transpose_mat
-    
     # Assemble random BV
     rowsizes = lin_op.get_dimensions()[0]
     X = SLEPc.BV().create(comm=lin_op._comm)
     X.setSizes(rowsizes, n_rand)
-    X.setFromOptions()
+    X.setType('mat')
     X.setRandomNormal()
     for j in range (n_rand):
         xj = X.getColumn(j)
@@ -52,50 +53,29 @@ def randomized_svd(lin_op, lin_op_action, n_rand, n_loops, n_svals):
             enforce_complex_conjugacy(lin_op._comm, xj, lin_op._nblocks)
         X.restoreColumn(j, xj)
     X.orthogonalize(None)
-
+    # Perform randomized SVD loop
     Qadj = X.duplicate()
-    X_mat = X.getMat()
-    Qadj_mat = Qadj.getMat()
-    lin_op_action_adj(X_mat, Qadj_mat)
-    X.restoreMat(X_mat)
-    Qadj.restoreMat(Qadj_mat)
+    lin_op_action(X, Qadj)
     X.destroy()
-    Qadj.orthogonalize(None)
     Qfwd = Qadj.duplicate()
-    j = 0
-    while j < n_loops:
-        Qadj_mat = Qadj.getMat()
-        Qfwd_mat = Qfwd.getMat()
-        lin_op_action(Qadj_mat, Qfwd_mat)
-        Qfwd.restoreMat(Qfwd_mat)
+    for j in range (n_loops):
+        lin_op_action(Qadj, Qfwd)
         Qfwd.orthogonalize(None)
-        Qfwd_mat = Qfwd.getMat()
-        lin_op_action_adj(Qfwd_mat, Qadj_mat)
-        Qfwd.restoreMat(Qfwd_mat)
-        Qadj.restoreMat(Qadj_mat)
-        j += 1
+        lin_op_action_adj(Qfwd, Qadj)
     R = create_dense_matrix(MPI.COMM_SELF, (n_rand, n_rand))
     Qadj.orthogonalize(R)
+    # Compute low-rank SVD
     u, s, v = sp.linalg.svd(R.getDenseArray())
     v = v.conj().T
     s = s[:n_svals]
     u = u[:,:n_svals]
     v = v[:,:n_svals]
-    u = PETSc.Mat().createDense((n_rand,n_svals), None, u, comm=MPI.COMM_SELF)
-    v = PETSc.Mat().createDense((n_rand,n_svals), None, v, comm=MPI.COMM_SELF)
-    
-    Qfwd.multInPlace(v,0,n_svals)
-    Qfwd.setActiveColumns(0,n_svals)
-    Qadj.multInPlace(u,0,n_svals)
-    Qadj.setActiveColumns(0,n_svals)
-    Qfwd_mat = copy_mat_from_bv(Qfwd)
-    Qfwd.destroy()
-    Qadj_mat = copy_mat_from_bv(Qadj)
-    Qadj.destroy()
-
-    sizes_S = Qfwd_mat.getSizes()[-1]
-    S = create_dense_matrix(lin_op.get_comm(), (sizes_S, sizes_S))
-    for i in range (*S.getOwnershipRange()):
-        S.setValues(i,i,s[i])
-    S.assemble(None)
-    return (Qfwd_mat, S, Qadj_mat)
+    u = PETSc.Mat().createDense((n_rand, n_svals), None, u, comm=MPI.COMM_SELF)
+    v = PETSc.Mat().createDense((n_rand, n_svals), None, v, comm=MPI.COMM_SELF)
+    Qfwd.multInPlace(v, 0, n_svals)
+    Qfwd.setActiveColumns(0, n_svals)
+    Qfwd.resize(n_svals, copy=True)
+    Qadj.multInPlace(u, 0, n_svals)
+    Qadj.setActiveColumns(0, n_svals)
+    Qadj.resize(n_svals, copy=True)
+    return (Qfwd, np.diag(s), Qadj)

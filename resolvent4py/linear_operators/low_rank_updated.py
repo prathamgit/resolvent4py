@@ -105,11 +105,13 @@ class LowRankUpdatedLinearOperator(LinearOperator):
         X = SLEPc.BV().create(self._comm)
         X.setSizes(self._dimensions[0], m)
         X.setType('mat')
+        return X
 
     def create_intermediate_bv_hermitian_transpose(self, m):
         X = SLEPc.BV().create(self._comm)
         X.setSizes(self._dimensions[-1], m)
         X.setType('mat')
+        return X
 
     def apply(self, x, y=None):
         self.Ax = self.A.apply(x, self.Ax)

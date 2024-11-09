@@ -5,13 +5,8 @@ from slepc4py import SLEPc
 import numpy as np
 import scipy as sp
 
-from ..linalg import compute_dense_inverse
 from ..linalg import enforce_complex_conjugacy
-from ..miscellaneous import copy_mat_from_bv
-from ..miscellaneous import create_dense_matrix
 from ..miscellaneous import petscprint
-from ..comms import sequential_to_distributed_matrix
-from ..comms import distributed_to_sequential_matrix
 
 def arnoldi_iteration(lin_op, lin_op_action, krylov_dim):
     r"""
@@ -21,18 +16,16 @@ def arnoldi_iteration(lin_op, lin_op_action, krylov_dim):
         :code:`lin_op` and :code:`lin_op_action`.
 
         :param lin_op: any child class of the :code:`LinearOperator` class
-        :param lin_op_action: the method (e.g., :code:`lin_op.apply`,
-            :code:`lin_op.solve_hermitian_transpose` or others) 
-            used to compute the action of the linear operator against a vector. 
-            This argument allows the user to specify whether they want 
-            the eigendecomposition of :math:`L`, :math:`L^*`, 
-            :math:`L^{-1}` or :math:`L^{-*}`.
+        :param lin_op_action: one of :code:`lin_op.apply`, :code:`lin_op.solve`,
+            :code:`lin_op.apply_hermitian_transpose` or 
+            :code:`lin_op.solve_hermitian_transpose`
         :param krylov_dim: dimension of the Krylov subspace
         :type kyrlov_dim: int
 
         :return: a 2-tuple with an orthonormal basis for the Krylov subspace
             and the Hessenberg matrix
-        :rtype: (SLEPc BV, numpy.ndarray)
+        :rtype: (SLEPc BV with :code:`krylov_dim` columns, \
+            numpy.ndarray of size :code:`krylov_dim x krylov_dim`)
     """
     comm = lin_op.get_comm()
     sizes = lin_op.get_dimensions()[0]
@@ -75,23 +68,27 @@ def arnoldi_iteration(lin_op, lin_op_action, krylov_dim):
 def eig(lin_op, lin_op_action, krylov_dim, n_evals, process_evals=None):
     r"""
         Compute the eigendecomposition of the linear operator :math:`L` 
-        specified by :code:`lin_op` and :code:`lin_op_action`.
+        specified by :code:`lin_op` and :code:`lin_op_action`. Example:
+        to compute the eigenvalues of :math:`L` closest to the origin, 
+        set :code:`lin_op_action = lin_op.solve` and 
+        :code:`process_evals = lambda x: 1./x`.
 
         :param lin_op: any child class of the :code:`LinearOperator` class
-        :param lin_op_action: the method (e.g., :code:`lin_op.apply`,
-            :code:`lin_op.solve_hermitian_transpose` or others) 
-            used to compute the action of the linear operator against a vector. 
-            This argument allows the user to specify whether they want 
-            the eigendecomposition of :math:`L`, :math:`L^*`, 
-            :math:`L^{-1}` or :math:`L^{-*}`.
+        :param lin_op_action: one of :code:`lin_op.apply`, :code:`lin_op.solve`,
+            :code:`lin_op.apply_hermitian_transpose` or 
+            :code:`lin_op.solve_hermitian_transpose`
         :param krylov_dim: dimension of the Arnoldi Krylov subspace
         :type krylov_dim: int
-        :param n_evals: number of largest eigenvalues to return
+        :param n_evals: number of eigenvalues to return
         :type n_evals: int
+        :param process_evals: function to extract the desired eigenvalues (see
+            example above).
+        :type process_evals: Callable
 
-        :return: a 2-tuple with the :code:`n_evals` largest-magnitude 
-            eigenvalues and corresponding eigenvectors
-        :rtype: (np.ndarray, SLEPc.BV)
+        :return: a 2-tuple with the :code:`n_evals` desired eigenvalues
+            and corresponding eigenvectors
+        :rtype: (numpy.ndarray of size :code:`n_evals x n_evals`, 
+            SLEPc.BV with :code:`n_evals` columns)
     """
     Q, H = arnoldi_iteration(lin_op, lin_op_action, krylov_dim)
     evals, evecs = sp.linalg.eig(H)
@@ -101,6 +98,7 @@ def eig(lin_op, lin_op_action, krylov_dim, n_evals, process_evals=None):
     evecs_ = PETSc.Mat().createDense(evecs.shape,None,evecs,comm=MPI.COMM_SELF)
     Q.multInPlace(evecs_,0,n_evals)
     Q.setActiveColumns(0,n_evals)
+    Q.resize(n_evals,copy=True)
     process_evals = (lambda x: x) if process_evals == None else process_evals
     evals = process_evals(evals)
     return (np.diag(evals), Q)
@@ -110,25 +108,28 @@ def right_and_left_eig(lin_op, lin_op_action, krylov_dim, \
     r"""
         Compute the right and left eigendecomposition of the linear operator 
         :math:`L` specified by :code:`lin_op` and :code:`lin_op_action`.
+        Example: to compute the eigenvalues of :math:`L` closest to the origin, 
+        set :code:`lin_op_action = lin_op.solve` and 
+        :code:`process_evals = lambda x: 1./x`.
 
         :param lin_op: any child class of the :code:`LinearOperator` class
-        :param lin_op_action: the method (e.g., :code:`lin_op.apply`,
-            :code:`lin_op.solve_hermitian_transpose` or others) 
-            used to compute the action of the linear operator against a vector. 
-            This argument allows the user to specify whether they want 
-            the eigendecomposition of :math:`L`, :math:`L^*`, 
-            :math:`L^{-1}` or :math:`L^{-*}`.
+        :param lin_op_action: one of :code:`lin_op.apply`, :code:`lin_op.solve`,
+            :code:`lin_op.apply_hermitian_transpose` or 
+            :code:`lin_op.solve_hermitian_transpose`
         :param krylov_dim: dimension of the Arnoldi Krylov subspace
         :type krylov_dim: int
-        :param n_evals: number of largest eigenvalues to return
+        :param n_evals: number of eigenvalues to return
         :type n_evals: int
-        :param process_evals: [optional] a function to process the eigenvalues.
-            The default is the identity function.
+        :param process_evals: function to extract the desired eigenvalues (see
+            example above).
+        :type process_evals: Callable
 
-        :return: a 2-tuple with the :code:`n_evals` largest-magnitude 
-            eigenvalues and corresponding eigenvectors
-        :rtype: (PETSc.Mat.Type.DENSE, PETSc.Mat.Type.DENSE, \
-            PETSc.Mat.Type.DENSE)
+        :return: a 3-tuple with the desired right eigenvectors :math:`V`, the 
+            corresponding eigenvalues :math:`D` and left eigenvectors :math:`W`
+            normalized so that :math:`W^* V = I`.
+        :rtype: (SLEPc.BV with :code:`n_evals` columns, 
+            numpy.ndarray of size :code:`n_evals x n_evals`, 
+            SLEPc.BV with :code:`n_evals` columns)
     """
     
     if lin_op_action == lin_op.solve:
@@ -137,8 +138,8 @@ def right_and_left_eig(lin_op, lin_op_action, krylov_dim, \
         lin_op_action_adj = lin_op.apply_hermitian_transpose
     else:
         raise ValueError (
-            f"lin_op_action must be one of lin_op.solve or lin_op.apply where "
-            f"lin_op is the first argument of the function."
+            f"lin_op_action must be one of lin_op.solve or lin_op.apply. "
+            f"See documentation for additional information."
         )
     # Compute the right and left eigendecompositions
     Dfwd, Qfwd = eig(lin_op, lin_op_action, krylov_dim, n_evals, process_evals)
@@ -156,8 +157,8 @@ def right_and_left_eig(lin_op, lin_op_action, krylov_dim, \
     Qadj_.destroy()
     # Biorthogonalize the eigenvectors
     M = Qfwd.dot(Qadj)
-    Minv = sp.linalg.inv(M.getArray())
+    Minv = sp.linalg.inv(M.getDenseArray())
     Minv = PETSc.Mat().createDense(Minv.shape, None, Minv, MPI.COMM_SELF)
     M.destroy()
-    Qfwd.multInPlace(Minv, 0, Minv.shape[-1])
+    Qfwd.multInPlace(Minv, 0, n_evals)
     return (Qfwd, Dfwd, Qadj)

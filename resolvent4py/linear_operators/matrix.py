@@ -40,7 +40,7 @@ class MatrixLinearOperator(LinearOperator):
             Y.restoreMat(Ym)
         else:
             Ym = Xm.duplicate()
-            Ym = self.A.matMult(Xm, Ym) 
+            Ym = self.A.matMult(Xm, Ym)
             Y = SLEPc.BV().createFromMat(Ym)
             Y.setType('mat')
             Ym.destroy()

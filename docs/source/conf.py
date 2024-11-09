@@ -42,8 +42,10 @@ rst_prolog = """
 .. _KSPType: https://petsc.org/release/petsc4py/reference/petsc4py.PETSc.KSP.Type.html#petsc4py.PETSc.KSP.Type
 .. _KSP: https://petsc.org/release/petsc4py/reference/petsc4py.PETSc.KSP.html
 .. _Vec: https://petsc.org/release/petsc4py/reference/petsc4py.PETSc.Vec.html
+.. _StandardVec: https://petsc.org/release/petsc4py/reference/petsc4py.PETSc.Vec.Type.html#petsc4py.PETSc.Vec.Type.STANDARD
 .. _LayoutSizeSpec: https://petsc.org/release/petsc4py/reference/petsc4py.typing.LayoutSizeSpec.html#petsc4py.typing.LayoutSizeSpec
 .. _BV: https://slepc.upv.es/slepc4py-current/docs/apiref/slepc4py.SLEPc.BV-class.html
+.. _MPICOMM: https://mpi4py.readthedocs.io/en/stable/reference/mpi4py.MPI.Comm.html#mpi4py.MPI.Comm
 """
 
 # -- Options for HTML output -------------------------------------------------
