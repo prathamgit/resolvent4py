@@ -1,10 +1,8 @@
-from petsc4py import PETSc
-from slepc4py import SLEPc
-from mpi4py import MPI
-import numpy as np
+from . import PETSc
+from . import SLEPc
+from . import np
 
 from .linalg import convert_coo_to_csr
-from .miscellaneous import petscprint
 from .linalg import compute_local_size
 
 def read_vector(comm, filename, sizes=None):

@@ -1,7 +1,5 @@
 from .linear_operator import LinearOperator
-from ..linalg import mat_solve_hermitian_transpose
 from ..linalg import create_AIJ_identity
-from petsc4py import PETSc
 
 class InputOutputLinearOperator(LinearOperator):
     r"""

@@ -1,6 +1,6 @@
-import numpy as np
-from mpi4py import MPI
-from petsc4py import PETSc
+from . import np
+from . import MPI
+from . import PETSc
 from .miscellaneous import get_mpi_type
 
 def sequential_to_distributed_matrix(Mat_seq, Mat_dist):

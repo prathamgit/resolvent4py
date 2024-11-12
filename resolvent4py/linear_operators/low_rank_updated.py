@@ -2,11 +2,12 @@ from ..linalg import bv_add
 from .low_rank import LowRankLinearOperator
 from .linear_operator import LinearOperator
 
-import numpy as np
-import scipy as sp
-from mpi4py import MPI
-from petsc4py import PETSc
-from slepc4py import SLEPc
+from .. import np
+from .. import sp
+from .. import MPI
+from .. import PETSc
+from .. import SLEPc
+
 
 class LowRankUpdatedLinearOperator(LinearOperator):
     r"""

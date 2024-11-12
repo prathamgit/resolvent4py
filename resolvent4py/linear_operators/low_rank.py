@@ -1,8 +1,6 @@
 from .linear_operator import LinearOperator
-# from ..linalg import bv_mult_array
-
-from mpi4py import MPI
-from petsc4py import PETSc
+from .. import MPI
+from .. import PETSc
 
 class LowRankLinearOperator(LinearOperator):
     r"""

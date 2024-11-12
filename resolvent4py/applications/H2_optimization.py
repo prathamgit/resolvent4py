@@ -1,14 +1,12 @@
-from mpi4py import MPI
-from petsc4py import PETSc
-from slepc4py import SLEPc
 import time as tlib
 import psutil
 
-import os
-import numpy as np
-import scipy as sp
-import pymanopt
-from functools import partial
+from .. import np
+from .. import sp
+from .. import MPI
+from .. import PETSc
+from .. import SLEPc
+from .. import pymanopt
 
 from ..io_functions import read_bv
 from ..io_functions import read_coo_matrix
@@ -18,12 +16,7 @@ from ..linear_operators import LowRankUpdatedLinearOperator
 from ..solvers_and_preconditioners_functions import create_mumps_solver
 from ..applications import eig
 from ..applications import right_and_left_eig
-from ..comms import sequential_to_distributed_matrix
-from ..comms import distributed_to_sequential_matrix
-from ..linalg import compute_local_size
-from ..linalg import hermitian_transpose
 from ..miscellaneous import petscprint
-from ..miscellaneous import create_dense_matrix
 from ..linalg import bv_add
 from ..linalg import bv_conj
 
@@ -79,7 +72,8 @@ class optimization_objects:
 
     def __init__(self, comm, fnames_jacobian, jacobian_sizes, path_factors, \
                 factor_sizes, fname_frequencies, fname_weights, \
-                stability_params, compute_B, compute_C, compute_dB, compute_dC):
+                stability_params, compute_B, compute_C, compute_dB, compute_dC,\
+                which_grad):
         
         self.comm = comm
         self.jacobian_sizes = jacobian_sizes
@@ -97,6 +91,7 @@ class optimization_objects:
         self.compute_dB = compute_dB
         self.compute_dC = compute_dC
         self.stab_params = stability_params
+        self.which_grad = which_grad
     
     def load_factors(self, path_factors, factor_sizes):
         
@@ -124,20 +119,19 @@ class optimization_objects:
         alpha = self.stab_params[0]
         return alpha*self.evaluate_exponential(val)
     
-    def compute_dBdp(self, p, grad_B, compute_dB):
+    def compute_dBdp(self, p, grad_B, Bp1, Bp0, compute_dB):
         grad_p = np.zeros_like(p)
         for j in range (len(p)):
             pjp = p.copy()
             pjm = p.copy()
-            pjp[j] += 1e-5
-            pjm[j] -= 1e-5
-            dB = compute_dB(pjp, pjm)
-            dB.scale(1./2e-5)
-            bv_conj(dB)
-            grad_p[j] = _compute_bv_contraction(self.comm, dB, grad_B).real
-            dB.destroy()
+            pjp[j] += 1e-7
+            pjm[j] -= 1e-7
+            Bp1 = compute_dB(pjp, pjm, Bp1, Bp0)
+            Bp1.scale(1./2e-7)
+            bv_conj(Bp1)
+            grad_p[j] = _compute_bv_contraction(self.comm, Bp1, grad_B).real
         return grad_p
-    
+
 def cost_profile(params, opt_obj):
     r"""
         Evaluate the cost function
@@ -152,8 +146,14 @@ def cost_profile(params, opt_obj):
 
     t0 = tlib.time()
 
-    B = opt_obj.compute_B(p)
-    C = opt_obj.compute_C(s)
+    B = SLEPc.BV().create(comm=comm)
+    B.setSizes(opt_obj.R_ops[0]._dimensions[0], K.shape[0])
+    B.setType('mat')
+    C = SLEPc.BV().create(comm=comm)
+    C.setSizes(opt_obj.R_ops[0]._dimensions[0], K.shape[-1])
+    C.setType('mat')
+    B = opt_obj.compute_B(p, B)
+    C = opt_obj.compute_C(s, C)
     RB = B.duplicate()
     RHTC = C.duplicate()
 
@@ -207,8 +207,18 @@ def euclidean_gradient_profile(params, opt_obj):
 
     t0 = tlib.time()
 
-    B = opt_obj.compute_B(p)
-    C = opt_obj.compute_C(s)
+    B = SLEPc.BV().create(comm=comm)
+    B.setSizes(opt_obj.R_ops[0]._dimensions[0], K.shape[0])
+    B.setType('mat')
+    Bp1 = B.copy()
+    Bp0 = B.copy()
+    C = SLEPc.BV().create(comm=comm)
+    C.setSizes(opt_obj.R_ops[0]._dimensions[0], K.shape[-1])
+    C.setType('mat')
+    Cp1 = C.copy()
+    Cp0 = C.copy()
+    B = opt_obj.compute_B(p, B)
+    C = opt_obj.compute_C(s, C)
     RB = B.duplicate()
     RHTC = C.duplicate()
     
@@ -273,7 +283,8 @@ def euclidean_gradient_profile(params, opt_obj):
         Q = LowRankLinearOperator(comm, M.V, M.Sigma.conj().T, B)
         Q_grad_B_i = Q.apply_mat(grad_B_i, Q_grad_B_i)
         bv_add(-1.0, grad_B_i, Q_grad_B_i)
-        grad_p += 2.0*w*opt_obj.compute_dBdp(p, grad_B_i, opt_obj.compute_dB)
+        grad_p += 2.0*w*opt_obj.compute_dBdp(p, grad_B_i, Bp1, Bp0, \
+                                             opt_obj.compute_dB)
         SMat.destroy()
 
         # Grad with respect to s
@@ -287,7 +298,8 @@ def euclidean_gradient_profile(params, opt_obj):
         Q = LowRankLinearOperator(comm, M.U, M.Sigma, C)
         Q_grad_C_i = Q.apply_mat(grad_C_i, Q_grad_C_i)
         bv_add(-1.0, grad_C_i, Q_grad_C_i)
-        grad_s += 2.0*w*opt_obj.compute_dBdp(s, grad_C_i, opt_obj.compute_dC)
+        grad_s += 2.0*w*opt_obj.compute_dBdp(s, grad_C_i, Cp1, Cp0, \
+                                             opt_obj.compute_dC)
         SMat.destroy()
 
         # process = psutil.Process(os.getpid())
@@ -316,20 +328,22 @@ def euclidean_gradient_profile(params, opt_obj):
         M_data = MD@VHTC.getDenseArray()@K.conj().T
         M = PETSc.Mat().createDense(M_data.shape, None, M_data, MPI.COMM_SELF)
         grad_B_i.mult(1.0, 0.0, W, M)
-        grad_p -= opt_obj.compute_dBdp(p, grad_B_i, opt_obj.compute_dB)
+        grad_p -= opt_obj.compute_dBdp(p, grad_B_i, Bp1, Bp0,\
+                                       opt_obj.compute_dB)
         M.destroy()
         # Grad with respect to s
         M_data = MD@BHTW.getDenseArray().conj().T@K
         M = PETSc.Mat().createDense(M_data.shape, None, M_data, MPI.COMM_SELF)
         grad_C_i.mult(1.0, 0.0, V, M)
-        grad_s -= opt_obj.compute_dBdp(s, grad_C_i, opt_obj.compute_dC)
+        grad_s -= opt_obj.compute_dBdp(s, grad_C_i, Cp1, Cp0,\
+                                       opt_obj.compute_dC)
         M.destroy()
 
         objects = [V, W, BHTW, VHTC]
         for obj in objects: obj.destroy()
 
     objects = [F1K, F2K, F3K,F1B, F2B, F3B, F1C, F2C, F3C, grad_B_i, \
-               Q_grad_B_i, grad_C_i, Q_grad_C_i]
+               Q_grad_B_i, grad_C_i, Q_grad_C_i, Bp1, Bp0, Cp1, Cp0, B, C]
     for obj in objects: obj.destroy()
 
     t1 = tlib.time()
@@ -362,11 +376,26 @@ def create_objective_and_gradient(manifold,opt_obj):
         """
         comm = opt_obj.comm
         p, K, s = params
+        idces = np.argwhere(p < 0.0)
+        p[idces] = 0.0
+        idces = np.argwhere(s < 0.0)
+        s[idces] = 0.0
+        # petscprint(comm, "------- Printing params --------")
+        # petscprint(comm, p)
+        # petscprint(comm, K[0,])
+        # petscprint(comm, s)
+        # petscprint(comm, "--------------------------------")
 
         t0 = tlib.time()
 
-        B = opt_obj.compute_B(p)
-        C = opt_obj.compute_C(s)
+        B = SLEPc.BV().create(comm=comm)
+        B.setSizes(opt_obj.R_ops[0]._dimensions[0], K.shape[0])
+        B.setType('mat')
+        C = SLEPc.BV().create(comm=comm)
+        C.setSizes(opt_obj.R_ops[0]._dimensions[0], K.shape[-1])
+        C.setType('mat')
+        B = opt_obj.compute_B(p, B)
+        C = opt_obj.compute_C(s, C)
         RB = B.duplicate()
         RHTC = C.duplicate()
 
@@ -402,7 +431,7 @@ def create_objective_and_gradient(manifold,opt_obj):
         for bv in bvs: bv.destroy()
 
         t1 = tlib.time()
-        petscprint(opt_obj.comm, "Cost exec time = %1.5f [sec]"%(t1 - t0))
+        # petscprint(opt_obj.comm, "Cost exec time = %1.5f [sec]"%(t1 - t0))
         return J.real
 
     @pymanopt.function.numpy(manifold)
@@ -412,17 +441,31 @@ def create_objective_and_gradient(manifold,opt_obj):
 
             :param params: a 3-tuple (actuator parameters p, feedback gains K, 
                 sensor parameters s)
-            
+
             :return: (:math:`\nabla_p J`, :math:`\nabla_K J`, 
                 :math:`\nabla_s J`)
         """
         comm = opt_obj.comm
         p, K, s = params
+        idces = np.argwhere(p < 0.0)
+        p[idces] = 0.0
+        idces = np.argwhere(s < 0.0)
+        s[idces] = 0.0
 
         t0 = tlib.time()
 
-        B = opt_obj.compute_B(p)
-        C = opt_obj.compute_C(s)
+        B = SLEPc.BV().create(comm=comm)
+        B.setSizes(opt_obj.R_ops[0]._dimensions[0], K.shape[0])
+        B.setType('mat')
+        Bp1 = B.copy()
+        Bp0 = B.copy()
+        C = SLEPc.BV().create(comm=comm)
+        C.setSizes(opt_obj.R_ops[0]._dimensions[0], K.shape[-1])
+        C.setType('mat')
+        Cp1 = C.copy()
+        Cp0 = C.copy()
+        B = opt_obj.compute_B(p, B)
+        C = opt_obj.compute_C(s, C)
         RB = B.duplicate()
         RHTC = C.duplicate()
         
@@ -463,7 +506,8 @@ def create_objective_and_gradient(manifold,opt_obj):
 
             # Grad with respect to K
             LiCT = Linv.conj().T
-            LiCTMat = PETSc.Mat().createDense(LiCT.shape, None, LiCT, MPI.COMM_SELF)
+            LiCTMat = PETSc.Mat().createDense(LiCT.shape, None, LiCT, \
+                                              MPI.COMM_SELF)
             F1K.mult(1.0, 0.0, M.V, LiCTMat)
             F2K = R.apply_mat(F1K, F2K)
             F3K = M.apply_mat(F1K, F3K)
@@ -487,7 +531,8 @@ def create_objective_and_gradient(manifold,opt_obj):
             Q = LowRankLinearOperator(comm, M.V, M.Sigma.conj().T, B)
             Q_grad_B_i = Q.apply_mat(grad_B_i, Q_grad_B_i)
             bv_add(-1.0, grad_B_i, Q_grad_B_i)
-            grad_p += 2.0*w*opt_obj.compute_dBdp(p, grad_B_i, opt_obj.compute_dB)
+            grad_p += 2.0*w*opt_obj.compute_dBdp(p, grad_B_i, Bp1, Bp0, \
+                                                opt_obj.compute_dB)
             SMat.destroy()
 
             # Grad with respect to s
@@ -501,7 +546,8 @@ def create_objective_and_gradient(manifold,opt_obj):
             Q = LowRankLinearOperator(comm, M.U, M.Sigma, C)
             Q_grad_C_i = Q.apply_mat(grad_C_i, Q_grad_C_i)
             bv_add(-1.0, grad_C_i, Q_grad_C_i)
-            grad_s += 2.0*w*opt_obj.compute_dBdp(s, grad_C_i, opt_obj.compute_dC)
+            grad_s += 2.0*w*opt_obj.compute_dBdp(s, grad_C_i, Cp1, Cp0, \
+                                                opt_obj.compute_dC)
             SMat.destroy()
 
             # process = psutil.Process(os.getpid())
@@ -512,7 +558,8 @@ def create_objective_and_gradient(manifold,opt_obj):
 
         # Stability-promoting penalty
         if opt_obj.stab_params != None:
-            cl_op = LowRankUpdatedLinearOperator(opt_obj.comm, opt_obj.A, B, K, C)
+            cl_op = LowRankUpdatedLinearOperator(opt_obj.comm, opt_obj.A, \
+                                                 B, K, C)
             kry_dim, n_evals = opt_obj.stab_params[2], opt_obj.stab_params[3]
             V, D, W = right_and_left_eig(cl_op, cl_op.solve, kry_dim, n_evals, \
                                                         lambda x: -1./x)
@@ -528,26 +575,40 @@ def create_objective_and_gradient(manifold,opt_obj):
             grad_K -= BHTW.getDenseArray()@MD@VHTC.getDenseArray()
             # Grad with respect to p
             M_data = MD@VHTC.getDenseArray()@K.conj().T
-            M = PETSc.Mat().createDense(M_data.shape, None, M_data, MPI.COMM_SELF)
+            M = PETSc.Mat().createDense(M_data.shape, None, M_data, \
+                                        MPI.COMM_SELF)
             grad_B_i.mult(1.0, 0.0, W, M)
-            grad_p -= opt_obj.compute_dBdp(p, grad_B_i, opt_obj.compute_dB)
+            grad_p -= opt_obj.compute_dBdp(p, grad_B_i, Bp1, Bp0,\
+                                        opt_obj.compute_dB)
             M.destroy()
             # Grad with respect to s
             M_data = MD@BHTW.getDenseArray().conj().T@K
-            M = PETSc.Mat().createDense(M_data.shape, None, M_data, MPI.COMM_SELF)
+            M = PETSc.Mat().createDense(M_data.shape, None, M_data, \
+                                        MPI.COMM_SELF)
             grad_C_i.mult(1.0, 0.0, V, M)
-            grad_s -= opt_obj.compute_dBdp(s, grad_C_i, opt_obj.compute_dC)
+            grad_s -= opt_obj.compute_dBdp(s, grad_C_i, Cp1, Cp0,\
+                                        opt_obj.compute_dC)
             M.destroy()
 
             objects = [V, W, BHTW, VHTC]
             for obj in objects: obj.destroy()
-        
+
         objects = [F1K, F2K, F3K,F1B, F2B, F3B, F1C, F2C, F3C, grad_B_i, \
-                Q_grad_B_i, grad_C_i, Q_grad_C_i]
+                Q_grad_B_i, grad_C_i, Q_grad_C_i, Bp1, Bp0, Cp1, Cp0, B, C]
         for obj in objects: obj.destroy()
 
         t1 = tlib.time()
-        petscprint(opt_obj.comm, "Gradient exec time = %1.5f [sec]"%(t1 - t0))
+        # petscprint(opt_obj.comm, "Grad exec time = %1.5f [sec]"%(t1 - t0))
+
+        # petscprint(comm, "------- Printing grads --------")
+        # petscprint(comm, grad_p)
+        # petscprint(comm, grad_K[0,])
+        # petscprint(comm, grad_s)
+        # petscprint(comm, "--------------------------------")
+        
+        grad_p *= opt_obj.which_grad[0]
+        grad_K *= opt_obj.which_grad[1]
+        grad_s *= opt_obj.which_grad[2]
         
         return grad_p, grad_K.real, grad_s
     
@@ -560,12 +621,15 @@ def test_euclidean_gradient(M, opt_obj, params, eps):
     comm = opt_obj.comm
     rank = comm.Get_rank()
     
-    cost = partial(cost_profile, opt_obj=opt_obj)
-    grad = partial(euclidean_gradient_profile, opt_obj=opt_obj)
-    # cost, grad, _ = create_objective_and_gradient(M,opt_obj)
-    J = cost(params)
-    grad_xa, grad_K, grad_xs = grad(params)
+    # cost = partial(cost_profile, opt_obj=opt_obj)
+    # grad = partial(euclidean_gradient_profile, opt_obj=opt_obj)
+    cost, grad, _ = create_objective_and_gradient(M,opt_obj)
+    J = cost(*params)
+    grad_xa, grad_K, grad_xs = grad(*params)
     
+    petscprint(comm, grad_xa)
+    petscprint(comm, grad_K)
+    petscprint(comm, grad_xs)
     petscprint(comm,"Cost = %1.15e"%J)
     
     # Check Sb gradient
@@ -578,7 +642,7 @@ def test_euclidean_gradient(M, opt_obj, params, eps):
         params_ = None
     
     params_ = comm.bcast(params_,root=0)
-    dfd = (cost(params_) - J)/eps
+    dfd = (cost(*params_) - J)/eps
 
     if rank == 0:
         dgrad = (delta.conj().T@grad_xa).real
@@ -600,7 +664,7 @@ def test_euclidean_gradient(M, opt_obj, params, eps):
         params_ = None
     
     params_ = comm.bcast(params_,root=0)
-    dfd = (cost(params_) - J)/eps
+    dfd = (cost(*params_) - J)/eps
 
     if rank == 0:
         dgrad = np.trace(delta.conj().T@grad_K).real
@@ -622,7 +686,7 @@ def test_euclidean_gradient(M, opt_obj, params, eps):
         params_ = None
 
     params_ = comm.bcast(params_,root=0)
-    dfd = (cost(params_) - J)/eps
+    dfd = (cost(*params_) - J)/eps
 
     if rank == 0:
         dgrad = (delta.conj().T@grad_xs).real

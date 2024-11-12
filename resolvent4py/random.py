@@ -1,7 +1,6 @@
-import numpy as np
-import scipy as sp
-
-from petsc4py import PETSc
+from . import np
+from . import sp
+from . import PETSc
 from .comms import scatter_array_from_root_to_all
 from .linalg import convert_coo_to_csr
 

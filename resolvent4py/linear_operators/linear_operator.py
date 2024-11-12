@@ -1,6 +1,6 @@
-import abc
-import numpy as np
-from petsc4py import PETSc
+from .. import np
+from .. import abc
+from .. import PETSc
 from ..error_handling_functions import raise_not_implemented_error
 from ..random import generate_random_petsc_vector
 from ..linalg import enforce_complex_conjugacy

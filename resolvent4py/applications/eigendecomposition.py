@@ -1,10 +1,8 @@
-from mpi4py import MPI
-from petsc4py import PETSc
-from slepc4py import SLEPc
-
-import numpy as np
-import scipy as sp
-
+from .. import np
+from .. import sp
+from .. import MPI
+from .. import PETSc
+from .. import SLEPc
 from ..linalg import enforce_complex_conjugacy
 from ..miscellaneous import petscprint
 

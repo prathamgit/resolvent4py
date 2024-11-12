@@ -1,7 +1,6 @@
 from .linear_operator import LinearOperator
 from ..linalg import mat_solve_hermitian_transpose
-from petsc4py import PETSc
-from slepc4py import SLEPc
+from .. import SLEPc
 
 class MatrixLinearOperator(LinearOperator):
     r"""

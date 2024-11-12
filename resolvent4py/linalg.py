@@ -1,12 +1,9 @@
-import numpy as np
-import scipy as sp
-
-from petsc4py import PETSc
-from slepc4py import SLEPc
-from mpi4py import MPI
+from . import np
+from . import sp
+from . import PETSc
+from . import MPI
 
 from .miscellaneous import get_mpi_type
-from .miscellaneous import petscprint
 
 
 def compute_local_size(Nglob):

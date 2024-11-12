@@ -1,4 +1,4 @@
-import functools
+from . import functools
 
 def raise_not_implemented_error(method):
     @functools.wraps(method)

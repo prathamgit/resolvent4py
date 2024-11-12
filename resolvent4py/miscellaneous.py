@@ -1,8 +1,6 @@
-import numpy as np
-import scipy as sp
-from slepc4py import SLEPc
-from petsc4py import PETSc
-from mpi4py import MPI
+from . import np
+from . import MPI
+from . import PETSc
 
 numpy_to_mpi_dtype = {
         np.dtype(np.int32): MPI.INT,
