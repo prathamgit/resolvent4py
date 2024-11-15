@@ -32,6 +32,11 @@ def bv_add(alpha, X, Y):
     Y.restoreMat(Ym)
 
 def bv_conj(X):
+    r"""
+        In-place conjugation of :code:`X`
+
+        :type X: `BV`_
+    """
     Xm = X.getMat()
     Xm.conjugate()
     X.restoreMat(Xm)
@@ -313,3 +318,38 @@ def create_AIJ_identity(comm, sizes):
     Id = PETSc.Mat().createConstantDiagonal(sizes, 1.0, comm)
     Id.convert(PETSc.Mat.Type.AIJ)
     return Id
+
+
+def bv_real(X, Y=None):
+    r"""
+        Real part of the BV structure :math:`Y = \text{Re}(X)`
+
+        :type X: `BV`_
+        :param Y: [optional] BV to store the real part of :code:`X`
+        :type Y: `BV`_ 
+        :return: Y
+    """
+    Y = X.copy() if Y == None else Y
+    Ym = Y.getMat()
+    Xm = X.getMat()
+    Xm.realPart(Ym)
+    X.restoreMat(Xm)
+    Y.restoreMat(Ym)
+    return Y
+
+def bv_imag(X, Y=None):
+    r"""
+        Imaginary part of the BV structure :math:`Y = \text{Im}(X)`
+
+        :type X: `BV`_
+        :param Y: [optional] BV to store the imaginary part of :code:`X`
+        :type Y: `BV`_ 
+        :return: Y
+    """
+    Y = X.copy() if Y == None else Y
+    Ym = Y.getMat()
+    Xm = X.getMat()
+    Xm.imagPart(Ym)
+    X.restoreMat(Xm)
+    Y.restoreMat(Ym)
+    return Y

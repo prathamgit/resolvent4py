@@ -23,6 +23,7 @@ if rank == 0:
 
     os.makedirs(path) if os.path.isdir(path) == False else None
     A = sp.sparse.csr_matrix(np.random.randn(N,N) + 1j*np.random.randn(N,N))
+    A = A.tocoo()
     rows, cols = A.nonzero()
     data = A.data
     arrays = [rows,cols,data]
@@ -36,13 +37,19 @@ if rank == 0:
 
 comm.Barrier()
 
+omega = 20.0
 fnames_jac = comm.bcast(fnames_jac, root=0)
 Nl = res4py.compute_local_size(N)
 A = res4py.read_coo_matrix(comm, fnames_jac, ((Nl, N),(Nl,N)))
-ksp = res4py.create_mumps_solver(comm, A)
-linop = res4py.MatrixLinearOperator(comm, A, ksp)
+oId = PETSc.Mat().createConstantDiagonal(A.getSizes(), 1.0, comm=comm)
+oId.scale(1j*omega)
+oId.convert(PETSc.Mat.Type.MPIAIJ)
+oId.axpy(-1.0, A)
+ksp = res4py.create_mumps_solver(comm, oId)
+linop = res4py.MatrixLinearOperator(comm, oId, ksp)
 
-V, D, W = res4py.right_and_left_eig(linop, linop.apply, 100, 10)
+V, D, W = res4py.right_and_left_eig(linop, linop.solve, 100, 10, \
+                                    lambda x: 1j*omega - 1./x, 'smallest_real')
 Dseq = np.diag(D)
 
 if rank == 0:
@@ -51,6 +58,8 @@ if rank == 0:
     plt.plot(Dseq.real, Dseq.imag, 'rx')
     plt.savefig("evals.png")
 
+linop.destroy()
+linop = res4py.MatrixLinearOperator(comm, A)
 for i in range (len(Dseq)):
     w = W.getColumn(i)
     v = V.getColumn(i)

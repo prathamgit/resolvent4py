@@ -1,13 +1,11 @@
-from mpi4py import MPI
-from petsc4py import PETSc
-from slepc4py import SLEPc
-import scipy as sp
-import numpy as np
+from .. import np
+from .. import sp
+from .. import MPI
+from .. import PETSc
+from .. import SLEPc
 
 from ..linalg import enforce_complex_conjugacy
 from ..miscellaneous import create_dense_matrix
-from ..miscellaneous import copy_mat_from_bv
-from ..miscellaneous import petscprint
 
 def randomized_svd(lin_op, lin_op_action, n_rand, n_loops, n_svals):
     r"""
@@ -55,15 +53,16 @@ def randomized_svd(lin_op, lin_op_action, n_rand, n_loops, n_svals):
     X.orthogonalize(None)
     # Perform randomized SVD loop
     Qadj = X.duplicate()
-    lin_op_action(X, Qadj)
+    lin_op_action_adj(X, Qadj)
+    Qadj.orthogonalize(None)
     X.destroy()
     Qfwd = Qadj.duplicate()
+    R = create_dense_matrix(MPI.COMM_SELF, (n_rand, n_rand))
     for j in range (n_loops):
         lin_op_action(Qadj, Qfwd)
         Qfwd.orthogonalize(None)
         lin_op_action_adj(Qfwd, Qadj)
-    R = create_dense_matrix(MPI.COMM_SELF, (n_rand, n_rand))
-    Qadj.orthogonalize(R)
+        Qadj.orthogonalize(R)
     # Compute low-rank SVD
     u, s, v = sp.linalg.svd(R.getDenseArray())
     v = v.conj().T

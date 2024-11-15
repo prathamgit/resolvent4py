@@ -46,8 +46,8 @@ def arnoldi_iteration(lin_op, lin_op_action, krylov_dim):
     # Perform Arnoldi iteration
     for k in range(1,krylov_dim+1):
         v = lin_op_action(q)
-        string = "Arnoldi iteration (%d/%d) - ||Aq|| "%(k, krylov_dim) + \
-                    "= %1.15e"%(v.norm())
+        # string = "Arnoldi iteration (%d/%d) - ||Aq|| "%(k, krylov_dim) + \
+        #             "= %1.15e"%(v.norm())
         # petscprint(comm, string)
         for j in range (k):
             qj = Q.getColumn(j)
@@ -90,7 +90,7 @@ def eig(lin_op, lin_op_action, krylov_dim, n_evals, process_evals=None):
     """
     Q, H = arnoldi_iteration(lin_op, lin_op_action, krylov_dim)
     evals, evecs = sp.linalg.eig(H)
-    idces = np.flipud(np.argsort(np.abs(evals)).reshape(-1))[:n_evals]
+    idces = np.flipud(np.argsort(np.abs(evals)))[:n_evals]
     evals = evals[idces]
     evecs = evecs[:,idces]
     evecs_ = PETSc.Mat().createDense(evecs.shape,None,evecs,comm=MPI.COMM_SELF)
@@ -101,8 +101,8 @@ def eig(lin_op, lin_op_action, krylov_dim, n_evals, process_evals=None):
     evals = process_evals(evals)
     return (np.diag(evals), Q)
 
-def right_and_left_eig(lin_op, lin_op_action, krylov_dim, \
-                       n_evals, process_evals=None):
+def right_and_left_eig(lin_op, lin_op_action, krylov_dim, n_evals, \
+                       process_evals=None):
     r"""
         Compute the right and left eigendecomposition of the linear operator 
         :math:`L` specified by :code:`lin_op` and :code:`lin_op_action`.
@@ -140,9 +140,8 @@ def right_and_left_eig(lin_op, lin_op_action, krylov_dim, \
             f"See documentation for additional information."
         )
     # Compute the right and left eigendecompositions
-    Dfwd, Qfwd = eig(lin_op, lin_op_action, krylov_dim, n_evals, process_evals)
-    Dadj, Qadj = eig(lin_op, lin_op_action_adj, krylov_dim, \
-                     n_evals, process_evals)
+    Dfwd, Qfwd = eig(lin_op, lin_op_action, krylov_dim, n_evals)
+    Dadj, Qadj = eig(lin_op, lin_op_action_adj, krylov_dim, n_evals)
     # Match the right and left eigenvalues/vectors
     Dfwdd = np.diag(Dfwd)
     Dadjd = np.diag(Dadj)
@@ -155,8 +154,48 @@ def right_and_left_eig(lin_op, lin_op_action, krylov_dim, \
     Qadj_.destroy()
     # Biorthogonalize the eigenvectors
     M = Qfwd.dot(Qadj)
-    Minv = sp.linalg.inv(M.getDenseArray())
+    evals, evecs = sp.linalg.eig(M.getDenseArray())
+    idces = np.argwhere(np.abs(evals) < 1e-10).reshape(-1)
+    evals[idces] += 1e-10
+    Minv = evecs@np.diag(1./evals)@sp.linalg.inv(evecs)
     Minv = PETSc.Mat().createDense(Minv.shape, None, Minv, MPI.COMM_SELF)
     M.destroy()
     Qfwd.multInPlace(Minv, 0, n_evals)
+    process_evals = (lambda x: x) if process_evals == None else process_evals
+    Dfwd = np.diag(process_evals(Dfwdd))
     return (Qfwd, Dfwd, Qadj)
+
+
+def check_eig_convergence(lin_op_action, D, V):
+    r"""
+        Check convergence of the eigenpairs by measuring 
+        :math:`\lVert L v - \lambda v\rVert`.
+
+        :param lin_op_action: one of :code:`L.apply`, :code:`L.solve`, 
+            :code:`L.apply_hermitian_transpose` or 
+            :code:`L.solve_hermitian_transpose`
+        :param D: diagonal 2D numpy array with the eigenvalues
+        :type D: numpy.ndarray
+        :param V: corresponding eigenvectors
+        :type V: `BV`_
+            
+        :return: None
+    """
+    petscprint(MPI.COMM_WORLD, " ")
+    petscprint(MPI.COMM_WORLD, "Executing eigenpair convergence check...")
+    w = V.createVec()
+    for j in range (D.shape[-1]):
+        v = V.getColumn(j)
+        e = v.copy()
+        e.scale(D[j,j])
+        w = lin_op_action(v, w)
+        e.axpy(-1.0, w)
+        error = e.norm()
+        V.restoreColumn(j, v)
+        e.destroy()
+        str = "Error for eigenpair %d = %1.15e"%(j+1, error)
+        petscprint(MPI.COMM_WORLD, str)
+    w.destroy()
+    petscprint(MPI.COMM_WORLD, "Executing eigenpair convergence check...")
+    petscprint(MPI.COMM_WORLD, " ")
+        
