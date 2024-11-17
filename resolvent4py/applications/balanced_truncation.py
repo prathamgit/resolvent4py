@@ -12,8 +12,6 @@ from ..linalg import compute_local_size
 
 
 from ..linear_operators import MatrixLinearOperator
-from ..linear_operators import LowRankLinearOperator
-from ..linear_operators import LowRankUpdatedLinearOperator
 
 class balanced_truncation:
 
