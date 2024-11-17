@@ -430,13 +430,7 @@ class ROMStabilityComponent:
         Arcl = self.compute_closed_loop_tensor(B, K, C)
         D, V = sp.linalg.eig(Arcl)
         W = sp.linalg.inv(V).conj().T
-        MD = np.asarray([self.evaluate_grad_exponential(v) for v in D])
-        # idces = np.argwhere(MD > 1e-6).reshape(-1)
-        # if len(idces) > 0:
-        #     V = V[:, idces]
-        #     W = W[:, idces]
-        #     MD = np.diag(MD[idces])
-        MD = np.diag(MD)
+        MD = np.diag([self.evaluate_grad_exponential(v) for v in D])
         M = W@MD@V.conj().T
         PhiHTC = C.dot(self.Phi)
         BHTPsi = self.Psi.dot(B)
