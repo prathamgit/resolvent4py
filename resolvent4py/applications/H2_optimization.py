@@ -69,6 +69,299 @@ def _compute_woodbury_update(comm, R, B, K, C, RB, RHTC):
     M = LowRankLinearOperator(comm, RB, K@Linv, RHTC)
     return M, Linv
 
+class InputOutputMatrices:
+
+    def __init__(self, comm, compute_B, compute_C, compute_dB, compute_dC):
+        self.comm = comm
+        self.compute_B = compute_B
+        self.compute_C = compute_C
+        self.compute_dB = compute_dB
+        self.compute_dC = compute_dC
+
+    def compute_dBdp(self, p, grad_B, Bp1, Bp0, compute_dB):
+        grad_p = np.zeros_like(p)
+        for j in range (len(p)):
+            pjp = p.copy()
+            pjm = p.copy()
+            pjp[j] += 1e-6
+            pjm[j] -= 1e-6
+            Bp1 = compute_dB(pjp, pjm, Bp1, Bp0)
+            Bp1.scale(1./2e-6)
+            bv_conj(Bp1)
+            grad_p[j] = _compute_bv_contraction(self.comm, Bp1, grad_B).real
+        return grad_p
+
+
+class H2Component:
+
+    def __init__(self, comm, path_factors, factor_sizes, frequencies, weights):
+        self.comm = comm
+        self.freqs = frequencies
+        self.weights = weights
+        self.load_factors(path_factors, factor_sizes)
+
+    def load_factors(self, path_factors, factor_sizes):
+        self.U, self.S, self.V, self.R_ops = [], [], [], []
+        for i in range (len(self.freqs)):
+            fname_U = path_factors + 'omega_%1.5f/U.dat'%self.freqs[i]
+            fname_S = path_factors + 'omega_%1.5f/S.npy'%self.freqs[i]
+            fname_V = path_factors + 'omega_%1.5f/V.dat'%self.freqs[i]
+            self.U.append(read_bv(self.comm, fname_U, factor_sizes))
+            self.V.append(read_bv(self.comm, fname_V, factor_sizes))
+            self.S.append(np.load(fname_S))
+            self.R_ops.append(\
+                LowRankLinearOperator(self.comm, self.U[-1], \
+                                      self.S[-1], self.V[-1]))
+            
+    def evaluate_cost(self, params, IOMats):
+        p, K, s = params
+        B = SLEPc.BV().create(comm=self.comm)
+        B.setSizes(self.R_ops[0]._dimensions[0], K.shape[0])
+        B.setType('mat')
+        C = SLEPc.BV().create(comm=self.comm)
+        C.setSizes(self.R_ops[0]._dimensions[0], K.shape[-1])
+        C.setType('mat')
+        B = IOMats.compute_B(p, B)
+        C = IOMats.compute_C(s, C)
+        RB = B.duplicate()
+        RHTC = C.duplicate()    
+        J = 0
+        for i in range (len(self.freqs)):
+            w = self.weights[i]
+            R = self.R_ops[i]
+            M, _ = _compute_woodbury_update(self.comm, R, B, K, C, RB, RHTC)
+            J += w*np.sum(np.diag(R.Sigma)**2)
+            J -= 2.0*w*_compute_trace_product(R, M, True)
+            J += w*_compute_trace_product(M, M, True)
+        objs = [B, C, RB, RHTC]
+        for obj in objs: obj.destroy()
+        return J.real
+    
+    def evaluate_gradient(self, params, IOMats):
+        comm = self.comm
+        p, K, s = params
+
+        B = SLEPc.BV().create(comm=comm)
+        B.setSizes(self.R_ops[0]._dimensions[0], K.shape[0])
+        B.setType('mat')
+        Bp1 = B.copy()
+        Bp0 = B.copy()
+        C = SLEPc.BV().create(comm=comm)
+        C.setSizes(self.R_ops[0]._dimensions[0], K.shape[-1])
+        C.setType('mat')
+        Cp1 = C.copy()
+        Cp0 = C.copy()
+        B = IOMats.compute_B(p, B)
+        C = IOMats.compute_C(s, C)
+        RB = B.duplicate()
+        RHTC = C.duplicate()
+        
+        grad_K = np.zeros(K.shape, dtype=np.complex128)
+        grad_p = np.zeros_like(p)
+        grad_s = np.zeros_like(s)
+
+        # Allocate memory for efficiency (grad_K)
+        F1K = SLEPc.BV().create(comm=comm)
+        F1K.setSizes(self.R_ops[0]._dimensions[0], C.getSizes()[-1])
+        F1K.setType('mat')
+        F2K = F1K.duplicate()
+        F3K = F1K.duplicate()
+
+        # Allocate memory for efficiency (grad_p)
+        F1B = SLEPc.BV().create(comm=comm)
+        F1B.setSizes(self.R_ops[0]._dimensions[0], B.getSizes()[-1])
+        F1B.setType('mat')
+        F2B = F1B.duplicate()
+        F3B = F1B.duplicate()
+        grad_B_i = F1B.duplicate()
+        Q_grad_B_i = F1B.duplicate()
+
+        # Allocate memory for efficiency (grad_s)
+        F1C = SLEPc.BV().create(comm=comm)
+        F1C.setSizes(self.R_ops[0]._dimensions[-1], C.getSizes()[-1])
+        F1C.setType('mat')
+        F2C = F1C.duplicate()
+        F3C = F1C.duplicate()
+        grad_C_i = F1C.duplicate()
+        Q_grad_C_i = F1C.duplicate()
+
+        for i in range (len(self.freqs)):
+            
+            w = self.weights[i]
+            R = self.R_ops[i]
+            M, Linv = _compute_woodbury_update(comm, R, B, K, C, RB, RHTC)
+
+            # Grad with respect to K
+            LiCT = Linv.conj().T
+            LiCTMat = PETSc.Mat().createDense(LiCT.shape, None, LiCT, MPI.COMM_SELF)
+            F1K.mult(1.0, 0.0, M.V, LiCTMat)
+            F2K = R.apply_mat(F1K, F2K)
+            F3K = M.apply_mat(F1K, F3K)
+            bv_add(-1.0, F3K, F2K)
+            grad_K_i_mat = F3K.dot(M.U)
+            F4K = C.dot(M.U)
+            grad_K_i = grad_K_i_mat.getDenseArray()
+            grad_K_i -= F4K.getDenseArray()@M.Sigma.conj().T@grad_K_i
+            grad_K += 2.0*w*grad_K_i
+            mats = [LiCTMat, grad_K_i_mat, F4K]
+            for mat in mats: mat.destroy()
+
+            # Grad with respect to p
+            S = M.Sigma.conj().T
+            SMat = PETSc.Mat().createDense(S.shape, None, S, MPI.COMM_SELF)
+            F1B.mult(1.0, 0.0, M.V, SMat)
+            F2B = R.apply_mat(F1B, F2B)
+            F3B = M.apply_mat(F1B, F3B)
+            bv_add(-1.0, F3B, F2B)
+            grad_B_i = R.apply_hermitian_transpose_mat(F3B, grad_B_i)
+            Q = LowRankLinearOperator(comm, M.V, M.Sigma.conj().T, B)
+            Q_grad_B_i = Q.apply_mat(grad_B_i, Q_grad_B_i)
+            bv_add(-1.0, grad_B_i, Q_grad_B_i)
+            grad_p += 2.0*w*IOMats.compute_dBdp(p, grad_B_i, Bp1, Bp0, \
+                                                IOMats.compute_dB)
+            SMat.destroy()
+
+            # Grad with respect to s
+            S = M.Sigma.copy()
+            SMat = PETSc.Mat().createDense(S.shape, None, S, MPI.COMM_SELF)
+            F1C.mult(1.0, 0.0, M.U, SMat)
+            F2C = R.apply_hermitian_transpose_mat(F1C, F2C)
+            F3C = M.apply_hermitian_transpose_mat(F1C, F3C)
+            bv_add(-1.0, F3C, F2C)
+            grad_C_i = R.apply_mat(F3C, grad_C_i)
+            Q = LowRankLinearOperator(comm, M.U, M.Sigma, C)
+            Q_grad_C_i = Q.apply_mat(grad_C_i, Q_grad_C_i)
+            bv_add(-1.0, grad_C_i, Q_grad_C_i)
+            grad_s += 2.0*w*IOMats.compute_dBdp(s, grad_C_i, Cp1, Cp0, \
+                                                IOMats.compute_dC)
+            SMat.destroy()
+
+            # process = psutil.Process(os.getpid())
+            # value = process.memory_info().rss/(1024 * 1024)
+            # value = sum(comm.allgather(value))
+            # if opt_obj.comm.Get_rank() == 0:
+            #     print(f"Iteration {i} usage {value} MB")
+        objects = [F1K, F2K, F3K,F1B, F2B, F3B, F1C, F2C, F3C, grad_B_i, \
+               Q_grad_B_i, grad_C_i, Q_grad_C_i, Bp1, Bp0, Cp1, Cp0, B, C]
+        for obj in objects: obj.destroy()
+        return grad_p, grad_K.real, grad_s
+
+
+class FOMStabilityComponent:
+
+    def __init__(self, comm, fnames_jacobian, jacobian_sizes, alpha, beta, \
+                 krylov_dim, n_evals, shifts):
+        self.comm = comm
+        self.alpha = alpha
+        self.beta = beta
+        self.krylov_dim = krylov_dim
+        self.n_evals = n_evals
+        A = read_coo_matrix(self.comm, fnames_jacobian, jacobian_sizes)
+        self.As = []
+        self.process_evals = []
+        for i in range (len(shifts)):
+            s = shifts[i]
+            Id = PETSc.Mat().createConstantDiagonal(jacobian_sizes,1.0,comm)
+            Id.scale(1j*s)
+            Id.convert(PETSc.Mat.Type.MPIAIJ)
+            Id.axpy(-1.0, A)
+            ksp = create_mumps_solver(self.comm, Id)
+            self.As.append(MatrixLinearOperator(self.comm, Id, ksp))
+            self.process_evals.append(lambda x: 1j*s - 1./x)
+
+    def evaluate_exponential(self, val):
+        try:    value = np.exp(self.alpha*(val.real + self.beta)).real
+        except: value = 1e12
+        value = 0.0 if value <= 1e-13 else value
+        return value
+    
+    def evaluate_grad_exponential(self, val):
+        return self.alpha*self.evaluate_exponential(val)
+
+    def evaluate_cost(self, params, IOMats):
+        p, K, s = params
+        B = SLEPc.BV().create(comm=self.comm)
+        B.setSizes(self.As[0]._dimensions[0], K.shape[0])
+        B.setType('mat')
+        C = SLEPc.BV().create(comm=self.comm)
+        C.setSizes(self.As[0]._dimensions[0], K.shape[-1])
+        C.setType('mat')
+        B = IOMats.compute_B(p, B)
+        C = IOMats.compute_C(s, C) 
+        J = 0
+        for i in range (len(self.As)):
+            linop = LowRankUpdatedLinearOperator(self.comm, self.As[i], B, K, C)
+            D, E = eig(linop, linop.solve, self.krylov_dim, self.n_evals, \
+                       self.process_evals[i])
+            J += np.sum([self.evaluate_exponential(val) for val in np.diag(D)])
+            E.destroy()
+            linop.destroy_woodbury_operator()
+            linop.destroy_intermediate_vectors()
+        B.destroy()
+        C.destroy()
+        return J.real
+    
+    def evaluate_gradient(self, params, IOMats):
+        p, K, s = params
+        B = SLEPc.BV().create(comm=self.comm)
+        B.setSizes(self.As[0]._dimensions[0], K.shape[0])
+        B.setType('mat')
+        Bp1 = B.copy()
+        Bp0 = B.copy()
+        C = SLEPc.BV().create(comm=self.comm)
+        C.setSizes(self.As[0]._dimensions[0], K.shape[-1])
+        C.setType('mat')
+        Cp1 = B.copy()
+        Cp0 = B.copy()
+        B = IOMats.compute_B(p, B)
+        C = IOMats.compute_C(s, C) 
+        grad_K = np.zeros(K.shape, dtype=np.complex128)
+        grad_p = np.zeros_like(p)
+        grad_s = np.zeros_like(s)
+        # Allocate memory for efficiency (grad_p)
+        grad_B = SLEPc.BV().create(comm=self.comm)
+        grad_B.setSizes(self.As[0]._dimensions[0], B.getSizes()[-1])
+        grad_B.setType('mat')
+        # Allocate memory for efficiency (grad_s)
+        grad_C = SLEPc.BV().create(comm=self.comm)
+        grad_C.setSizes(self.As[0]._dimensions[-1], C.getSizes()[-1])
+        grad_C.setType('mat')
+        for i in range (len(self.As)):
+            linop = LowRankUpdatedLinearOperator(self.comm, self.As[i], B, K, C)
+            V, D, W = right_and_left_eig(linop, linop.solve, self.krylov_dim, \
+                                         self.n_evals, self.process_evals[i])
+            self.destroy_woodbury_operator()
+            self.destroy_intermediate_vectors()
+            D = np.diag(D)
+            MD = np.diag([self.evaluate_grad_exponential(v) for v in D])
+            BHTW = W.dot(B)
+            VHTC = C.dot(V)
+            # Grad with respect to K
+            grad_K -= BHTW.getDenseArray()@MD@VHTC.getDenseArray()
+            # Grad with respect to p
+            M_data = MD@VHTC.getDenseArray()@K.conj().T
+            M = PETSc.Mat().createDense(M_data.shape, None, M_data, \
+                                        MPI.COMM_SELF)
+            grad_B.mult(1.0, 0.0, W, M)
+            grad_p -= IOMats.compute_dBdp(p, grad_B, Bp1, Bp0, \
+                                          IOMats.compute_dB)
+            M.destroy()
+            # Grad with respect to s
+            M_data = MD@BHTW.getDenseArray().conj().T@K
+            M = PETSc.Mat().createDense(M_data.shape, None, M_data, \
+                                        MPI.COMM_SELF)
+            grad_C.mult(1.0, 0.0, V, M)
+            grad_s -= IOMats.compute_dBdp(s, grad_C, Cp1, Cp0, \
+                                          IOMats.compute_dC)
+            M.destroy()
+
+        objects = [V, W, BHTW, VHTC, B, C, Bp0, Bp1, Cp0, Cp1, grad_B, grad_C]
+        for obj in objects: obj.destroy()
+        return grad_p, grad_K.real, grad_s
+
+
+
+
 class optimization_objects:
 
     def __init__(self, comm, fnames_jacobian, jacobian_sizes, path_factors, \
@@ -95,7 +388,6 @@ class optimization_objects:
 
         self.freqs = np.load(fname_frequencies)
         self.weights = np.load(fname_weights)
-        self.factor_sizes = factor_sizes
         self.load_factors(path_factors, factor_sizes)
         self.compute_B = compute_B
         self.compute_C = compute_C

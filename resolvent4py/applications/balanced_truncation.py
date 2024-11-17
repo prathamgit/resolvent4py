@@ -160,10 +160,15 @@ class balanced_truncation:
     def compute_reduced_order_tensors(self, Phi, Psi):
 
         APhi = self.A.apply_mat(Phi)
-        Ar = APhi.dot(Psi)
-        Br = self.B.dot(Psi)
-        Cr = self.C.dot(Phi)
-
+        Arm = APhi.dot(Psi)
+        Brm = self.B.dot(Psi)
+        Crm = self.C.dot(Phi)
+        Ar = Arm.getDenseArray().copy()
+        Br = Brm.getDenseArray().copy()
+        Cr = Crm.getDenseArray().copy()
+        Arm.destroy()
+        Brm.destroy()
+        Crm.destroy()
         return (Ar, Br, Cr)
 
 

@@ -320,7 +320,7 @@ def create_AIJ_identity(comm, sizes):
     return Id
 
 
-def bv_real(X, Y=None):
+def bv_real(X):
     r"""
         Real part of the BV structure :math:`Y = \text{Re}(X)`
 
@@ -329,15 +329,13 @@ def bv_real(X, Y=None):
         :type Y: `BV`_ 
         :return: Y
     """
-    Y = X.copy() if Y == None else Y
+    Y = X.copy()
     Ym = Y.getMat()
-    Xm = X.getMat()
-    Xm.realPart(Ym)
-    X.restoreMat(Xm)
+    Ym.realPart()
     Y.restoreMat(Ym)
     return Y
 
-def bv_imag(X, Y=None):
+def bv_imag(X):
     r"""
         Imaginary part of the BV structure :math:`Y = \text{Im}(X)`
 
@@ -346,10 +344,8 @@ def bv_imag(X, Y=None):
         :type Y: `BV`_ 
         :return: Y
     """
-    Y = X.copy() if Y == None else Y
+    Y = X.copy()
     Ym = Y.getMat()
-    Xm = X.getMat()
-    Xm.imagPart(Ym)
-    X.restoreMat(Xm)
+    Ym.imagPart()
     Y.restoreMat(Ym)
     return Y
