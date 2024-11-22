@@ -1,5 +1,7 @@
 __all__ = [
-    "myAdaptiveLineSearcher"
+    "myAdaptiveLineSearcher",
+    "myBackTrackingLineSearcher"
 ]
 
 from .myAdaptiveLineSearcher import myAdaptiveLineSearcher
+from .myBackTrackingLineSearcher import myBackTrackingLineSearcher

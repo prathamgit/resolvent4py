@@ -13,6 +13,7 @@ from ..io_functions import read_coo_matrix
 from ..linear_operators import MatrixLinearOperator
 from ..linear_operators import LowRankLinearOperator
 from ..linear_operators import LowRankUpdatedLinearOperator
+from ..linear_operators import ProductLinearOperator
 from ..solvers_and_preconditioners_functions import create_mumps_solver
 from ..applications import eig
 from ..applications import right_and_left_eig
@@ -52,6 +53,16 @@ def _compute_trace_product(L1, L2, L2_hermitian_transpose=False):
     F2.destroy()
     return np.trace(M)
 
+def _compute_trace_product_new(L1, L2, DDHT, FFHT):
+    F1 = DDHT.apply_mat(L1.U)
+    F2 = L2.apply_hermitian_transpose_mat(F1)
+    F3 = FFHT.apply_mat(F2)
+    F4 = F3.dot(L1.V)
+    M = L1.Sigma@F4.getDenseArray()
+    objs = [F1, F2, F3, F4]
+    for obj in objs: obj.destroy()
+    return np.trace(M)
+
 
 def _compute_woodbury_update(comm, R, B, K, C, RB, RHTC):
     r"""
@@ -71,22 +82,30 @@ def _compute_woodbury_update(comm, R, B, K, C, RB, RHTC):
 
 class InputOutputMatrices:
 
-    def __init__(self, comm, compute_B, compute_C, compute_dB, compute_dC):
+    def __init__(self, comm, compute_B, compute_C, compute_dB, compute_dC, \
+                 D, F):
         self.comm = comm
         self.compute_B = compute_B
         self.compute_C = compute_C
         self.compute_dB = compute_dB
         self.compute_dC = compute_dC
+        self.DDHT = ProductLinearOperator(comm, [D, D], \
+                                            [D.apply_hermitian_transpose, \
+                                             D.apply])
+        self.FFHT = ProductLinearOperator(comm, [F, F], \
+                                            [F.apply_hermitian_transpose, \
+                                             F.apply])
 
     def compute_dBdp(self, p, grad_B, Bp1, Bp0, compute_dB):
+        eps = 1e-4
         grad_p = np.zeros_like(p)
         for j in range (len(p)):
             pjp = p.copy()
             pjm = p.copy()
-            pjp[j] += 1e-6
-            pjm[j] -= 1e-6
+            pjp[j] += eps
+            pjm[j] -= eps
             Bp1 = compute_dB(pjp, pjm, Bp1, Bp0)
-            Bp1.scale(1./2e-6)
+            Bp1.scale(1./(2*eps))
             bv_conj(Bp1)
             grad_p[j] = _compute_bv_contraction(self.comm, Bp1, grad_B).real
         return grad_p
@@ -130,9 +149,11 @@ class H2Component:
             w = self.weights[i]
             R = self.R_ops[i]
             M, _ = _compute_woodbury_update(self.comm, R, B, K, C, RB, RHTC)
-            J += w*np.sum(np.diag(R.Sigma)**2)
-            J -= 2.0*w*_compute_trace_product(R, M, True)
-            J += w*_compute_trace_product(M, M, True)
+            # J += w*np.sum(np.diag(R.Sigma)**2)
+            J += w*_compute_trace_product_new(R, R, IOMats.DDHT, IOMats.FFHT)
+            J -= 2.0*w*_compute_trace_product_new(R, M, IOMats.DDHT, \
+                                                  IOMats.FFHT)
+            J += w*_compute_trace_product_new(M, M, IOMats.DDHT, IOMats.FFHT)
         objs = [B, C, RB, RHTC]
         for obj in objs: obj.destroy()
         return J.real
@@ -166,6 +187,8 @@ class H2Component:
         F1K.setType('mat')
         F2K = F1K.duplicate()
         F3K = F1K.duplicate()
+        F5K = F1K.duplicate()
+        F6K = F1K.duplicate()
 
         # Allocate memory for efficiency (grad_p)
         F1B = SLEPc.BV().create(comm=comm)
@@ -173,6 +196,8 @@ class H2Component:
         F1B.setType('mat')
         F2B = F1B.duplicate()
         F3B = F1B.duplicate()
+        F5B = F1B.duplicate()
+        F6B = F1B.duplicate()
         grad_B_i = F1B.duplicate()
         Q_grad_B_i = F1B.duplicate()
 
@@ -182,6 +207,8 @@ class H2Component:
         F1C.setType('mat')
         F2C = F1C.duplicate()
         F3C = F1C.duplicate()
+        F5C = F1C.duplicate()
+        F6C = F1C.duplicate()
         grad_C_i = F1C.duplicate()
         Q_grad_C_i = F1C.duplicate()
 
@@ -196,10 +223,12 @@ class H2Component:
             LiCTMat = PETSc.Mat().createDense(LiCT.shape, None, LiCT, \
                                               MPI.COMM_SELF)
             F1K.mult(1.0, 0.0, M.V, LiCTMat)
-            F2K = R.apply_mat(F1K, F2K)
-            F3K = M.apply_mat(F1K, F3K)
+            F5K = IOMats.FFHT.apply_mat(F1K, F5K)
+            F2K = R.apply_mat(F5K, F2K)     # Used to be F1K instead of F5K
+            F3K = M.apply_mat(F5K, F3K)     # Used to be F1K instead of F5K
             bv_add(-1.0, F3K, F2K)
-            grad_K_i_mat = F3K.dot(M.U)
+            F6K = IOMats.DDHT.apply_mat(F3K, F6K)
+            grad_K_i_mat = F6K.dot(M.U)     # Used to be F3K instead of F6K
             F4K = C.dot(M.U)
             grad_K_i = grad_K_i_mat.getDenseArray()
             grad_K_i -= F4K.getDenseArray()@M.Sigma.conj().T@grad_K_i
@@ -211,10 +240,12 @@ class H2Component:
             S = M.Sigma.conj().T
             SMat = PETSc.Mat().createDense(S.shape, None, S, MPI.COMM_SELF)
             F1B.mult(1.0, 0.0, M.V, SMat)
-            F2B = R.apply_mat(F1B, F2B)
-            F3B = M.apply_mat(F1B, F3B)
+            F5B = IOMats.FFHT.apply_mat(F1B, F5B)
+            F2B = R.apply_mat(F5B, F2B)     # Used to be F1B instead of F5B
+            F3B = M.apply_mat(F5B, F3B)     # Used to be F1B instead of F5B
             bv_add(-1.0, F3B, F2B)
-            grad_B_i = R.apply_hermitian_transpose_mat(F3B, grad_B_i)
+            F6B = IOMats.DDHT.apply_mat(F3B, F6B)
+            grad_B_i = R.apply_hermitian_transpose_mat(F6B, grad_B_i) # Used to be F3B instead of F6B
             Q = LowRankLinearOperator(comm, M.V, M.Sigma.conj().T, B)
             Q_grad_B_i = Q.apply_mat(grad_B_i, Q_grad_B_i)
             bv_add(-1.0, grad_B_i, Q_grad_B_i)
@@ -226,10 +257,12 @@ class H2Component:
             S = M.Sigma.copy()
             SMat = PETSc.Mat().createDense(S.shape, None, S, MPI.COMM_SELF)
             F1C.mult(1.0, 0.0, M.U, SMat)
-            F2C = R.apply_hermitian_transpose_mat(F1C, F2C)
-            F3C = M.apply_hermitian_transpose_mat(F1C, F3C)
+            F5C = IOMats.DDHT.apply_mat(F1C, F5C)
+            F2C = R.apply_hermitian_transpose_mat(F5C, F2C)     # Used to be F1C instead of F5C
+            F3C = M.apply_hermitian_transpose_mat(F5C, F3C)     # Used to be F1C instead of F5C
             bv_add(-1.0, F3C, F2C)
-            grad_C_i = R.apply_mat(F3C, grad_C_i)
+            F6C = IOMats.FFHT.apply_mat(F3C, F6C)   # Used to be F3C instead of F6C
+            grad_C_i = R.apply_mat(F6C, grad_C_i)
             Q = LowRankLinearOperator(comm, M.U, M.Sigma, C)
             Q_grad_C_i = Q.apply_mat(grad_C_i, Q_grad_C_i)
             bv_add(-1.0, grad_C_i, Q_grad_C_i)
@@ -244,7 +277,7 @@ class H2Component:
             #     print(f"Iteration {i} usage {value} MB")
         objects = [F1K, F2K, F3K, F1B, F2B, F3B, F1C, F2C, F3C, grad_B_i, \
                    Q_grad_B_i, grad_C_i, Q_grad_C_i, Bp1, Bp0, Cp1, Cp0, B, C, \
-                   RB, RHTC]
+                   RB, RHTC, F5K, F6K, F5B, F6B, F5C, F6C]
         for obj in objects: obj.destroy()
         return grad_p, grad_K.real, grad_s
 
@@ -337,7 +370,6 @@ class FOMStabilityComponent:
             linop.destroy_woodbury_operator()
             linop.destroy_intermediate_vectors()
             D = np.diag(D)
-            petscprint(self.comm, D)
             MD = np.diag([self.evaluate_grad_exponential(v) for v in D])
             BHTW = W.dot(B)
             VHTC = C.dot(V)
@@ -436,7 +468,6 @@ class ROMStabilityComponent:
         BHTPsi = self.Psi.dot(B)
         # Grad with respect to p
         Mat = M@PhiHTC.getDenseArray()@K.conj().T
-        petscprint(self.comm, Mat.shape)
         Matm = PETSc.Mat().createDense(Mat.shape, None, Mat, MPI.COMM_SELF)
         grad_B.mult(1.0, 0.0, self.Psi, Matm)
         grad_p = -IOMats.compute_dBdp(p, grad_B, Bp1, Bp0, IOMats.compute_dB)
@@ -573,7 +604,64 @@ def test_euclidean_gradient(comm, cost, grad, params, eps):
         petscprint(comm,"dfd = %1.5e,\t dfgrad = %1.5e,\t error = %1.5e,\t percent error = %1.5e"%(dfd,dgrad,error,percent_error))
         petscprint(comm,"---------------------------------")
         
-    
+def generate_initial_gains(params, IOMats, H2Comp, K):
+    r"""
+        Generate initial guess for the feedback gains
+
+        :param params: a 2-tuple (actuator parameters, sensor parameters)
+
+    """
+    comm = H2Comp.comm
+    p, s = params
+
+    B = SLEPc.BV().create(comm=comm)
+    B.setSizes(H2Comp.R_ops[0]._dimensions[0], K.shape[0])
+    B.setType('mat')
+    C = SLEPc.BV().create(comm=comm)
+    C.setSizes(H2Comp.R_ops[0]._dimensions[0], K.shape[-1])
+    C.setType('mat')
+    B = IOMats.compute_B(p, B)
+    C = IOMats.compute_C(s, C)
+    RB = B.duplicate()
+    DDHTRB = B.duplicate()
+    RHTC = C.duplicate()
+    FFHTRHTC = C.duplicate()
+    RFFHTRHTC = C.duplicate()
+
+    # H2 component of the cost function
+    M = np.zeros((len(K.reshape(-1)), len(K.reshape(-1))), dtype=np.float64)
+    RHS = np.zeros(M.shape[0], dtype=np.float64)
+    cc = 1 if np.sum(H2Comp.freqs < 0.0) == 0 else 0
+    for i in range (len(H2Comp.freqs)):
+        w = H2Comp.weights[i]
+        R = H2Comp.R_ops[i]
+        RB = R.apply_mat(B, RB)
+        DDHTRB = IOMats.DDHT.apply_mat(RB, DDHTRB)
+        Qi = DDHTRB.dot(RB)
+        Qia = Qi.getDenseArray()
+
+        RHTC = R.apply_hermitian_transpose_mat(C, RHTC)
+        FFHTRHTC = IOMats.FFHT.apply_mat(RHTC, FFHTRHTC)
+        Pi = FFHTRHTC.dot(RHTC)
+        Pia = Pi.getDenseArray()
+        Mi = np.kron(Qia, Pia.T)
+        M += 2*w*Mi.real if cc == 1 else w*Mi
+
+        RFFHTRHTC = R.apply_mat(FFHTRHTC, RFFHTRHTC)
+        RHSm = RFFHTRHTC.dot(DDHTRB)
+        RHSma = RHSm.getDenseArray()
+        RHS += 2*w*RHSma.reshape(-1).real if cc == 1 else w*RHSma.reshape(-1)
+
+        mats = [Pi, Qi, RHSm]
+        for mat in mats: mat.destroy()
+    mats = [B, C, RB, DDHTRB, RHTC, FFHTRHTC, RFFHTRHTC]
+    for mat in mats: mat.destroy()
+    u, s, v = sp.linalg.svd(M)
+    v = v.conj().T
+    idces = np.argwhere(s >= 1e-12).reshape(-1)
+    Kvec = u[:,idces]@np.diag(1./s[idces])@(v[:,idces].conj().T@RHS)
+    K[:,:] = Kvec.reshape(K.shape)
+    return K
 
 # -------------------------------------------------------------
 # -------------------------------------------------------------
@@ -1133,54 +1221,3 @@ def test_euclidean_gradient(comm, cost, grad, params, eps):
 #         return grad_p, grad_K.real, grad_s
     
 #     return cost, euclidean_gradient, euclidean_hessian
-
-
-# def generate_initial_gains(params, opt_obj, K):
-#     r"""
-#         Generate initial guess for the feedback gains
-
-#         :param params: a 2-tuple (actuator parameters, sensor parameters)
-
-#     """
-#     comm = opt_obj.comm
-#     p, s = params
-
-#     B = SLEPc.BV().create(comm=comm)
-#     B.setSizes(opt_obj.R_ops[0]._dimensions[0], K.shape[0])
-#     B.setType('mat')
-#     C = SLEPc.BV().create(comm=comm)
-#     C.setSizes(opt_obj.R_ops[0]._dimensions[0], K.shape[-1])
-#     C.setType('mat')
-#     B = opt_obj.compute_B(p, B)
-#     C = opt_obj.compute_C(s, C)
-#     RB = B.duplicate()
-#     RHTC = C.duplicate()
-#     RRHTC = RHTC.duplicate()
-
-#     # H2 component of the cost function
-#     RHS = np.zeros(K.shape, dtype=np.float64)
-#     M1 = np.zeros((K.shape[0], K.shape[0]), dtype=np.float64)
-#     M2 = np.zeros((K.shape[1], K.shape[1]), dtype=np.float64)
-#     cc = 1 if np.sum(opt_obj.freqs < 0.0) == 0 else 0
-#     for i in range (len(opt_obj.freqs)):
-#         w = opt_obj.weights[i]
-#         R = opt_obj.R_ops[i]
-#         RB = R.apply_mat(B, RB)
-#         RHTC = R.apply_hermitian_transpose_mat(C, RHTC)
-#         RRHTC = R.apply_mat(RHTC, RRHTC)
-#         RHSi = RRHTC.dot(RB)
-#         RHS += 2*w*RHSi.getDenseArray().real if cc == 1 \
-#             else w*RHSi.getDenseArray()
-        
-#         M1i = RB.dot(RB)
-#         M2i = RHTC.dot(RHTC)
-#         M1 += 2*w*M1i.getDenseArray().real if cc == 1 else w*M1i.getDenseArray()
-#         M2 += M2i.getDenseArray().real if cc == 1 else M2i.getDenseArray()
-        
-#         mats = [M1i, M2i, RHSi]
-#         for mat in mats: mat.destroy()
-    
-#     B.destroy()
-#     C.destroy()
-#     K[:,:] = sp.linalg.inv(M1)@RHS@sp.linalg.inv(M2)
-#     return K

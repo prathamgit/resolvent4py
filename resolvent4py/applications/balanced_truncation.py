@@ -70,7 +70,6 @@ class balanced_truncation:
         else:
             shift_i = [0, nc*nf//2]
             shift_j = [0, nb*nf//2]
-            print(len(self.freqs), nf, nb, nc, M.shape)
             for i in range (len(self.Yf)):
                 wi = self.weights[i]
                 Yi = self.Yf[i]
