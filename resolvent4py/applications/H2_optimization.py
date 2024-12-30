@@ -281,6 +281,146 @@ class H2Component:
         for obj in objects: obj.destroy()
         return grad_p, grad_K.real, grad_s
 
+class BodeFormula:
+
+    def __init__(self, comm, path_factors, factor_sizes, frequencies, weights, \
+                 open_loop_eigvals, sigma, alpha, eps):
+        self.comm = comm
+        self.freqs = frequencies
+        self.weights = weights
+        self.load_factors(path_factors, factor_sizes)
+        self.open_loop_eigvals = open_loop_eigvals
+        self.sigma = sigma
+        self.alpha = alpha
+        self.eps = eps
+
+    def load_factors(self, path_factors, factor_sizes):
+        self.U, self.S, self.V, self.R_ops = [], [], [], []
+        for i in range (len(self.freqs)):
+            fname_U = path_factors + 'omega_%1.5f/U.dat'%self.freqs[i]
+            fname_S = path_factors + 'omega_%1.5f/S.npy'%self.freqs[i]
+            fname_V = path_factors + 'omega_%1.5f/V.dat'%self.freqs[i]
+            self.U.append(read_bv(self.comm, fname_U, factor_sizes))
+            self.V.append(read_bv(self.comm, fname_V, factor_sizes))
+            self.S.append(np.load(fname_S))
+            self.R_ops.append(\
+                LowRankLinearOperator(self.comm, self.U[-1], \
+                                      self.S[-1], self.V[-1]))
+
+    def evaluate_exponential(self, val):
+        try:    value = np.exp(self.alpha*(val.real + self.beta)).real
+        except: value = 1e12
+        value = 0.0 if value <= 1e-13 else value
+        return value
+    
+    def evaluate_grad_exponential(self, val):
+        return self.alpha*self.evaluate_exponential(val)
+
+    def evaluate_cost(self, params, IOMats):
+        p, K, s = params
+        Id = np.eye(K.shape[-1])
+        B = SLEPc.BV().create(comm=self.comm)
+        B.setSizes(self.R_ops[0]._dimensions[0], K.shape[0])
+        B.setType('mat')
+        C = SLEPc.BV().create(comm=self.comm)
+        C.setSizes(self.R_ops[0]._dimensions[0], K.shape[-1])
+        C.setType('mat')
+        B = IOMats.compute_B(p, B)
+        C = IOMats.compute_C(s, C)
+        RB = B.duplicate()
+        integral = 0
+        for i in range (len(self.freqs) - 1):
+            RB = self.R_ops[i].apply_mat(B, RB)
+            CRB = RB.dot(C)
+            S = sp.linalg.inv(Id + CRB.getDenseArray()@K)
+            _, s, _ = sp.linalg.svd(S)
+            integral += self.weights[i]*np.sum(np.log(s))
+            CRB.destroy()
+        integral *= 1.0/np.pi if np.min(self.freqs) > 0.0 else 1.0/(2*np.pi)
+        RB = self.R_ops[-1].apply_mat(B, RB)
+        CRB = RB.dot(C)
+        L = CRB.getDenseArray()@K
+        sumRe = np.sum(self.open_loop_eigvals.real - self.sigma) - \
+                0.5*np.trace(1j*self.freqs[-1]*L).real - integral
+        objs = [RB, CRB, B, C]
+        for obj in objs: obj.destroy()
+        return sumRe #np.exp(self.alpha*(sumRe + self.eps))
+
+    def evaluate_gradient(self, params, IOMats):
+        p, K, s = params
+        Id = np.eye(K.shape[-1])
+        B = SLEPc.BV().create(comm=self.comm)
+        B.setSizes(self.R_ops[0]._dimensions[0], K.shape[0])
+        B.setType('mat')
+        B = IOMats.compute_B(p, B)
+        grad_B_i = B.duplicate()
+        Bp1 = B.duplicate()
+        Bp0 = B.duplicate()
+
+        C = SLEPc.BV().create(comm=self.comm)
+        C.setSizes(self.R_ops[0]._dimensions[0], K.shape[-1])
+        C.setType('mat')
+        C = IOMats.compute_C(s, C)
+        RB = B.duplicate()
+        RHTC = C.duplicate()
+        grad_C_i = C.duplicate()
+        Cp1 = C.duplicate()
+        Cp0 = C.duplicate()
+
+        grad_K = np.zeros(K.shape, dtype=np.complex128)
+        grad_p = np.zeros_like(p)
+        grad_s = np.zeros_like(s)
+
+        for i in range (len(self.freqs) - 1):
+            RB = self.R_ops[i].apply_mat(B, RB)
+            CRB = RB.dot(C)
+            CRBa = CRB.getDenseArray()
+            S = sp.linalg.inv(Id + CRBa@K)
+            _, s, v = sp.linalg.svd(S)
+            v = v.conj().T
+            Mat = v@np.diag(s/2)@v.conj().T@S.conj().T
+            # grad with respect to K
+            grad_K -= 2*self.weights[i]*(CRBa.conj().T@Mat)
+            # grad with respect to p
+            RHTC = self.R_ops[i].apply_hermitian_transpose_mat(C, RHTC)
+            Mat_ = PETSc.Mat().createDense((K.shape[1], K.shape[0]), None, \
+                                           Mat@K.conj().T, MPI.COMM_SELF)
+            grad_B_i.mult(2.0*self.weights[i], 0.0, RHTC, Mat_)
+            grad_p -= IOMats.compute_dBdp(p, grad_B_i, Bp1, \
+                                          Bp0, IOMats.compute_dB)
+            Mat_.destroy()
+            # grad with respect to s
+            Mat_ = PETSc.Mat().createDense((K.shape[0], K.shape[1]), None, \
+                                           K@Mat.conj().T, MPI.COMM_SELF)
+            grad_C_i.mult(2.0*self.weights[i], 0.0, RB, Mat_)
+            grad_s -= IOMats.compute_dBdp(s, grad_C_i, Cp1, Cp0, \
+                                          IOMats.compute_dC)
+            Mat_.destroy()
+            CRB.destroy()
+
+        f = 1./np.pi if np.min(self.freqs) > 0.0 else 1./(2*np.pi)
+        grad_K *= -f
+        grad_p *= -f
+        grad_s *= -f
+
+        RB = self.R_ops[-1].apply_mat(B, RB)
+        CRB = RB.dot(C)
+        CRBa = CRB.getDenseArray()
+        grad_K -= 0.5*self.freqs[-1]*CRBa.conj().T
+        Mat_ = PETSc.Mat().createDense(K.shape, None, K, MPI.COMM_SELF)
+        grad_C_i.mult(0.5*self.freqs[-1], 0.0, RB, Mat_)
+        grad_s -= IOMats.compute_dBdp(s, grad_C_i, Cp1, Cp0, IOMats.compute_dC)
+        Mat_.destroy()
+        RHTC = self.R_ops[-1].apply_hermitian_transpose_mat(C, RHTC)
+        Mat_ = PETSc.Mat().createDense(K.T.shape, None, \
+                                       K.conj().T, MPI.COMM_SELF)
+        grad_B_i.mult(0.5*self.freqs[-1], 0.0, RHTC, Mat_)
+        grad_p -= IOMats.compute_dBdp(p, grad_B_i, Bp1, Bp0, IOMats.compute_dB)
+        Mat_.destroy()
+
+        objs = [B, C, Bp0, Bp1, Cp0, Cp1, grad_B_i, grad_C_i, RB, RHTC, CRB]
+        for obj in objs: obj.destroy()
+        return grad_p, grad_K, grad_s
 
 class FOMStabilityComponent:
 
