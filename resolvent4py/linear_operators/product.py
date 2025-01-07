@@ -87,8 +87,13 @@ class ProductLinearOperator(LinearOperator):
         
         self.nlops = len(self.names)
         self.create_intermediate_vectors()
-        dims = (getattr(self, self.names[-1])._dimensions[0], \
-                getattr(self, self.names[0])._dimensions[-1])
+        L1 = getattr(self, self.names[0])
+        Ln = getattr(self, self.names[-1])
+        dimr = Ln._dimensions[0] if self.actions[-1] == Ln.apply or \
+            self.actions[-1] == Ln.solve else Ln._dimensions[-1]
+        dimc = L1._dimensions[-1] if self.actions[0] == L1.apply or \
+            self.actions[-1] == L1.solve else Ln._dimensions[0]
+        dims = (dimr, dimc)
         super().__init__(comm, 'ProductLinearOperator', dims, nblocks)
 
     def create_intermediate_vectors(self):
