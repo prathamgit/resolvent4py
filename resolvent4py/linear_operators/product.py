@@ -84,18 +84,13 @@ class ProductLinearOperator(LinearOperator):
             self.actions_hermitian_transpose)
         self.actions_hermitian_transpose_mat = np.flipud(\
             self.actions_hermitian_transpose_mat)
-        dims = []
-        if self.actions[-1] == getattr(self, self.names[-1]).apply or \
-            self.actions[-1] == getattr(self, self.names[-1]).solve:
-            dims.append(getattr(self, self.names[-1])._dimensions[0])
-        else:
-            dims.append(getattr(self, self.names[-1])._dimensions[-1])
-        if self.actions[0] == getattr(self, self.names[0]).apply or \
-            self.actions[0] == getattr(self, self.names[0]).solve:
-            dims.append(getattr(self, self.names[0])._dimensions[-1])
-        else:
-            dims.append(getattr(self, self.names[0])._dimensions[0])
-        self.nlops = len(self.names)
+        L1 = getattr(self, self.names[0])
+        Ln = getattr(self, self.names[-1])
+        dimr = Ln._dimensions[0] if self.actions[-1] == Ln.apply or \
+            self.actions[-1] == Ln.solve else Ln._dimensions[-1]
+        dimc = L1._dimensions[-1] if self.actions[0] == L1.apply or \
+            self.actions[0] == L1.solve else Ln._dimensions[0]
+        dims = (dimr, dimc)
         self.create_intermediate_vectors()
         super().__init__(comm, 'ProductLinearOperator', dims, nblocks)
 
