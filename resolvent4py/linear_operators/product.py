@@ -92,7 +92,7 @@ class ProductLinearOperator(LinearOperator):
         dimr = Ln._dimensions[0] if self.actions[-1] == Ln.apply or \
             self.actions[-1] == Ln.solve else Ln._dimensions[-1]
         dimc = L1._dimensions[-1] if self.actions[0] == L1.apply or \
-            self.actions[-1] == L1.solve else Ln._dimensions[0]
+            self.actions[0] == L1.solve else Ln._dimensions[0]
         dims = (dimr, dimc)
         super().__init__(comm, 'ProductLinearOperator', dims, nblocks)
 
