@@ -75,7 +75,7 @@ class ProductLinearOperator(LinearOperator):
                     linop.solve_mat)
             else:
                 raise ValueError (
-                    f"Action for the {i}th linear operator in the list must be "
+                    f"Action for the linear operator ({i}) in the list must be "
                     f"one of apply, solve, apply_hermitian_transpose or "
                     f"solve_hermitian_transpose."
                 )
@@ -84,11 +84,19 @@ class ProductLinearOperator(LinearOperator):
             self.actions_hermitian_transpose)
         self.actions_hermitian_transpose_mat = np.flipud(\
             self.actions_hermitian_transpose_mat)
-        
+        dims = []
+        if self.actions[-1] == getattr(self, self.names[-1]).apply or \
+            self.actions[-1] == getattr(self, self.names[-1]).solve:
+            dims.append(getattr(self, self.names[-1])._dimensions[0])
+        else:
+            dims.append(getattr(self, self.names[-1])._dimensions[-1])
+        if self.actions[0] == getattr(self, self.names[0]).apply or \
+            self.actions[0] == getattr(self, self.names[0]).solve:
+            dims.append(getattr(self, self.names[0])._dimensions[-1])
+        else:
+            dims.append(getattr(self, self.names[0])._dimensions[0])
         self.nlops = len(self.names)
         self.create_intermediate_vectors()
-        dims = (getattr(self, self.names[0])._dimensions[0], \
-                getattr(self, self.names[-1])._dimensions[-1])
         super().__init__(comm, 'ProductLinearOperator', dims, nblocks)
 
     def create_intermediate_vectors(self):
