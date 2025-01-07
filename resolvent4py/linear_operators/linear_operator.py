@@ -1,6 +1,7 @@
 from .. import np
 from .. import abc
 from .. import PETSc
+from .. import SLEPc
 from ..error_handling_functions import raise_not_implemented_error
 from ..random import generate_random_petsc_vector
 from ..linalg import enforce_complex_conjugacy
@@ -72,6 +73,19 @@ class LinearOperator(metaclass=abc.ABCMeta):
         vec.setUp()
         return vec
 
+    def create_right_bv(self, ncols):
+        r"""
+            :param ncols: number of columns in the BV
+            :param type: int
+
+            :return: a SLEPc BV that :math:`L` can be multiplied against
+            :rtype: `BV`_
+        """
+        bv = SLEPc.BV().create(comm=self._comm)
+        bv.setSizes(self._dimensions[-1], ncols)
+        bv.setType('mat')
+        return bv
+
     def create_left_vector(self):
         r"""
             :return: a PETSc vector where :math:`Lx` can be stored into
@@ -81,6 +95,19 @@ class LinearOperator(metaclass=abc.ABCMeta):
         vec.setSizes(self._dimensions[0])
         vec.setUp()
         return vec
+
+    def create_left_bv(self, ncols):
+        r"""
+            :param ncols: number of columns in the BV
+            :param type: int
+
+            :return: a SLEPc BV where :math:`LX` can be stored into
+            :rtype: `BV`_
+        """
+        bv = SLEPc.BV().create(comm=self._comm)
+        bv.setSizes(self._dimensions[0], ncols)
+        bv.setType('mat')
+        return bv
     
     def check_if_real_valued(self):
         r"""
