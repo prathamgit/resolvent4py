@@ -1,5 +1,5 @@
 from . import PETSc
-from .random import generate_random_petsc_vector
+from .random_utils import generate_random_petsc_vector
 
 def create_mumps_solver(comm,A):
     r"""

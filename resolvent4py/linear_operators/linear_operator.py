@@ -2,7 +2,7 @@ from .. import np
 from .. import abc
 from .. import PETSc
 from ..error_handling_functions import raise_not_implemented_error
-from ..random import generate_random_petsc_vector
+from ..random_utils import generate_random_petsc_vector
 from ..linalg import enforce_complex_conjugacy
 from ..linalg import check_complex_conjugacy
 
