@@ -336,7 +336,7 @@ class BodeFormula:
             _, s, _ = sp.linalg.svd(S)
             integral += self.weights[i]*np.sum(np.log(s))
             CRB.destroy()
-        integral *= 1.0/np.pi if np.min(self.freqs) > 0.0 else 1.0/(2*np.pi)
+        integral *= 1.0/np.pi if np.min(self.freqs) >= 0.0 else 1.0/(2*np.pi)
         RB = self.R_ops[-1].apply_mat(B, RB)
         CRB = RB.dot(C)
         L = CRB.getDenseArray()@K
@@ -371,56 +371,49 @@ class BodeFormula:
         grad_p = np.zeros_like(p)
         grad_s = np.zeros_like(s)
 
+        f = 1./np.pi if np.min(self.freqs) > 0.0 else 1./(2*np.pi)
+
         for i in range (len(self.freqs) - 1):
+            RHTC = self.R_ops[i].apply_hermitian_transpose_mat(C, RHTC)
             RB = self.R_ops[i].apply_mat(B, RB)
             CRB = RB.dot(C)
             CRBa = CRB.getDenseArray()
             S = sp.linalg.inv(Id + CRBa@K)
             _, s, v = sp.linalg.svd(S)
             v = v.conj().T
-            Mat = v@np.diag(s/2)@v.conj().T@S.conj().T
-            # grad with respect to K
-            grad_K -= 2*self.weights[i]*(CRBa.conj().T@Mat)
-            # grad with respect to p
-            RHTC = self.R_ops[i].apply_hermitian_transpose_mat(C, RHTC)
-            Mat_ = PETSc.Mat().createDense((K.shape[1], K.shape[0]), None, \
-                                           Mat@K.conj().T, MPI.COMM_SELF)
-            grad_B_i.mult(2.0*self.weights[i], 0.0, RHTC, Mat_)
-            grad_p -= IOMats.compute_dBdp(p, grad_B_i, Bp1, \
+            
+            grad_K += f*self.weights[i]*CRBa.conj().T@S.conj().T
+            Mat = S.conj().T@K.conj().T
+            Mat_ = PETSc.Mat().createDense(Mat.shape, None, Mat, MPI.COMM_SELF)
+            grad_B_i.mult(f*self.weights[i], 0.0, RHTC, Mat_)
+            grad_p += IOMats.compute_dBdp(p, grad_B_i, Bp1, \
                                           Bp0, IOMats.compute_dB)
-            Mat_.destroy()
-            # grad with respect to s
-            Mat_ = PETSc.Mat().createDense((K.shape[0], K.shape[1]), None, \
-                                           K@Mat.conj().T, MPI.COMM_SELF)
-            grad_C_i.mult(2.0*self.weights[i], 0.0, RB, Mat_)
-            grad_s -= IOMats.compute_dBdp(s, grad_C_i, Cp1, Cp0, \
+            Mat_.hermitianTranspose(None)
+            grad_C_i.mult(f*self.weights[i], 0.0, RB, Mat_)
+            grad_s += IOMats.compute_dBdp(s, grad_C_i, Cp1, Cp0, \
                                           IOMats.compute_dC)
+            
             Mat_.destroy()
             CRB.destroy()
 
-        f = 1./np.pi if np.min(self.freqs) > 0.0 else 1./(2*np.pi)
-        grad_K *= -f
-        grad_p *= -f
-        grad_s *= -f
-
+        RHTC = self.R_ops[-1].apply_hermitian_transpose_mat(C, RHTC)
         RB = self.R_ops[-1].apply_mat(B, RB)
         CRB = RB.dot(C)
         CRBa = CRB.getDenseArray()
-        grad_K -= 0.5*self.freqs[-1]*CRBa.conj().T
-        Mat_ = PETSc.Mat().createDense(K.shape, None, K, MPI.COMM_SELF)
-        grad_C_i.mult(0.5*self.freqs[-1], 0.0, RB, Mat_)
-        grad_s -= IOMats.compute_dBdp(s, grad_C_i, Cp1, Cp0, IOMats.compute_dC)
-        Mat_.destroy()
-        RHTC = self.R_ops[-1].apply_hermitian_transpose_mat(C, RHTC)
-        Mat_ = PETSc.Mat().createDense(K.T.shape, None, \
-                                       K.conj().T, MPI.COMM_SELF)
-        grad_B_i.mult(0.5*self.freqs[-1], 0.0, RHTC, Mat_)
-        grad_p -= IOMats.compute_dBdp(p, grad_B_i, Bp1, Bp0, IOMats.compute_dB)
-        Mat_.destroy()
 
-        objs = [B, C, Bp0, Bp1, Cp0, Cp1, grad_B_i, grad_C_i, RB, RHTC, CRB]
+        grad_K -= 0.5*1j*self.freqs[-1]*CRBa.conj().T
+        Mat = K.conj().T
+        Mat_ = PETSc.Mat().createDense(Mat.shape, None, Mat, MPI.COMM_SELF)
+        grad_B_i.mult(0.5*1j*self.freqs[-1], 0.0, RHTC, Mat_)
+        grad_p -= IOMats.compute_dBdp(p, grad_B_i, Bp1, Bp0, IOMats.compute_dB)
+        Mat_.hermitianTranspose(None)
+        grad_C_i.mult(0.5*1j*self.freqs[-1], 0.0, RB, Mat_)
+        grad_s -= IOMats.compute_dBdp(s, grad_C_i, Cp1, Cp0, IOMats.compute_dC)
+
+        objs = [B, C, Bp0, Bp1, Cp0, Cp1, grad_B_i, \
+                grad_C_i, RB, RHTC, CRB, Mat_]
         for obj in objs: obj.destroy()
-        return grad_p, grad_K, grad_s
+        return grad_p.real, grad_K.real, grad_s.real
 
 class FOMStabilityComponent:
 
