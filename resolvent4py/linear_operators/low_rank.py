@@ -7,7 +7,7 @@ class LowRankLinearOperator(LinearOperator):
         Class for a linear operator of the form
 
         .. math::
-
+        
             L = U \Sigma V^*,
 
         where :math:`U`, :math:`\Sigma` and :math:`V` are matrices of
@@ -15,12 +15,12 @@ class LowRankLinearOperator(LinearOperator):
 
         :param comm: MPI communicator (one of :code:`MPI.COMM_WORLD` or
             :code:`MPI.COMM_SELF`)
-        :param U: dense PETSc matrix
-        :type U: PETSc.Mat.Type.DENSE
-        :param Sigma: dense PETSc matrix
-        :type Sigma: PETSc.Mat.Type.DENSE
-        :param V: dense PETSc matrix
-        :type V: PETSc.Mat.Type.DENSE
+        :param U: a SLEPc BV
+        :type U: `BV`_
+        :param Sigma: 2D numpy array
+        :type Sigma: numpy.ndarray
+        :param V: a SLEPc BV
+        :type V: `BV`_
         :param nblocks: [optional] number of blocks (if the linear operator \
             has block structure)
         :type nblocks: int
@@ -29,7 +29,7 @@ class LowRankLinearOperator(LinearOperator):
         self.U = U
         self.Sigma = Sigma
         self.V = V
-        dimensions = (U.getSizes()[0],V.getSizes()[0])
+        dimensions = (U.getSizes()[0], V.getSizes()[0])
         super().__init__(comm, 'LowRankLinearOperator', dimensions, nblocks)
 
     def apply(self, x, y=None):

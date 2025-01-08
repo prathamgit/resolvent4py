@@ -2,6 +2,7 @@ from .linear_operator import LinearOperator
 from .. import MPI
 from .. import PETSc
 from .. import np
+from ..miscellaneous import compute_local_size
 from ..comms import distributed_to_sequential_vector
 from ..comms import sequential_to_distributed_vector
 from ..comms import distributed_to_sequential_matrix
@@ -20,32 +21,33 @@ class BvLinearOperator(LinearOperator):
 
         :param comm: MPI communicator (one of :code:`MPI.COMM_WORLD` or
             :code:`MPI.COMM_SELF`)
-        :param U: dense PETSc matrix
-        :type U: PETSc.Mat.Type.DENSE
-        :param Sigma: dense PETSc matrix
-        :type Sigma: PETSc.Mat.Type.DENSE
+        :param U: a SLEPc BV
+        :type U: `BV`_
+        :param Sigma: a SLEPc BV
+        :type Sigma: `BV`_
         :param nblocks: [optional] number of blocks (if the linear operator \
             has block structure)
         :type nblocks: int
     """
-    def __init__(self, comm, U, Sigma, V, nblocks=None):
+    def __init__(self, comm, U, Sigma, nblocks=None):
         self.U = U
         self.Sigma = Sigma
-        dims = (U.getSizes()[0], (Sigma.shape[-1], Sigma.shape[-1]))
+        dims = (U.getSizes()[0], \
+                (compute_local_size(Sigma.shape[-1]), Sigma.shape[-1]))
         super().__init__(comm, 'BvLinearOperator', dims, nblocks)
 
     def apply(self, x, y=None):
         y = self.create_left_vector() if y == None else y
-        q = distributed_to_sequential_vector(self._comm, x)
-        self.U.multVec(1.0, 0.0, y, self.Sigma@q.getArray())
-        q.destroy()
+        xseq = distributed_to_sequential_vector(self._comm, x)
+        self.U.multVec(1.0, 0.0, y, self.Sigma@xseq.getArray())
+        xseq.destroy()
         return y
     
     def apply_hermitian_transpose(self, x, y=None):
         y = self.create_right_vector() if y == None else y
         q = self.Sigma.conj().T@self.U.dotVec(x)
         qvec = PETSc.Vec().createWithArray(q, len(q), None, MPI.COMM_SELF)
-        sequential_to_distributed_vector(qvec, y)
+        y = sequential_to_distributed_vector(qvec, y)
         return y
     
     def apply_mat(self, X, Y=None):
@@ -60,9 +62,10 @@ class BvLinearOperator(LinearOperator):
     
     def apply_hermitian_transpose_mat(self, X, Y=None):
         M = X.dot(self.U)
+        Ma = M.getDenseArray()
         sz = (self.Sigma[-1], self.X.getSizes()[-1])
-        Y = np.zeros(sz, M.getDenseArray().dtype) if Y == None else Y
-        Y[:, :] = self.Sigma.conj().T@M.getDenseArray()
+        Y = np.zeros(sz, Ma.dtype) if Y == None else Y
+        Y[:, :] = self.Sigma.conj().T@Ma
         M.destroy()
         return Y
 

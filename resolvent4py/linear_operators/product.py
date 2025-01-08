@@ -39,6 +39,10 @@ class ProductLinearOperator(LinearOperator):
                 f"ProductLinearOperator is the product of at least two "
                 f"linear operators. Only 1 was provided at initialization."
             )
+        if len(linops) != len(linops_actions):
+            raise ValueError (
+                f"len(linops) must be equal to len(linops_actions)."
+            )
 
         self.actions = linops_actions
         self.actions_hermitian_transpose = []
@@ -95,7 +99,7 @@ class ProductLinearOperator(LinearOperator):
             self.actions[0] == L1.solve else Ln._dimensions[0]
         dims = (dimr, dimc)
         super().__init__(comm, 'ProductLinearOperator', dims, nblocks)
-
+    
     def create_intermediate_vectors(self):
         self.intermediate_vecs = []
         for j in range (self.nlops - 1):
