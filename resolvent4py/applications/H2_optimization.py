@@ -89,12 +89,10 @@ class InputOutputMatrices:
         self.compute_C = compute_C
         self.compute_dB = compute_dB
         self.compute_dC = compute_dC
-        self.DDHT = ProductLinearOperator(comm, [D, D], \
-                                            [D.apply_hermitian_transpose, \
-                                             D.apply])
-        self.FFHT = ProductLinearOperator(comm, [F, F], \
-                                            [F.apply_hermitian_transpose, \
-                                             F.apply])
+        D_actions = [D.apply_hermitian_transpose, D.apply]
+        F_actions = [F.apply_hermitian_transpose, F.apply]
+        self.DDHT = ProductLinearOperator(comm, [D, D], D_actions)
+        self.FFHT = ProductLinearOperator(comm, [F, F], F_actions)
 
     def compute_dBdp(self, p, grad_B, Bp1, Bp0, compute_dB):
         eps = 1e-4
@@ -149,7 +147,6 @@ class H2Component:
             w = self.weights[i]
             R = self.R_ops[i]
             M, _ = _compute_woodbury_update(self.comm, R, B, K, C, RB, RHTC)
-            # J += w*np.sum(np.diag(R.Sigma)**2)
             J += w*_compute_trace_product_new(R, R, IOMats.DDHT, IOMats.FFHT)
             J -= 2.0*w*_compute_trace_product_new(R, M, IOMats.DDHT, \
                                                   IOMats.FFHT)
@@ -329,14 +326,14 @@ class BodeFormula:
         C = IOMats.compute_C(s, C)
         RB = B.duplicate()
         integral = 0
+        f = 1./np.pi if np.min(self.freqs) > 0.0 else 1./(2*np.pi)
         for i in range (len(self.freqs) - 1):
             RB = self.R_ops[i].apply_mat(B, RB)
             CRB = RB.dot(C)
             S = sp.linalg.inv(Id + CRB.getDenseArray()@K)
-            _, s, _ = sp.linalg.svd(S)
-            integral += self.weights[i]*np.sum(np.log(s))
+            _, sv, _ = sp.linalg.svd(S)
+            integral += f*self.weights[i]*np.sum(np.log(sv))
             CRB.destroy()
-        integral *= 1.0/np.pi if np.min(self.freqs) >= 0.0 else 1.0/(2*np.pi)
         RB = self.R_ops[-1].apply_mat(B, RB)
         CRB = RB.dot(C)
         L = CRB.getDenseArray()@K
@@ -356,12 +353,12 @@ class BodeFormula:
         grad_B_i = B.duplicate()
         Bp1 = B.duplicate()
         Bp0 = B.duplicate()
+        RB = B.duplicate()
 
         C = SLEPc.BV().create(comm=self.comm)
         C.setSizes(self.R_ops[0]._dimensions[0], K.shape[-1])
         C.setType('mat')
         C = IOMats.compute_C(s, C)
-        RB = B.duplicate()
         RHTC = C.duplicate()
         grad_C_i = C.duplicate()
         Cp1 = C.duplicate()
@@ -371,16 +368,16 @@ class BodeFormula:
         grad_p = np.zeros_like(p)
         grad_s = np.zeros_like(s)
 
+        integral = 0.0
         f = 1./np.pi if np.min(self.freqs) > 0.0 else 1./(2*np.pi)
-
         for i in range (len(self.freqs) - 1):
             RHTC = self.R_ops[i].apply_hermitian_transpose_mat(C, RHTC)
             RB = self.R_ops[i].apply_mat(B, RB)
             CRB = RB.dot(C)
             CRBa = CRB.getDenseArray()
             S = sp.linalg.inv(Id + CRBa@K)
-            _, s, v = sp.linalg.svd(S)
-            v = v.conj().T
+            _, sv, _ = sp.linalg.svd(S)
+            integral += f*self.weights[i]*np.sum(np.log(sv))
             
             grad_K += f*self.weights[i]*CRBa.conj().T@S.conj().T
             Mat = S.conj().T@K.conj().T
@@ -400,223 +397,26 @@ class BodeFormula:
         RB = self.R_ops[-1].apply_mat(B, RB)
         CRB = RB.dot(C)
         CRBa = CRB.getDenseArray()
+        sumRe = np.sum(self.open_loop_eigvals.real - self.sigma) - \
+                0.5*np.trace(1j*self.freqs[-1]*CRBa@K).real - integral
 
-        grad_K -= 0.5*1j*self.freqs[-1]*CRBa.conj().T
+        grad_K -= 0.5*(1j*self.freqs[-1]*CRBa).conj().T
         Mat = K.conj().T
         Mat_ = PETSc.Mat().createDense(Mat.shape, None, Mat, MPI.COMM_SELF)
-        grad_B_i.mult(0.5*1j*self.freqs[-1], 0.0, RHTC, Mat_)
+        grad_B_i.mult(0.5*np.conj(1j*self.freqs[-1]), 0.0, RHTC, Mat_)
         grad_p -= IOMats.compute_dBdp(p, grad_B_i, Bp1, Bp0, IOMats.compute_dB)
         Mat_.hermitianTranspose(None)
         grad_C_i.mult(0.5*1j*self.freqs[-1], 0.0, RB, Mat_)
         grad_s -= IOMats.compute_dBdp(s, grad_C_i, Cp1, Cp0, IOMats.compute_dC)
 
+        # grad_K *= 2*sumRe
+        # grad_s *= 2*sumRe
+        # grad_p *= 2*sumRe
+
         objs = [B, C, Bp0, Bp1, Cp0, Cp1, grad_B_i, \
                 grad_C_i, RB, RHTC, CRB, Mat_]
         for obj in objs: obj.destroy()
         return grad_p.real, grad_K.real, grad_s.real
-
-class FOMStabilityComponent:
-
-    def __init__(self, comm, fnames_jacobian, jacobian_sizes, alpha, beta, \
-                 krylov_dim, n_evals, shifts):
-        self.comm = comm
-        self.alpha = alpha
-        self.beta = beta
-        self.krylov_dim = krylov_dim
-        self.n_evals = n_evals
-        A = read_coo_matrix(self.comm, fnames_jacobian, jacobian_sizes)
-        self.As = []
-        self.process_evals = []
-        for i in range (len(shifts)):
-            s = shifts[i]
-            Id = PETSc.Mat().createConstantDiagonal(jacobian_sizes,1.0,comm)
-            Id.scale(1j*s)
-            Id.convert(PETSc.Mat.Type.MPIAIJ)
-            Id.axpy(-1.0, A)
-            ksp = create_mumps_solver(self.comm, Id)
-            self.As.append(MatrixLinearOperator(self.comm, Id, ksp))
-            self.process_evals.append(lambda x: 1j*s - 1./x)
-
-    def evaluate_exponential(self, val):
-        try:    value = np.exp(self.alpha*(val.real + self.beta)).real
-        except: value = 1e12
-        value = 0.0 if value <= 1e-13 else value
-        return value
-    
-    def evaluate_grad_exponential(self, val):
-        return self.alpha*self.evaluate_exponential(val)
-
-    def evaluate_cost(self, params, IOMats):
-        p, K, s = params
-        B = SLEPc.BV().create(comm=self.comm)
-        B.setSizes(self.As[0]._dimensions[0], K.shape[0])
-        B.setType('mat')
-        C = SLEPc.BV().create(comm=self.comm)
-        C.setSizes(self.As[0]._dimensions[0], K.shape[-1])
-        C.setType('mat')
-        B = IOMats.compute_B(p, B)
-        C = IOMats.compute_C(s, C) 
-        J = 0
-        for i in range (len(self.As)):
-            linop = LowRankUpdatedLinearOperator(self.comm, self.As[i], B, K, C)
-            D, E = eig(linop, linop.solve, self.krylov_dim, self.n_evals, \
-                       self.process_evals[i])
-            J += np.sum([self.evaluate_exponential(val) for val in np.diag(D)])
-            E.destroy()
-            linop.destroy_woodbury_operator()
-            linop.destroy_intermediate_vectors()
-        B.destroy()
-        C.destroy()
-        return J.real
-    
-    def evaluate_gradient(self, params, IOMats):
-        p, K, s = params
-        B = SLEPc.BV().create(comm=self.comm)
-        B.setSizes(self.As[0]._dimensions[0], K.shape[0])
-        B.setType('mat')
-        Bp1 = B.copy()
-        Bp0 = B.copy()
-        C = SLEPc.BV().create(comm=self.comm)
-        C.setSizes(self.As[0]._dimensions[0], K.shape[-1])
-        C.setType('mat')
-        Cp1 = C.copy()
-        Cp0 = C.copy()
-        B = IOMats.compute_B(p, B)
-        C = IOMats.compute_C(s, C) 
-        grad_K = np.zeros(K.shape, dtype=np.complex128)
-        grad_p = np.zeros_like(p)
-        grad_s = np.zeros_like(s)
-        # Allocate memory for efficiency (grad_p)
-        grad_B = SLEPc.BV().create(comm=self.comm)
-        grad_B.setSizes(self.As[0]._dimensions[0], B.getSizes()[-1])
-        grad_B.setType('mat')
-        grad_B.scale(0.0)
-        # Allocate memory for efficiency (grad_s)
-        grad_C = SLEPc.BV().create(comm=self.comm)
-        grad_C.setSizes(self.As[0]._dimensions[-1], C.getSizes()[-1])
-        grad_C.setType('mat')
-        grad_C.scale(0.0)
-        for i in range (len(self.As)):
-            linop = LowRankUpdatedLinearOperator(self.comm, self.As[i], B, K, C)
-            V, D, W = right_and_left_eig(linop, linop.solve, self.krylov_dim, \
-                                         self.n_evals, self.process_evals[i])
-            linop.destroy_woodbury_operator()
-            linop.destroy_intermediate_vectors()
-            D = np.diag(D)
-            MD = np.diag([self.evaluate_grad_exponential(v) for v in D])
-            BHTW = W.dot(B)
-            VHTC = C.dot(V)
-            # Grad with respect to K
-            grad_K -= BHTW.getDenseArray()@MD@VHTC.getDenseArray()
-            # Grad with respect to p
-            Ma = MD@VHTC.getDenseArray()@K.conj().T
-            M = PETSc.Mat().createDense(Ma.shape, None, Ma, MPI.COMM_SELF)
-            grad_B.mult(1.0, 0.0, W, M)
-            grad_p -= IOMats.compute_dBdp(p, grad_B, Bp1, Bp0, \
-                                          IOMats.compute_dB)
-            M.destroy()
-            # Grad with respect to s
-            Ma = MD@BHTW.getDenseArray().conj().T@K
-            M = PETSc.Mat().createDense(Ma.shape, None, Ma, MPI.COMM_SELF)
-            grad_C.mult(1.0, 0.0, V, M)
-            grad_s -= IOMats.compute_dBdp(s, grad_C, Cp1, Cp0, \
-                                          IOMats.compute_dC)
-            M.destroy()
-            objects = [V, W, BHTW, VHTC]
-            for obj in objects: obj.destroy()
-
-        objects = [B, C, Bp0, Bp1, Cp0, Cp1, grad_B, grad_C]
-        for obj in objects: obj.destroy()
-        return grad_p, grad_K.real, grad_s
-
-class ROMStabilityComponent:
-
-    def __init__(self, comm, Ar, Phi, Psi, alpha, beta):
-        self.comm = comm
-        self.Ar = Ar
-        self.Phi = Phi
-        self.Psi = Psi
-        self.alpha = alpha
-        self.beta = beta
-
-    def evaluate_exponential(self, val):
-        try:    value = np.exp(self.alpha*(val.real + self.beta)).real
-        except: value = 1e12
-        value = 0.0 if value <= 1e-13 else value
-        return value
-    
-    def evaluate_grad_exponential(self, val):
-        return self.alpha*self.evaluate_exponential(val)
-
-    def compute_closed_loop_tensor(self, B, K, C):
-        PsiHTB = B.dot(self.Psi)
-        CHTPhi = self.Phi.dot(C)
-        Arcl = self.Ar - PsiHTB.getDenseArray()@K@CHTPhi.getDenseArray()
-        PsiHTB.destroy()
-        CHTPhi.destroy()
-        return Arcl
-
-    def evaluate_cost(self, params, IOMats):
-        p, K, s = params
-        B = SLEPc.BV().create(comm=self.comm)
-        B.setSizes(self.Phi.getSizes()[0], K.shape[0])
-        B.setType('mat')
-        C = SLEPc.BV().create(comm=self.comm)
-        C.setSizes(self.Phi.getSizes()[0], K.shape[-1])
-        C.setType('mat')
-        B = IOMats.compute_B(p, B)
-        C = IOMats.compute_C(s, C) 
-        Arcl = self.compute_closed_loop_tensor(B, K, C)
-        D, _ = sp.linalg.eig(Arcl)
-        J = np.sum([self.evaluate_exponential(val) for val in D])
-        B.destroy()
-        C.destroy()
-        return J.real
-
-    def evaluate_gradient(self, params, IOMats):
-        p, K, s = params
-        B = SLEPc.BV().create(comm=self.comm)
-        B.setSizes(self.Phi.getSizes()[0], K.shape[0])
-        B.setType('mat')
-        grad_B = B.copy()
-        Bp1 = B.copy()
-        Bp0 = B.copy()
-        C = SLEPc.BV().create(comm=self.comm)
-        C.setSizes(self.Phi.getSizes()[0], K.shape[-1])
-        C.setType('mat')
-        grad_C = C.copy()
-        Cp1 = C.copy()
-        Cp0 = C.copy()
-        B = IOMats.compute_B(p, B)
-        C = IOMats.compute_C(s, C) 
-        grad_K = np.zeros(K.shape, dtype=np.complex128)
-        grad_p = np.zeros_like(p)
-        grad_s = np.zeros_like(s)
-        Arcl = self.compute_closed_loop_tensor(B, K, C)
-        D, V = sp.linalg.eig(Arcl)
-        W = sp.linalg.inv(V).conj().T
-        MD = np.diag([self.evaluate_grad_exponential(v) for v in D])
-        M = W@MD@V.conj().T
-        PhiHTC = C.dot(self.Phi)
-        BHTPsi = self.Psi.dot(B)
-        # Grad with respect to p
-        Mat = M@PhiHTC.getDenseArray()@K.conj().T
-        Matm = PETSc.Mat().createDense(Mat.shape, None, Mat, MPI.COMM_SELF)
-        grad_B.mult(1.0, 0.0, self.Psi, Matm)
-        grad_p = -IOMats.compute_dBdp(p, grad_B, Bp1, Bp0, IOMats.compute_dB)
-        Matm.destroy()
-        # Grad with respect to s
-        Mat = M.conj().T@BHTPsi.getDenseArray().conj().T@K
-        Matm = PETSc.Mat().createDense(Mat.shape, None, Mat, MPI.COMM_SELF)
-        grad_C.mult(1.0, 0.0, self.Phi, Matm)
-        grad_s = -IOMats.compute_dBdp(s, grad_C, Cp1, Cp0, IOMats.compute_dC)
-        Matm.destroy()
-        # Grad with respect to K
-        grad_K = -BHTPsi.getDenseArray()@M@PhiHTC.getDenseArray()
-        objs = [B, C, Bp0, Bp1, Cp0, Cp1, grad_B, grad_C, BHTPsi, PhiHTC]
-        for obj in objs: obj.destroy()
-        return grad_p, grad_K.real, grad_s
-
 
 def create_objective_and_gradient_new(manifold, IOMats, H2Comp=None, \
                                       StabComp=None):
@@ -645,20 +445,19 @@ def create_objective_and_gradient_new(manifold, IOMats, H2Comp=None, \
     
     @pymanopt.function.numpy(manifold)
     def euclidean_gradient(*params):
+        grad_pH2, grad_KH2, grad_sH2 = 0.0, 0.0, 0.0
+        grad_pStb, grad_KStb, grad_sStb = 0.0, 0.0, 0.0
         if H2Comp != None:
             grad_pH2, grad_KH2, grad_sH2 = \
                 H2Comp.evaluate_gradient(params, IOMats)
-        else:
-            grad_pH2, grad_KH2, grad_sH2 = 0.0, 0.0, 0.0
         if StabComp != None:
             grad_pStb, grad_KStb, grad_sStb = \
                 StabComp.evaluate_gradient(params, IOMats)
-        else:
-            grad_pStb, grad_KStb, grad_sStb = 0.0, 0.0, 0.0
         grad_p = grad_pH2 + grad_pStb
         grad_K = grad_KH2 + grad_KStb
         grad_s = grad_sH2 + grad_sStb
         return grad_p, grad_K, grad_s
+    
     return cost, euclidean_gradient, euclidean_hessian
         
 def test_euclidean_gradient(comm, cost, grad, params, eps):
@@ -1354,3 +1153,212 @@ def generate_initial_gains(params, IOMats, H2Comp, K):
 #         return grad_p, grad_K.real, grad_s
     
 #     return cost, euclidean_gradient, euclidean_hessian
+
+
+
+# -------------------------------------------------
+# ------- Other old stuff that does work ----------
+# -------------------------------------------------
+
+# class FOMStabilityComponent:
+
+#     def __init__(self, comm, fnames_jacobian, jacobian_sizes, alpha, beta, \
+#                  krylov_dim, n_evals, shifts):
+#         self.comm = comm
+#         self.alpha = alpha
+#         self.beta = beta
+#         self.krylov_dim = krylov_dim
+#         self.n_evals = n_evals
+#         A = read_coo_matrix(self.comm, fnames_jacobian, jacobian_sizes)
+#         self.As = []
+#         self.process_evals = []
+#         for i in range (len(shifts)):
+#             s = shifts[i]
+#             Id = PETSc.Mat().createConstantDiagonal(jacobian_sizes,1.0,comm)
+#             Id.scale(1j*s)
+#             Id.convert(PETSc.Mat.Type.MPIAIJ)
+#             Id.axpy(-1.0, A)
+#             ksp = create_mumps_solver(self.comm, Id)
+#             self.As.append(MatrixLinearOperator(self.comm, Id, ksp))
+#             self.process_evals.append(lambda x: 1j*s - 1./x)
+
+#     def evaluate_exponential(self, val):
+#         try:    value = np.exp(self.alpha*(val.real + self.beta)).real
+#         except: value = 1e12
+#         value = 0.0 if value <= 1e-13 else value
+#         return value
+    
+#     def evaluate_grad_exponential(self, val):
+#         return self.alpha*self.evaluate_exponential(val)
+
+#     def evaluate_cost(self, params, IOMats):
+#         p, K, s = params
+#         B = SLEPc.BV().create(comm=self.comm)
+#         B.setSizes(self.As[0]._dimensions[0], K.shape[0])
+#         B.setType('mat')
+#         C = SLEPc.BV().create(comm=self.comm)
+#         C.setSizes(self.As[0]._dimensions[0], K.shape[-1])
+#         C.setType('mat')
+#         B = IOMats.compute_B(p, B)
+#         C = IOMats.compute_C(s, C) 
+#         J = 0
+#         for i in range (len(self.As)):
+#             linop = LowRankUpdatedLinearOperator(self.comm, self.As[i], B, K, C)
+#             D, E = eig(linop, linop.solve, self.krylov_dim, self.n_evals, \
+#                        self.process_evals[i])
+#             J += np.sum([self.evaluate_exponential(val) for val in np.diag(D)])
+#             E.destroy()
+#             linop.destroy_woodbury_operator()
+#             linop.destroy_intermediate_vectors()
+#         B.destroy()
+#         C.destroy()
+#         return J.real
+    
+#     def evaluate_gradient(self, params, IOMats):
+#         p, K, s = params
+#         B = SLEPc.BV().create(comm=self.comm)
+#         B.setSizes(self.As[0]._dimensions[0], K.shape[0])
+#         B.setType('mat')
+#         Bp1 = B.copy()
+#         Bp0 = B.copy()
+#         C = SLEPc.BV().create(comm=self.comm)
+#         C.setSizes(self.As[0]._dimensions[0], K.shape[-1])
+#         C.setType('mat')
+#         Cp1 = C.copy()
+#         Cp0 = C.copy()
+#         B = IOMats.compute_B(p, B)
+#         C = IOMats.compute_C(s, C) 
+#         grad_K = np.zeros(K.shape, dtype=np.complex128)
+#         grad_p = np.zeros_like(p)
+#         grad_s = np.zeros_like(s)
+#         # Allocate memory for efficiency (grad_p)
+#         grad_B = SLEPc.BV().create(comm=self.comm)
+#         grad_B.setSizes(self.As[0]._dimensions[0], B.getSizes()[-1])
+#         grad_B.setType('mat')
+#         grad_B.scale(0.0)
+#         # Allocate memory for efficiency (grad_s)
+#         grad_C = SLEPc.BV().create(comm=self.comm)
+#         grad_C.setSizes(self.As[0]._dimensions[-1], C.getSizes()[-1])
+#         grad_C.setType('mat')
+#         grad_C.scale(0.0)
+#         for i in range (len(self.As)):
+#             linop = LowRankUpdatedLinearOperator(self.comm, self.As[i], B, K, C)
+#             V, D, W = right_and_left_eig(linop, linop.solve, self.krylov_dim, \
+#                                          self.n_evals, self.process_evals[i])
+#             linop.destroy_woodbury_operator()
+#             linop.destroy_intermediate_vectors()
+#             D = np.diag(D)
+#             MD = np.diag([self.evaluate_grad_exponential(v) for v in D])
+#             BHTW = W.dot(B)
+#             VHTC = C.dot(V)
+#             # Grad with respect to K
+#             grad_K -= BHTW.getDenseArray()@MD@VHTC.getDenseArray()
+#             # Grad with respect to p
+#             Ma = MD@VHTC.getDenseArray()@K.conj().T
+#             M = PETSc.Mat().createDense(Ma.shape, None, Ma, MPI.COMM_SELF)
+#             grad_B.mult(1.0, 0.0, W, M)
+#             grad_p -= IOMats.compute_dBdp(p, grad_B, Bp1, Bp0, \
+#                                           IOMats.compute_dB)
+#             M.destroy()
+#             # Grad with respect to s
+#             Ma = MD@BHTW.getDenseArray().conj().T@K
+#             M = PETSc.Mat().createDense(Ma.shape, None, Ma, MPI.COMM_SELF)
+#             grad_C.mult(1.0, 0.0, V, M)
+#             grad_s -= IOMats.compute_dBdp(s, grad_C, Cp1, Cp0, \
+#                                           IOMats.compute_dC)
+#             M.destroy()
+#             objects = [V, W, BHTW, VHTC]
+#             for obj in objects: obj.destroy()
+
+#         objects = [B, C, Bp0, Bp1, Cp0, Cp1, grad_B, grad_C]
+#         for obj in objects: obj.destroy()
+#         return grad_p, grad_K.real, grad_s
+
+# class ROMStabilityComponent:
+
+#     def __init__(self, comm, Ar, Phi, Psi, alpha, beta):
+#         self.comm = comm
+#         self.Ar = Ar
+#         self.Phi = Phi
+#         self.Psi = Psi
+#         self.alpha = alpha
+#         self.beta = beta
+
+#     def evaluate_exponential(self, val):
+#         try:    value = np.exp(self.alpha*(val.real + self.beta)).real
+#         except: value = 1e12
+#         value = 0.0 if value <= 1e-13 else value
+#         return value
+    
+#     def evaluate_grad_exponential(self, val):
+#         return self.alpha*self.evaluate_exponential(val)
+
+#     def compute_closed_loop_tensor(self, B, K, C):
+#         PsiHTB = B.dot(self.Psi)
+#         CHTPhi = self.Phi.dot(C)
+#         Arcl = self.Ar - PsiHTB.getDenseArray()@K@CHTPhi.getDenseArray()
+#         PsiHTB.destroy()
+#         CHTPhi.destroy()
+#         return Arcl
+
+#     def evaluate_cost(self, params, IOMats):
+#         p, K, s = params
+#         B = SLEPc.BV().create(comm=self.comm)
+#         B.setSizes(self.Phi.getSizes()[0], K.shape[0])
+#         B.setType('mat')
+#         C = SLEPc.BV().create(comm=self.comm)
+#         C.setSizes(self.Phi.getSizes()[0], K.shape[-1])
+#         C.setType('mat')
+#         B = IOMats.compute_B(p, B)
+#         C = IOMats.compute_C(s, C) 
+#         Arcl = self.compute_closed_loop_tensor(B, K, C)
+#         D, _ = sp.linalg.eig(Arcl)
+#         J = np.sum([self.evaluate_exponential(val) for val in D])
+#         B.destroy()
+#         C.destroy()
+#         return J.real
+
+#     def evaluate_gradient(self, params, IOMats):
+#         p, K, s = params
+#         B = SLEPc.BV().create(comm=self.comm)
+#         B.setSizes(self.Phi.getSizes()[0], K.shape[0])
+#         B.setType('mat')
+#         grad_B = B.copy()
+#         Bp1 = B.copy()
+#         Bp0 = B.copy()
+#         C = SLEPc.BV().create(comm=self.comm)
+#         C.setSizes(self.Phi.getSizes()[0], K.shape[-1])
+#         C.setType('mat')
+#         grad_C = C.copy()
+#         Cp1 = C.copy()
+#         Cp0 = C.copy()
+#         B = IOMats.compute_B(p, B)
+#         C = IOMats.compute_C(s, C) 
+#         grad_K = np.zeros(K.shape, dtype=np.complex128)
+#         grad_p = np.zeros_like(p)
+#         grad_s = np.zeros_like(s)
+#         Arcl = self.compute_closed_loop_tensor(B, K, C)
+#         D, V = sp.linalg.eig(Arcl)
+#         W = sp.linalg.inv(V).conj().T
+#         MD = np.diag([self.evaluate_grad_exponential(v) for v in D])
+#         M = W@MD@V.conj().T
+#         PhiHTC = C.dot(self.Phi)
+#         BHTPsi = self.Psi.dot(B)
+#         # Grad with respect to p
+#         Mat = M@PhiHTC.getDenseArray()@K.conj().T
+#         Matm = PETSc.Mat().createDense(Mat.shape, None, Mat, MPI.COMM_SELF)
+#         grad_B.mult(1.0, 0.0, self.Psi, Matm)
+#         grad_p = -IOMats.compute_dBdp(p, grad_B, Bp1, Bp0, IOMats.compute_dB)
+#         Matm.destroy()
+#         # Grad with respect to s
+#         Mat = M.conj().T@BHTPsi.getDenseArray().conj().T@K
+#         Matm = PETSc.Mat().createDense(Mat.shape, None, Mat, MPI.COMM_SELF)
+#         grad_C.mult(1.0, 0.0, self.Phi, Matm)
+#         grad_s = -IOMats.compute_dBdp(s, grad_C, Cp1, Cp0, IOMats.compute_dC)
+#         Matm.destroy()
+#         # Grad with respect to K
+#         grad_K = -BHTPsi.getDenseArray()@M@PhiHTC.getDenseArray()
+#         objs = [B, C, Bp0, Bp1, Cp0, Cp1, grad_B, grad_C, BHTPsi, PhiHTC]
+#         for obj in objs: obj.destroy()
+#         return grad_p, grad_K.real, grad_s
+
