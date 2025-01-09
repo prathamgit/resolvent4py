@@ -1,6 +1,7 @@
 import time as tlib
 import psutil
 
+import matplotlib.pyplot as plt
 from .. import np
 from .. import sp
 from .. import MPI
@@ -304,15 +305,6 @@ class BodeFormula:
                 LowRankLinearOperator(self.comm, self.U[-1], \
                                       self.S[-1], self.V[-1]))
 
-    def evaluate_exponential(self, val):
-        try:    value = np.exp(self.alpha*(val.real + self.beta)).real
-        except: value = 1e12
-        value = 0.0 if value <= 1e-13 else value
-        return value
-    
-    def evaluate_grad_exponential(self, val):
-        return self.alpha*self.evaluate_exponential(val)
-
     def evaluate_cost(self, params, IOMats):
         p, K, s = params
         Id = np.eye(K.shape[-1])
@@ -326,6 +318,7 @@ class BodeFormula:
         C = IOMats.compute_C(s, C)
         RB = B.duplicate()
         integral = 0
+        kernel = np.zeros(len(self.freqs)-1)
         f = 1./np.pi if np.min(self.freqs) > 0.0 else 1./(2*np.pi)
         for i in range (len(self.freqs) - 1):
             RB = self.R_ops[i].apply_mat(B, RB)
@@ -334,6 +327,7 @@ class BodeFormula:
             _, sv, _ = sp.linalg.svd(S)
             integral += f*self.weights[i]*np.sum(np.log(sv))
             CRB.destroy()
+            kernel[i] = np.sum(np.log(sv))
         RB = self.R_ops[-1].apply_mat(B, RB)
         CRB = RB.dot(C)
         L = CRB.getDenseArray()@K
@@ -341,7 +335,13 @@ class BodeFormula:
                 0.5*np.trace(1j*self.freqs[-1]*L).real - integral
         objs = [RB, CRB, B, C]
         for obj in objs: obj.destroy()
-        return sumRe #np.exp(self.alpha*(sumRe + self.eps))
+        # if self.comm.Get_rank() == 0:
+        #     plt.figure()
+        #     plt.plot(self.freqs[:-1], kernel)
+        #     plt.axhline(y=0.0, color='r', alpha=0.5)
+        #     plt.savefig("kernel.png")
+        return 1e13 if self.alpha*sumRe**2 > np.log(1e13) else \
+            np.exp(self.alpha*sumRe**2) - 1
 
     def evaluate_gradient(self, params, IOMats):
         p, K, s = params
@@ -369,6 +369,7 @@ class BodeFormula:
         grad_s = np.zeros_like(s)
 
         integral = 0.0
+        
         f = 1./np.pi if np.min(self.freqs) > 0.0 else 1./(2*np.pi)
         for i in range (len(self.freqs) - 1):
             RHTC = self.R_ops[i].apply_hermitian_transpose_mat(C, RHTC)
@@ -409,12 +410,115 @@ class BodeFormula:
         grad_C_i.mult(0.5*1j*self.freqs[-1], 0.0, RB, Mat_)
         grad_s -= IOMats.compute_dBdp(s, grad_C_i, Cp1, Cp0, IOMats.compute_dC)
 
-        # grad_K *= 2*sumRe
-        # grad_s *= 2*sumRe
-        # grad_p *= 2*sumRe
+        if self.alpha*sumRe**2 < np.log(1e13):
+            grad_K *= 2*self.alpha*sumRe*np.exp(self.alpha*sumRe**2)
+            grad_s *= 2*self.alpha*sumRe*np.exp(self.alpha*sumRe**2)
+            grad_p *= 2*self.alpha*sumRe*np.exp(self.alpha*sumRe**2)
+        else:
+            grad_K *= 1e13
+            grad_s *= 1e13
+            grad_p *= 1e13
 
         objs = [B, C, Bp0, Bp1, Cp0, Cp1, grad_B_i, \
                 grad_C_i, RB, RHTC, CRB, Mat_]
+        for obj in objs: obj.destroy()
+        return grad_p.real, grad_K.real, grad_s.real
+
+class SensitivityCost:
+
+    def __init__(self, comm, path_factors, factor_sizes, frequencies, weights):
+        self.comm = comm
+        self.freqs = frequencies
+        self.weights = weights
+        self.load_factors(path_factors, factor_sizes)
+
+    def load_factors(self, path_factors, factor_sizes):
+        self.U, self.S, self.V, self.R_ops = [], [], [], []
+        for i in range (len(self.freqs)):
+            fname_U = path_factors + 'omega_%1.5f/U.dat'%self.freqs[i]
+            fname_S = path_factors + 'omega_%1.5f/S.npy'%self.freqs[i]
+            fname_V = path_factors + 'omega_%1.5f/V.dat'%self.freqs[i]
+            self.U.append(read_bv(self.comm, fname_U, factor_sizes))
+            self.V.append(read_bv(self.comm, fname_V, factor_sizes))
+            self.S.append(np.load(fname_S))
+            self.R_ops.append(\
+                LowRankLinearOperator(self.comm, self.U[-1], \
+                                      self.S[-1], self.V[-1]))
+    
+    def evaluate_cost(self, params, IOMats):
+        p, K, s = params
+        Id = np.eye(K.shape[-1])
+        B = SLEPc.BV().create(comm=self.comm)
+        B.setSizes(self.R_ops[0]._dimensions[0], K.shape[0])
+        B.setType('mat')
+        C = SLEPc.BV().create(comm=self.comm)
+        C.setSizes(self.R_ops[0]._dimensions[0], K.shape[-1])
+        C.setType('mat')
+        B = IOMats.compute_B(p, B)
+        C = IOMats.compute_C(s, C)
+        RB = B.duplicate()
+        J = 0
+        for i in range (len(self.freqs)):
+            RB = self.R_ops[i].apply_mat(B, RB)
+            CRB = RB.dot(C)
+            S = sp.linalg.inv(Id + CRB.getDenseArray()@K)
+            _, sv, _ = sp.linalg.svd(S)
+            J += self.weights[i]*sv[0]
+            CRB.destroy()
+        objs = [RB, CRB, B, C]
+        for obj in objs: obj.destroy()
+        return J
+
+    def evaluate_gradient(self, params, IOMats):
+        p, K, s = params
+        Id = np.eye(K.shape[-1])
+        B = SLEPc.BV().create(comm=self.comm)
+        B.setSizes(self.R_ops[0]._dimensions[0], K.shape[0])
+        B.setType('mat')
+        B = IOMats.compute_B(p, B)
+        grad_B_i = B.duplicate()
+        Bp1 = B.duplicate()
+        Bp0 = B.duplicate()
+        RB = B.duplicate()
+
+        C = SLEPc.BV().create(comm=self.comm)
+        C.setSizes(self.R_ops[0]._dimensions[0], K.shape[-1])
+        C.setType('mat')
+        C = IOMats.compute_C(s, C)
+        RHTC = C.duplicate()
+        grad_C_i = C.duplicate()
+        Cp1 = C.duplicate()
+        Cp0 = C.duplicate()
+
+        grad_K = np.zeros(K.shape, dtype=np.complex128)
+        grad_p = np.zeros_like(p)
+        grad_s = np.zeros_like(s)
+
+        for i in range (len(self.freqs)):
+            RHTC = self.R_ops[i].apply_hermitian_transpose_mat(C, RHTC)
+            RB = self.R_ops[i].apply_mat(B, RB)
+            CRB = RB.dot(C)
+            CRBa = CRB.getDenseArray()
+            S = sp.linalg.inv(Id + CRBa@K)
+            _, sv, vh = sp.linalg.svd(S)
+            v = vh.conj().T
+            V = np.outer(v[:,0], v[:,0].conj())
+            
+            grad_K -= self.weights[i]*sv[0]*CRBa.conj().T@V@S.conj().T
+            Mat = V@S.conj().T@K.conj().T
+            Mat_ = PETSc.Mat().createDense(Mat.shape, None, Mat, MPI.COMM_SELF)
+            grad_B_i.mult(self.weights[i]*sv[0], 0.0, RHTC, Mat_)
+            grad_p -= IOMats.compute_dBdp(p, grad_B_i, Bp1, \
+                                          Bp0, IOMats.compute_dB)
+            Mat_.hermitianTranspose(None)
+            grad_C_i.mult(self.weights[i]*sv[0], 0.0, RB, Mat_)
+            grad_s -= IOMats.compute_dBdp(s, grad_C_i, Cp1, Cp0, \
+                                          IOMats.compute_dC)
+            
+            Mat_.destroy()
+            CRB.destroy()
+
+        objs = [B, C, Bp0, Bp1, Cp0, Cp1, grad_B_i, grad_C_i, RB, RHTC, CRB]
         for obj in objs: obj.destroy()
         return grad_p.real, grad_K.real, grad_s.real
 
