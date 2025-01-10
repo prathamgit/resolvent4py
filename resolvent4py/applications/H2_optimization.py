@@ -55,11 +55,19 @@ def _compute_trace_product(L1, L2, L2_hermitian_transpose=False):
     return np.trace(M)
 
 def _compute_trace_product_new(L1, L2, DDHT, FFHT):
-    F1 = DDHT.apply_mat(L1.U)
-    F2 = L2.apply_hermitian_transpose_mat(F1)
-    F3 = FFHT.apply_mat(F2)
-    F4 = F3.dot(L1.V)
-    M = L1.Sigma@F4.getDenseArray()
+    Ln = getattr(FFHT, FFHT.names[-1])
+    if Ln._name == 'LowRankLinearOperator':
+        F1 = L1.apply_mat(Ln.U)
+        F2 = L2.apply_mat(Ln.U)
+        F3 = DDHT.apply_mat(F1)
+        F4 = F3.dot(F2)
+        M = F4.getDenseArray()
+    else:
+        F1 = DDHT.apply_mat(L1.U)
+        F2 = L2.apply_hermitian_transpose_mat(F1)
+        F3 = FFHT.apply_mat(F2)
+        F4 = F3.dot(L1.V)
+        M = L1.Sigma@F4.getDenseArray()
     objs = [F1, F2, F3, F4]
     for obj in objs: obj.destroy()
     return np.trace(M)
@@ -142,16 +150,41 @@ class H2Component:
         B = IOMats.compute_B(p, B)
         C = IOMats.compute_C(s, C)
         RB = B.duplicate()
-        RHTC = C.duplicate()    
+        RHTC = C.duplicate()
         J = 0
-        for i in range (len(self.freqs)):
-            w = self.weights[i]
-            R = self.R_ops[i]
-            M, _ = _compute_woodbury_update(self.comm, R, B, K, C, RB, RHTC)
-            J += w*_compute_trace_product_new(R, R, IOMats.DDHT, IOMats.FFHT)
-            J -= 2.0*w*_compute_trace_product_new(R, M, IOMats.DDHT, \
+
+        Ln = getattr(IOMats.FFHT, IOMats.FFHT.names[-1])
+        Qn = getattr(IOMats.DDHT, IOMats.DDHT.names[-1])
+        if Ln._name != 'LowRankLinearOperator':
+            for i in range (len(self.freqs)):
+                w = self.weights[i]
+                R = self.R_ops[i]
+                M, _ = _compute_woodbury_update(self.comm, R, B, K, C, \
+                                                RB, RHTC)
+                J += w*_compute_trace_product_new(R, R, IOMats.DDHT, \
                                                   IOMats.FFHT)
-            J += w*_compute_trace_product_new(M, M, IOMats.DDHT, IOMats.FFHT)
+                J -= 2.0*w*_compute_trace_product_new(R, M, IOMats.DDHT, \
+                                                    IOMats.FFHT)
+                J += w*_compute_trace_product_new(M, M, IOMats.DDHT, \
+                                                  IOMats.FFHT)
+        else:
+            F1 = Ln.U.duplicate()
+            F2 = Ln.U.duplicate()
+            F3 = Qn.create_left_bv(Ln.U.getSizes()[-1])
+            for i in range (len(self.freqs)):
+                w = self.weights[i]
+                R = self.R_ops[i]
+                M, _ = _compute_woodbury_update(self.comm, R, B, K, C, \
+                                                RB, RHTC)
+                F1 = R.apply_mat(Ln.U, F1)
+                F2 = M.apply_mat(Ln.U, F2)
+                bv_add(-1.0, F1, F2)
+                F3 = Qn.apply_hermitian_transpose_mat(F1, F3)
+                Mat = F3.dot(F3)
+                J += w*np.trace(Mat.getDenseArray())
+            objs = [F1, F2, F3]
+            for obj in objs: obj.destroy()
+
         objs = [B, C, RB, RHTC]
         for obj in objs: obj.destroy()
         return J.real

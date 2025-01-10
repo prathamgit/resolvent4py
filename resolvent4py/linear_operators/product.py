@@ -148,12 +148,13 @@ class ProductLinearOperator(LinearOperator):
 
     
     def apply(self, x, y=None):
+        y = self.create_left_vector() if y == None else y
         for j in range (self.nlops):
             if j == 0:
                 yj = self.intermediate_vecs[j]
                 yj = self.actions[j](x, yj)
                 self.intermediate_vecs[j] = yj
-            elif j < self.nlops - 1:
+            elif j > 0 and j < self.nlops - 1:
                 yj = self.intermediate_vecs[j]
                 yjm1 = self.intermediate_vecs[j-1]
                 yj = self.actions[j](yjm1, yj)
@@ -164,12 +165,13 @@ class ProductLinearOperator(LinearOperator):
         return y
 
     def apply_hermitian_transpose(self, x, y=None):
+        y = self.create_right_vector() if y == None else y
         for j in range (self.nlops):
             if j == 0:
                 yj = self.intermediate_vecs_hermitian_transpose[j]
                 yj = self.actions_hermitian_transpose[j](x, yj)
                 self.intermediate_vecs_hermitian_transpose[j] = yj
-            elif j < self.nlops - 1:
+            elif j > 0 and j < self.nlops - 1:
                 yj = self.intermediate_vecs_hermitian_transpose[j]
                 yjm1 = self.intermediate_vecs_hermitian_transpose[j-1]
                 yj = self.actions_hermitian_transpose[j](yjm1, yj)
@@ -180,6 +182,7 @@ class ProductLinearOperator(LinearOperator):
         return y
     
     def apply_mat(self, X, Y=None, Z=None):
+        Y = self.create_left_bv(X.getSizes()[-1]) if Y == None else Y
         destroy = False
         if Z == None:
             Z = self.create_intermediate_bvs(X.getSizes()[-1])
@@ -187,7 +190,7 @@ class ProductLinearOperator(LinearOperator):
         for j in range (self.nlops):
             if j == 0:
                 Z[j] = self.actions_mat[j](X, Z[j])
-            elif j < self.nlops - 1:
+            elif j > 0 and j < self.nlops - 1:
                 Z[j] = self.actions_mat[j](Z[j-1], Z[j])
             else:
                 Y = self.actions_mat[j](Z[j-1], Y)
@@ -196,6 +199,7 @@ class ProductLinearOperator(LinearOperator):
         return Y
     
     def apply_hermitian_transpose_mat(self, X, Y=None, Z=None):
+        Y = self.create_right_bv(X.getSizes()[-1]) if Y == None else Y
         destroy = False
         if Z == None:
             Z = self.create_intermediate_bvs_hermitian_transpose(\
@@ -204,7 +208,7 @@ class ProductLinearOperator(LinearOperator):
         for j in range (self.nlops):
             if j == 0:
                 Z[j] = self.actions_hermitian_transpose_mat[j](X, Z[j])
-            elif j < self.nlops - 1:
+            elif j > 0 and j < self.nlops - 1:
                 Z[j] = self.actions_hermitian_transpose_mat[j](Z[j-1], Z[j])
             else:
                 Y = self.actions_hermitian_transpose_mat[j](Z[j-1], Y)
