@@ -1,3 +1,6 @@
+from .. import MPI
+from ..miscellaneous import petscprint
+
 class myAdaptiveLineSearcher:
     """Adaptive line-search algorithm."""
 
@@ -41,15 +44,17 @@ class myAdaptiveLineSearcher:
             cost_evaluations += 1
 
         # ----- Added by Alby --------
-        if alpha <= 1e-12: 
-            print("Attention: allowing for cost function to increase by 1 percent")
+        if alpha <= 1e-14:
+            string =  "Attention: allowing for cost function "\
+                      "to increase by 1 percent"
+            petscprint(MPI.COMM_WORLD, string)
             alpha = float(self._initial_step_size / norm_d)
             self._oldalpha = alpha
 
             newx = manifold.retraction(x, alpha * d)
             newf = objective(newx)
             cost_evaluations = 1
-
+            
             while (
                 newf > 1.01*f0 and cost_evaluations <= self._max_iterations
             ):

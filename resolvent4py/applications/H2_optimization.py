@@ -23,6 +23,7 @@ from ..linalg import bv_add
 from ..linalg import bv_conj
 from ..io_functions import write_to_file
 
+
 def _compute_bv_contraction(comm, L1, L2):
     r"""
         Compute :math:`\sum_{i,j} M_{i,j}P_{i,j}`, where :math:`M = L_1` 
@@ -129,6 +130,7 @@ class H2Component:
     def load_factors(self, path_factors, factor_sizes):
         self.U, self.S, self.V, self.R_ops = [], [], [], []
         for i in range (len(self.freqs)):
+            # t0 = tlib.time()
             fname_U = path_factors + 'omega_%1.5f/U.dat'%self.freqs[i]
             fname_S = path_factors + 'omega_%1.5f/S.npy'%self.freqs[i]
             fname_V = path_factors + 'omega_%1.5f/V.dat'%self.freqs[i]
@@ -138,6 +140,8 @@ class H2Component:
             self.R_ops.append(\
                 LowRankLinearOperator(self.comm, self.U[-1], \
                                       self.S[-1], self.V[-1]))
+            # dt = tlib.time() - t0
+            # petscprint(self.comm, "Loaded freq = %d/%d (%1.3e)"%(i, len(self.freqs), dt))
             
     def evaluate_cost(self, params, IOMats):
         p, K, s = params
@@ -310,7 +314,7 @@ class H2Component:
                    Q_grad_B_i, grad_C_i, Q_grad_C_i, Bp1, Bp0, Cp1, Cp0, B, C, \
                    RB, RHTC, F5K, F6K, F5B, F6B, F5C, F6C]
         for obj in objects: obj.destroy()
-        return grad_p, grad_K.real, grad_s
+        return grad_p.real, grad_K.real, grad_s.real
 
 class BodeFormula:
 
@@ -328,6 +332,7 @@ class BodeFormula:
     def load_factors(self, path_factors, factor_sizes):
         self.U, self.S, self.V, self.R_ops = [], [], [], []
         for i in range (len(self.freqs)):
+            # t0 = tlib.time()
             fname_U = path_factors + 'omega_%1.5f/U.dat'%self.freqs[i]
             fname_S = path_factors + 'omega_%1.5f/S.npy'%self.freqs[i]
             fname_V = path_factors + 'omega_%1.5f/V.dat'%self.freqs[i]
@@ -337,6 +342,8 @@ class BodeFormula:
             self.R_ops.append(\
                 LowRankLinearOperator(self.comm, self.U[-1], \
                                       self.S[-1], self.V[-1]))
+            # dt = tlib.time() - t0
+            # petscprint(self.comm, "Loaded freq = %d/%d (%1.3e)"%(i, len(self.freqs), dt))
 
     def evaluate_cost(self, params, IOMats):
         p, K, s = params
@@ -373,8 +380,9 @@ class BodeFormula:
         #     plt.plot(self.freqs[:-1], kernel)
         #     plt.axhline(y=0.0, color='r', alpha=0.5)
         #     plt.savefig("kernel.png")
-        return 1e13 if self.alpha*sumRe**2 > np.log(1e13) else \
-            np.exp(self.alpha*sumRe**2) - 1
+        exp_arg = self.alpha*np.abs(sumRe)
+        value = sumRe**2*np.exp(exp_arg) if exp_arg < np.log(1e13) else 1e13
+        return value
 
     def evaluate_gradient(self, params, IOMats):
         p, K, s = params
@@ -426,7 +434,7 @@ class BodeFormula:
             
             Mat_.destroy()
             CRB.destroy()
-
+        
         RHTC = self.R_ops[-1].apply_hermitian_transpose_mat(C, RHTC)
         RB = self.R_ops[-1].apply_mat(B, RB)
         CRB = RB.dot(C)
@@ -443,14 +451,28 @@ class BodeFormula:
         grad_C_i.mult(0.5*1j*self.freqs[-1], 0.0, RB, Mat_)
         grad_s -= IOMats.compute_dBdp(s, grad_C_i, Cp1, Cp0, IOMats.compute_dC)
 
-        if self.alpha*sumRe**2 < np.log(1e13):
-            grad_K *= 2*self.alpha*sumRe*np.exp(self.alpha*sumRe**2)
-            grad_s *= 2*self.alpha*sumRe*np.exp(self.alpha*sumRe**2)
-            grad_p *= 2*self.alpha*sumRe*np.exp(self.alpha*sumRe**2)
+        exp_arg = self.alpha*np.abs(sumRe)
+        if exp_arg < np.log(1e13):
+            expval = np.exp(exp_arg)
+            value = (2*sumRe + self.alpha*sumRe**2)*expval if sumRe > 0 else \
+                (2*sumRe - self.alpha*sumRe**2)*expval
         else:
-            grad_K *= 1e13
-            grad_s *= 1e13
-            grad_p *= 1e13
+            value = 1e13
+        
+        grad_K *= value
+        grad_s *= value
+        grad_p *= value
+
+        # scaling_exp = self.alpha*(sumRe**2 - self.eps)
+        # if scaling_exp < np.log(1e13):
+        #     scaling_value = 2*self.alpha*sumRe*np.exp(scaling_exp)
+        #     grad_K *= scaling_value
+        #     grad_s *= scaling_value
+        #     grad_p *= scaling_value
+        # else:
+        #     grad_K *= 1e13
+        #     grad_s *= 1e13
+        #     grad_p *= 1e13
 
         objs = [B, C, Bp0, Bp1, Cp0, Cp1, grad_B_i, \
                 grad_C_i, RB, RHTC, CRB, Mat_]
@@ -555,8 +577,8 @@ class SensitivityCost:
         for obj in objs: obj.destroy()
         return grad_p.real, grad_K.real, grad_s.real
 
-def create_objective_and_gradient_new(manifold, IOMats, H2Comp=None, \
-                                      StabComp=None):
+def create_objective_and_gradient_new(manifold, IOMats, WhichGrads, \
+                                      H2Comp=None, StabComp=None):
     r"""
         Create functions to evaluate the cost function and the gradient
 
@@ -571,7 +593,7 @@ def create_objective_and_gradient_new(manifold, IOMats, H2Comp=None, \
         raise ValueError (
             f"Provide at least one of H2Comp or StabComp should be provided"
         )
-    
+
     euclidean_hessian = None
 
     @pymanopt.function.numpy(manifold)
@@ -593,7 +615,7 @@ def create_objective_and_gradient_new(manifold, IOMats, H2Comp=None, \
         grad_p = grad_pH2 + grad_pStb
         grad_K = grad_KH2 + grad_KStb
         grad_s = grad_sH2 + grad_sStb
-        return grad_p, grad_K, grad_s
+        return WhichGrads[0]*grad_p, WhichGrads[1]*grad_K, WhichGrads[2]*grad_s
     
     return cost, euclidean_gradient, euclidean_hessian
         

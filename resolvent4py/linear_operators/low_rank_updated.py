@@ -189,7 +189,7 @@ class LowRankUpdatedLinearOperator(LinearOperator):
         return Y
     
     def destroy_woodbury_operator(self):
-        self.W.destroy()
+        self.W.destroy() if self.W != None else None
 
     def destroy_low_rank_update(self):
         self.L.destroy()

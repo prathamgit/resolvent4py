@@ -78,3 +78,10 @@ def write_to_file(comm, filename, object):
     viewer = PETSc.Viewer().createBinary(filename, "w", comm=comm)
     object.view(viewer)
     viewer.destroy()
+
+def write_bv_to_file(comm, filename, object):
+    mat = object.getMat()
+    viewer = PETSc.Viewer().createBinary(filename, "w", comm=comm)
+    mat.view(viewer)
+    viewer.destroy()
+    object.restoreMat(mat)

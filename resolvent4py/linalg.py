@@ -4,6 +4,7 @@ from . import PETSc
 from . import MPI
 
 from .miscellaneous import get_mpi_type
+from .miscellaneous import petscprint
 
 
 def compute_local_size(Nglob):
@@ -174,7 +175,7 @@ def convert_coo_to_csr(comm, arrays, sizes):
         send_rows.append(rows[idces])
         send_cols.append(cols[idces])
         send_vals.append(vals[idces])
-    
+
     recv_bufs = [np.empty(1, dtype=np.int32) for _ in pool]
     recv_reqs = [comm.Irecv(bf,source=i) for (bf,i) in zip(recv_bufs,pool)]
     send_reqs = [comm.Isend(sz,dest=i) for (i,sz) in enumerate(lengths)]
@@ -213,7 +214,7 @@ def convert_coo_to_csr(comm, arrays, sizes):
     for i in range (sizes[0][0]):
         ni += np.count_nonzero(my_rows == i)
         my_rows_ptr[i+1] = ni
-    
+
     return my_rows_ptr, my_cols, my_vals
 
 
