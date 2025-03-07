@@ -6,6 +6,7 @@ from .. import SLEPc
 
 from ..linalg import enforce_complex_conjugacy
 from ..miscellaneous import create_dense_matrix
+from ..miscellaneous import petscprint
 
 # def randomized_svd(lin_op, lin_op_action, n_rand, n_loops, n_svals):
 #     r"""

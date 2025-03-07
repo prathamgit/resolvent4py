@@ -1,6 +1,5 @@
 from .linear_operator import LinearOperator
 from .. import SLEPc
-from .. import np
 
 class ProductLinearOperator(LinearOperator):
     r"""
@@ -11,8 +10,8 @@ class ProductLinearOperator(LinearOperator):
             L = L_{r}L_{r-1}\ldots L_{2}L_{1}
 
         where :math:`L_i` are themselves linear operators.
-        For example, by setting :code:`linops = (L1, L2)` and 
-        :code:`linops_actions = (L1.apply_hermitian_transpose, L2.solve)` 
+        For example, by setting :code:`linops = (L2, L1)` and 
+        :code:`linops_actions = (L2.solve, L1.apply_hermitian_transpose)` 
         we define a linear operator
 
         .. math:
@@ -21,19 +20,19 @@ class ProductLinearOperator(LinearOperator):
 
 
         :param comm: MPI communicator
-        :param linops: tuple of linear operators. Example:
-            :code:`(L1, L2)`
+        :param linops: tuple of linear operators. (See example above.)
         :param linops_actions: tuple of actions (one of :code:`apply`, 
             :code:`solve`, :code:`apply_hermitian_transpose` or 
             :code:`solve_hermitian_transpose`) to define the overall action
-            of the product operator :math:`L`. Example:
-            :code:`(L1.apply_hermitian_transpose, L2.solve)`
+            of the product operator :math:`L`. (See example above.)
         :param nblocks: [optional] number of blocks (if the linear operator \
             has block structure). This must be an odd number.
         :type nblocks: int
     """
     def __init__(self, comm, linops, linops_actions, nblocks=None):
-
+        
+        linops.reverse()
+        linops_actions.reverse()
         if len(linops) == 1:
             raise ValueError (
                 f"ProductLinearOperator is the product of at least two "
@@ -43,13 +42,14 @@ class ProductLinearOperator(LinearOperator):
             raise ValueError (
                 f"len(linops) must be equal to len(linops_actions)."
             )
-
+        
+        self.linops = linops
         self.actions = linops_actions
         self.actions_hermitian_transpose = []
         self.actions_mat = []
         self.actions_hermitian_transpose_mat = []
         self.names = []
-        for (i, linop) in enumerate(linops):
+        for (i, linop) in enumerate(self.linops):
             name = 'L%03d'%i
             self.names.append(name)
             setattr(self, name, linop)
@@ -84,10 +84,8 @@ class ProductLinearOperator(LinearOperator):
                     f"solve_hermitian_transpose."
                 )
         
-        self.actions_hermitian_transpose = np.flipud(\
-            self.actions_hermitian_transpose)
-        self.actions_hermitian_transpose_mat = np.flipud(\
-            self.actions_hermitian_transpose_mat)
+        self.actions_hermitian_transpose.reverse()
+        self.actions_hermitian_transpose_mat.reverse()
         
         self.nlops = len(self.names)
         self.create_intermediate_vectors()
@@ -109,7 +107,9 @@ class ProductLinearOperator(LinearOperator):
             else:
                 self.intermediate_vecs.append(L.create_right_vector())
         self.intermediate_vecs_hermitian_transpose = []
-        self.names = np.flipud(self.names)
+
+        self.names.reverse()
+        self.actions.reverse()
         for j in range (self.nlops - 1):
             L = getattr(self, self.names[j])
             if self.actions[j] == L.apply or self.actions[j] == L.solve:
@@ -118,7 +118,8 @@ class ProductLinearOperator(LinearOperator):
             else:
                 self.intermediate_vecs_hermitian_transpose.append(\
                     L.create_left_vector())
-        self.names = np.flipud(self.names)
+        self.names.reverse()
+        self.actions.reverse()
                 
     def create_intermediate_bvs(self, m):
         intermediate_bvs = []
@@ -133,7 +134,8 @@ class ProductLinearOperator(LinearOperator):
         return intermediate_bvs
 
     def create_intermediate_bvs_hermitian_transpose(self, m):
-        self.names = np.flipud(self.names)
+        self.names.reverse()
+        self.actions.reverse()
         intermediate_bvs = []
         for j in range (self.nlops - 1):
             L = getattr(self, self.names[j])
@@ -143,10 +145,10 @@ class ProductLinearOperator(LinearOperator):
             X.setSizes(sz, m)
             X.setType('mat')
             intermediate_bvs.append(X)
-        self.names = np.flipud(self.names)
+        self.names.reverse()
+        self.actions.reverse()
         return intermediate_bvs
 
-    
     def apply(self, x, y=None):
         y = self.create_left_vector() if y == None else y
         for j in range (self.nlops):

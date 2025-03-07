@@ -73,7 +73,7 @@ class LinearOperator(metaclass=abc.ABCMeta):
         vec.setUp()
         return vec
 
-    def create_right_bv(self, ncols):
+    def create_right_bv(self, ncols: int):
         r"""
             :param ncols: number of columns in the BV
             :param type: int
@@ -96,7 +96,7 @@ class LinearOperator(metaclass=abc.ABCMeta):
         vec.setUp()
         return vec
 
-    def create_left_bv(self, ncols):
+    def create_left_bv(self, ncols: int):
         r"""
             :param ncols: number of columns in the BV
             :param type: int
