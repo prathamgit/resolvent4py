@@ -105,7 +105,7 @@ def scatter_array_from_root_to_all(comm, array, locsize=None):
             count = counts[0]
             dtype = array.dtype
             for j in range (1,size):
-                comm.send(counts[rank], dest=j, tag=0)
+                comm.send(counts[j], dest=j, tag=0)
                 comm.send(dtype, dest=j, tag=1)
         else:
             count = comm.recv(source=0, tag=0)

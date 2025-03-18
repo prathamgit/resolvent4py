@@ -30,13 +30,13 @@ class ProductLinearOperator(LinearOperator):
         :type nblocks: int
     """
     def __init__(self, comm, linops, linops_actions, nblocks=None):
-        
+
         linops.reverse()
         linops_actions.reverse()
         if len(linops) == 1:
             raise ValueError (
                 f"ProductLinearOperator is the product of at least two "
-                f"linear operators. Only 1 was provided at initialization."
+                f"linear operators. Only one was provided at initialization."
             )
         if len(linops) != len(linops_actions):
             raise ValueError (
@@ -165,7 +165,7 @@ class ProductLinearOperator(LinearOperator):
                 yjm1 = self.intermediate_vecs[j-1]
                 y = self.actions[j](yjm1, y)
         return y
-
+    
     def apply_hermitian_transpose(self, x, y=None):
         y = self.create_right_vector() if y == None else y
         for j in range (self.nlops):
@@ -218,6 +218,11 @@ class ProductLinearOperator(LinearOperator):
             for Zj in Z: Zj.destroy()
         return Y
     
+    def destroy_intermediate_vectors(self):
+        for vec in self.intermediate_vecs: vec.destroy()
+        for vec in self.intermediate_vecs_hermitian_transpose: vec.destroy()
+
     def destroy(self):
+        self.destroy_intermediate_vectors()
         for name in self.names:
             getattr(self, name).destroy()

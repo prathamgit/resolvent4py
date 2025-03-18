@@ -13,7 +13,7 @@ from ..linalg import compute_local_size
 
 from ..linear_operators import MatrixLinearOperator
 
-class balanced_truncation:
+class BalancedTruncation:
 
     def __init__(self, comm, fnames_jacobian, jacobian_sizes, fname_B, \
                  B_sizes, fname_C, C_sizes, path_factors, \

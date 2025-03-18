@@ -22,16 +22,14 @@ def generate_random_petsc_sparse_matrix(comm, sizes, complex=None):
     arrays = [None, None, None]
     if rank == 0:
         dtype = np.complex128 if complex == True else np.float64
-        A = sp.sparse.random(nrows, ncols, density=0.1, \
+        A = sp.sparse.random(nrows, ncols, density=0.01, \
                                 format='csr', dtype=dtype)
         if nrows == ncols:  # add identity to make A invertible
             A += sp.sparse.identity(nrows, dtype=dtype, format='csr')
-        rows, cols = A.nonzero()
-        data = A.data
-        arrays = [rows,cols,data]
+        A = A.tocoo()
+        arrays = [A.row, A.col, A.data]
     # Scatter to all other processors and assemble
-    recv_bufs = [scatter_array_from_root_to_all(comm, array) \
-                 for array in arrays]
+    recv_bufs = [scatter_array_from_root_to_all(comm, a) for a in arrays]
     row_ptrs, cols, data = convert_coo_to_csr(comm, recv_bufs, sizes)
     A = PETSc.Mat().create(comm=comm)
     A.setSizes(sizes)
@@ -41,8 +39,7 @@ def generate_random_petsc_sparse_matrix(comm, sizes, complex=None):
     A.assemble(None)
     return A
 
-
-def generate_random_petsc_vector(comm, sizes, complex=None):
+def generate_random_petsc_vector(comm, sizes, complex=False):
     r"""
         :param comm: MPI communicator
         :param sizes: vector sizes
@@ -54,14 +51,10 @@ def generate_random_petsc_vector(comm, sizes, complex=None):
         :return: a PETSc vector
         :rtype: PETSc.Vec.Type.STANDARD
     """
-    # Generate random array on root
     array = None
     if comm.Get_rank() == 0:
-        if complex == True:
-            array = np.random.randn(sizes[-1]) + 1j*np.random.randn(sizes[-1])
-        else:
-            array = np.random.randn(sizes[-1])
-    # Scatter and assemble
+        vec = np.random.randn(sizes[-1])
+        array = vec + 1j*np.random.randn(sizes[-1]) if complex else vec
     array = scatter_array_from_root_to_all(comm, array, sizes[0])
     vec = PETSc.Vec().createWithArray(array, sizes, None, comm=comm)
     return vec

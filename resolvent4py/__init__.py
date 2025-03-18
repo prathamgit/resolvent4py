@@ -7,8 +7,10 @@ import scipy as sp
 import abc
 import functools
 import pymanopt
+import tracemalloc
 
-__all__ = ['PETSc', 'SLEPc', 'MPI', 'np', 'sp', 'abc', 'functools', 'pymanopt']
+__all__ = ['PETSc', 'SLEPc', 'MPI', 'np', 'sp', 'abc', 'functools', \
+           'pymanopt', 'tracemalloc']
 
 from .linear_operators import MatrixLinearOperator
 from .linear_operators import LowRankLinearOperator

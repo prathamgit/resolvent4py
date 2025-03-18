@@ -67,4 +67,4 @@ class LowRankLinearOperator(LinearOperator):
     def destroy(self):
         self.U.destroy()
         self.V.destroy()
-        del self.Sigma
+        # del self.Sigma

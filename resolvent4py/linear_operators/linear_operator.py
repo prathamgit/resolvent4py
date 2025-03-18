@@ -6,6 +6,7 @@ from ..error_handling_functions import raise_not_implemented_error
 from ..random import generate_random_petsc_vector
 from ..linalg import enforce_complex_conjugacy
 from ..linalg import check_complex_conjugacy
+from ..miscellaneous import get_memory_usage
 
 class LinearOperator(metaclass=abc.ABCMeta):
     r"""
@@ -115,9 +116,8 @@ class LinearOperator(metaclass=abc.ABCMeta):
                 :code:`False` otherwise
             :rtype: bool
         """
-        sizes = self.get_dimensions()[-1]
-        array = np.random.randn(sizes[0])
-        x = PETSc.Vec().createWithArray(array, sizes, None, self._comm)
+        sizes = self._dimensions[-1]
+        x = generate_random_petsc_vector(self._comm, sizes)
         Lx = self.apply(x)
         Lxai = Lx.getArray().imag
         norm = np.sqrt(sum(self._comm.allgather(np.linalg.norm(Lxai)**2)))
@@ -156,7 +156,7 @@ class LinearOperator(metaclass=abc.ABCMeta):
         x.destroy()
         Lx.destroy()
         return result
-
+    
     # Methods that must be implemented by subclasses
     @abc.abstractmethod
     def apply(self, x, y=None):

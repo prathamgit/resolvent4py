@@ -1,6 +1,7 @@
 from . import np
 from . import MPI
 from . import PETSc
+from . import tracemalloc
 
 numpy_to_mpi_dtype = {
         np.dtype(np.int32): MPI.INT,
@@ -35,6 +36,17 @@ def petscprint(comm, arg):
     else:
         if MPI.COMM_WORLD.Get_rank() == 0:
             print(arg)
+
+def get_memory_usage():
+    r"""
+        Compute the used memory (in Mb)
+    """
+    snapshot = tracemalloc.take_snapshot()
+    top_stats = snapshot.statistics('lineno')
+    total_memory = sum(stat.size for stat in top_stats) / (1024 ** 2)
+    values = MPI.COMM_WORLD.allgather(total_memory)
+    value = sum(values)
+    return value
 
 def copy_mat_from_bv(bv):
     r"""

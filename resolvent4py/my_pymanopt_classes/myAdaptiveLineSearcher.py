@@ -19,7 +19,7 @@ class myAdaptiveLineSearcher:
 
     def search(self, objective, manifold, x, d, f0, df0):
         norm_d = manifold.norm(x, d)
-
+        
         if self._oldalpha is not None:
             alpha = self._oldalpha
         else:
@@ -44,7 +44,7 @@ class myAdaptiveLineSearcher:
             cost_evaluations += 1
 
         # ----- Added by Alby --------
-        if alpha <= 1e-14:
+        if alpha <= 1e-16:
             string =  "Attention: allowing for cost function "\
                       "to increase by 1 percent"
             petscprint(MPI.COMM_WORLD, string)

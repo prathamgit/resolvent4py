@@ -1,6 +1,7 @@
 from .linear_operator import LinearOperator
 from ..linalg import mat_solve_hermitian_transpose
 from .. import SLEPc
+import gc
 
 class MatrixLinearOperator(LinearOperator):
     r"""
@@ -29,6 +30,7 @@ class MatrixLinearOperator(LinearOperator):
     def apply(self, x, y=None):
         y = self.create_left_vector() if y == None else y
         self.A.mult(x,y)
+        # gc.collect()
         return y
     
     def apply_mat(self, X, Y=None):
@@ -141,4 +143,4 @@ class MatrixLinearOperator(LinearOperator):
         
     def destroy(self):
         self.A.destroy()
-        self.ksp.destroy()
+        self.ksp.destroy() if self.ksp is not None else None
