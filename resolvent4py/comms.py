@@ -101,7 +101,7 @@ def scatter_array_from_root_to_all(comm, array, locsize=None):
             n = len(array)
             counts = np.asarray([n//size + 1 if np.mod(n,size) > j \
                                 else n//size for j in range (size)])
-            displs = np.concatenate(([0],np.cumsum(counts[:-1])))
+            displs = np.concatenate(([0], np.cumsum(counts[:-1])))
             count = counts[0]
             dtype = array.dtype
             for j in range (1,size):
@@ -115,11 +115,13 @@ def scatter_array_from_root_to_all(comm, array, locsize=None):
         counts = comm.gather(locsize, root=0)
         if rank == 0:
             dtype = array.dtype
-            displs = np.concatenate(([0],np.cumsum(counts[:-1])))
+            displs = np.concatenate(([0], np.cumsum(counts[:-1])))
             for j in range (1,size):
                 comm.send(dtype, dest=j, tag=1)
         else:
             dtype = comm.recv(source=0, tag=1)
     recvbuf = np.empty(count, dtype=dtype)
+    counts = np.asarray(counts,dtype=np.int64) if counts is not None else counts
+    displs = np.asarray(displs,dtype=np.int64) if displs is not None else displs
     comm.Scatterv([array, counts, displs, get_mpi_type(dtype)], recvbuf, root=0)
     return recvbuf

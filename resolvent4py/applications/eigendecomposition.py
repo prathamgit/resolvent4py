@@ -42,10 +42,12 @@ def arnoldi_iteration(lin_op, lin_op_action, krylov_dim):
     q.setArray(qa)
     enforce_complex_conjugacy(comm, q, nblocks) if block_cc == True else None
     q.scale(1./q.norm())
-    Q.insertVec(0,q)
+    Q.insertVec(0, q)
+    v = lin_op.create_left_vector() if lin_op_action == lin_op.apply or \
+        lin_op_action == lin_op.solve else lin_op.create_right_vector()
     # Perform Arnoldi iteration
     for k in range(1, krylov_dim+1):
-        v = lin_op_action(q)
+        v = lin_op_action(q, v)
         # string = "Arnoldi iteration (%d/%d) - ||Aq|| "%(k, krylov_dim) + \
         #             "= %1.15e"%(v.norm())
         # petscprint(comm, string)
@@ -58,8 +60,8 @@ def arnoldi_iteration(lin_op, lin_op_action, krylov_dim):
             H[k,k-1] = v.norm()
             v.scale(1./H[k,k-1])
             Q.insertVec(k,v)
+        q.destroy()
         q = v.copy()
-        v.destroy()
     q.destroy()
     return (Q, H)
 

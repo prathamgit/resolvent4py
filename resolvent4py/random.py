@@ -22,7 +22,7 @@ def generate_random_petsc_sparse_matrix(comm, sizes, complex=None):
     arrays = [None, None, None]
     if rank == 0:
         dtype = np.complex128 if complex == True else np.float64
-        A = sp.sparse.random(nrows, ncols, density=0.01, \
+        A = sp.sparse.random(nrows, ncols, density=0.001, \
                                 format='csr', dtype=dtype)
         if nrows == ncols:  # add identity to make A invertible
             A += sp.sparse.identity(nrows, dtype=dtype, format='csr')

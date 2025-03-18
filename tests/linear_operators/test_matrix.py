@@ -12,6 +12,9 @@ from petsc4py import PETSc
 comm = MPI.COMM_WORLD
 rank, size = comm.Get_rank(), comm.Get_size()
 
+string = f"Hello, running test_matrix.py with {size} processors"
+res4py.petscprint(comm, string)
+
 N = 100
 s = 10
 
@@ -21,18 +24,18 @@ fnames_jac, fnames = None, None
 if rank == 0:
 
     os.makedirs(path) if os.path.isdir(path) == False else None
-    A = sp.sparse.csr_matrix(np.random.randn(N,N) + 1j*np.random.randn(N,N))
-    rows, cols = A.nonzero()
-    data = A.data
-    arrays = [rows,cols,data]
+    A = sp.sparse.random(N, N, 0.1, 'csr', np.complex128)
+    A += sp.sparse.identity(N, np.complex128, 'csr')
+    A = A.tocoo()
+    arrays = [A.row, A.col, A.data]
     fnames_jac = [path + 'rows.dat',path + 'cols.dat',path + 'vals.dat']
-    for (i,array) in enumerate(arrays):
+    for (i, array) in enumerate(arrays):
         vec = PETSc.Vec().createWithArray(array,len(array),None,MPI.COMM_SELF)
         res4py.write_to_file(MPI.COMM_SELF, fnames_jac[i], vec)
         vec.destroy()
     A = A.todense()
     Ainv = sp.linalg.inv(A)
-
+    
     x = np.random.randn(A.shape[0]) + 1j*np.random.randn(A.shape[0]) 
     xvec = PETSc.Vec().createWithArray(x, comm=MPI.COMM_SELF)
     Ax = PETSc.Vec().createWithArray(A@x, comm=MPI.COMM_SELF)
@@ -49,21 +52,22 @@ if rank == 0:
                                      MPI.COMM_SELF)
     
     objs = [xvec, Ax, ATx, Ainvx, AinvTx, Xmat, AX, ATX, AinvX, AinvTX]
-    fnames_ = ['x', 'Ax', 'ATx', 'Ainvx', 'AinvTx', 'X', 'AX', 'ATX', \
-               'AinvX', 'AinvTX']
+    fnames_ = ['xvec', 'Axvec', 'ATxvec', 'Ainvxvec', 'AinvTxvec', \
+               'X', 'AX', 'ATX', 'AinvX', 'AinvTX']
     fnames = [path + root + '.dat' for root in fnames_]
-    for (k, obj) in enumerate(objs):
-        res4py.write_to_file(MPI.COMM_SELF, fnames[k], obj)
+    for (i, obj) in enumerate(objs):
+        res4py.write_to_file(MPI.COMM_SELF, fnames[i], obj)
 
 comm.Barrier()
 
-fnames = comm.bcast(fnames, root=0)
 fnames_jac = comm.bcast(fnames_jac, root=0)
+fnames = comm.bcast(fnames, root=0)
 fnames_vecs = fnames[:5]
 fnames_mats = fnames[5:]
 
 Nl = res4py.compute_local_size(N)
 sl = res4py.compute_local_size(s)
+
 A = res4py.read_coo_matrix(comm, fnames_jac, ((Nl, N),(Nl,N)))
 ksp = res4py.create_mumps_solver(comm, A)
 linop = res4py.MatrixLinearOperator(comm, A, ksp)
