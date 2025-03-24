@@ -70,6 +70,7 @@ def _compute_woodbury_update(comm, R, B, K, C, RB, RHTC):
     Sig = CHTRB.getDenseArray()@K
     Linv = sp.linalg.inv(np.eye(Sig.shape[0]) + Sig)
     M = LowRankLinearOperator(comm, RB, K@Linv, RHTC)
+    CHTRB.destroy()
     return M, Linv
 
 
@@ -125,6 +126,220 @@ class InputOutputMatrices:
             grad_p[j] = _compute_bv_contraction(self.comm, dBdp, gradB).real
             bv_conj(dBdp)
         return grad_p
+
+
+class HinfComponent:
+
+    def __init__(self, comm, path_factors, factor_sizes, frequencies, IOMats, \
+                 alpha=1):
+        self.comm = comm
+        self.freqs = frequencies
+        self.load_factors(path_factors, factor_sizes)
+        self.IOMats = IOMats
+        self.alpha = alpha
+
+    def load_factors(self, path_factors, factor_sizes):
+        self.U, self.S, self.V, self.R_ops = [], [], [], []
+        for i in range (len(self.freqs)):
+            # t0 = tlib.time()
+            fname_U = path_factors + 'omega_%1.5f/U.dat'%self.freqs[i]
+            fname_S = path_factors + 'omega_%1.5f/S.npy'%self.freqs[i]
+            fname_V = path_factors + 'omega_%1.5f/V.dat'%self.freqs[i]
+            self.U.append(read_bv(self.comm, fname_U, factor_sizes))
+            self.V.append(read_bv(self.comm, fname_V, factor_sizes))
+            self.S.append(np.load(fname_S))
+            self.R_ops.append(\
+                LowRankLinearOperator(self.comm, self.U[-1], \
+                                      self.S[-1], self.V[-1]))
+            # dt = tlib.time() - t0
+            # petscprint(self.comm, "Loaded freq = %d/%d (%1.3e)"%(i, len(self.freqs), dt))
+            
+    def evaluate_cost(self, params):
+        p, K, s = params
+        B = SLEPc.BV().create(comm=self.comm)
+        B.setSizes(self.R_ops[0]._dimensions[0], K.shape[0])
+        B.setType('mat')
+        C = SLEPc.BV().create(comm=self.comm)
+        C.setSizes(self.R_ops[0]._dimensions[0], K.shape[-1])
+        C.setType('mat')
+        B = self.IOMats.compute_B(p, B)
+        C = self.IOMats.compute_C(s, C)
+        RB = B.duplicate()
+        RHTC = C.duplicate()
+
+        xi = np.zeros(len(self.freqs), dtype=np.complex128)
+        Ln = getattr(self.IOMats.FFHT, self.IOMats.FFHT.names[-1])
+        Qn = getattr(self.IOMats.DDHT, self.IOMats.DDHT.names[-1])
+        if Ln._name != 'LowRankLinearOperator':
+            for i in range (len(self.freqs)):
+                R = self.R_ops[i]
+                M, _ = _compute_woodbury_update(self.comm, R, B, K, C, \
+                                                RB, RHTC)
+                xi[i] += _compute_trace_product_new(R, R, self.IOMats.DDHT, \
+                                                self.IOMats.FFHT)
+                xi[i] -= 2.0*_compute_trace_product_new(R, M, self.IOMats.DDHT, \
+                                                    self.IOMats.FFHT)
+                xi[i] += _compute_trace_product_new(M, M, self.IOMats.DDHT, \
+                                                self.IOMats.FFHT)
+        else:
+            F1 = Ln.U.duplicate()
+            F2 = Ln.U.duplicate()
+            F3 = Qn.create_left_bv(Ln.U.getSizes()[-1])
+            for i in range (len(self.freqs)):
+                R = self.R_ops[i]
+                M, _ = _compute_woodbury_update(self.comm, R, B, K, C, RB, RHTC)
+                F1 = R.apply_mat(Ln.U, F1)
+                F2 = M.apply_mat(Ln.U, F2)
+                bv_add(-1.0, F1, F2)
+                F3 = Qn.apply_hermitian_transpose_mat(F1, F3)
+                Mat = F3.dot(F3)
+                xi[i] = np.trace(Mat.getDenseArray())
+            objs = [F1, F2, F3]
+            for obj in objs: obj.destroy()
+
+
+        objs = [B, C, RB, RHTC]
+        for obj in objs: obj.destroy()
+        # cost = 1/self.alpha*np.log(np.sum(np.exp(self.alpha*np.abs(xi.real))))
+        return np.linalg.norm(xi.real, ord=np.inf)
+    
+    def evaluate_gradient(self, params):
+        comm = self.comm
+        p, K, s = params
+
+        B = SLEPc.BV().create(comm=comm)
+        B.setSizes(self.R_ops[0]._dimensions[0], K.shape[0])
+        B.setType('mat')
+        Bp1 = B.copy()
+        Bp0 = B.copy()
+        C = SLEPc.BV().create(comm=comm)
+        C.setSizes(self.R_ops[0]._dimensions[0], K.shape[-1])
+        C.setType('mat')
+        Cp1 = C.copy()
+        Cp0 = C.copy()
+        B = self.IOMats.compute_B(p, B)
+        C = self.IOMats.compute_C(s, C)
+        RB = B.duplicate()
+        RHTC = C.duplicate()
+        
+        grad_K = np.zeros(K.shape, dtype=np.complex128)
+        grad_p = np.zeros_like(p)
+        grad_s = np.zeros_like(s)
+
+        # Allocate memory for efficiency (grad_K)
+        F1K = SLEPc.BV().create(comm=comm)
+        F1K.setSizes(self.R_ops[0]._dimensions[0], C.getSizes()[-1])
+        F1K.setType('mat')
+        F2K = F1K.duplicate()
+        F3K = F1K.duplicate()
+        F5K = F1K.duplicate()
+        F6K = F1K.duplicate()
+
+        # Allocate memory for efficiency (grad_p)
+        F1B = SLEPc.BV().create(comm=comm)
+        F1B.setSizes(self.R_ops[0]._dimensions[0], B.getSizes()[-1])
+        F1B.setType('mat')
+        F2B = F1B.duplicate()
+        F3B = F1B.duplicate()
+        F5B = F1B.duplicate()
+        F6B = F1B.duplicate()
+        grad_B_i = F1B.duplicate()
+        Q_grad_B_i = F1B.duplicate()
+
+        # Allocate memory for efficiency (grad_s)
+        F1C = SLEPc.BV().create(comm=comm)
+        F1C.setSizes(self.R_ops[0]._dimensions[-1], C.getSizes()[-1])
+        F1C.setType('mat')
+        F2C = F1C.duplicate()
+        F3C = F1C.duplicate()
+        F5C = F1C.duplicate()
+        F6C = F1C.duplicate()
+        grad_C_i = F1C.duplicate()
+        Q_grad_C_i = F1C.duplicate()
+
+        dBdps = self.IOMats.compute_dBdp_lst(p, Bp1, Bp0, self.IOMats.compute_dB)
+        dCdss = self.IOMats.compute_dBdp_lst(s, Cp1, Cp0, self.IOMats.compute_dC)
+
+        denom = 0
+        for i in range (len(self.freqs)):
+            
+            R = self.R_ops[i]
+            M, Linv = _compute_woodbury_update(comm, R, B, K, C, RB, RHTC)
+            xi = _compute_trace_product_new(R, R, self.IOMats.DDHT, \
+                                                self.IOMats.FFHT).real
+            xi -= 2.0*_compute_trace_product_new(R, M, self.IOMats.DDHT, \
+                                                self.IOMats.FFHT).real
+            xi += _compute_trace_product_new(M, M, self.IOMats.DDHT, \
+                                            self.IOMats.FFHT).real
+            
+            val_i = np.exp(np.abs(xi)*self.alpha)
+            denom += val_i
+            val_i *= np.sign(xi)
+            
+            # Grad with respect to K
+            LiCT = Linv.conj().T
+            LiCTMat = PETSc.Mat().createDense(LiCT.shape, None, LiCT, \
+                                              MPI.COMM_SELF)
+            F1K.mult(1.0, 0.0, M.V, LiCTMat)
+            F5K = self.IOMats.FFHT.apply_mat(F1K, F5K)
+            F2K = R.apply_mat(F5K, F2K)     # Used to be F1K instead of F5K
+            F3K = M.apply_mat(F5K, F3K)     # Used to be F1K instead of F5K
+            bv_add(-1.0, F3K, F2K)
+            F6K = self.IOMats.DDHT.apply_mat(F3K, F6K)
+            grad_K_i_mat = F6K.dot(M.U)     # Used to be F3K instead of F6K
+            F4K = C.dot(M.U)
+            grad_K_i = grad_K_i_mat.getDenseArray()
+            grad_K_i -= F4K.getDenseArray()@M.Sigma.conj().T@grad_K_i
+            grad_K += 2.0*grad_K_i*val_i
+            mats = [LiCTMat, grad_K_i_mat, F4K]
+            for mat in mats: mat.destroy()
+
+            # Grad with respect to p
+            S = M.Sigma.conj().T
+            SMat = PETSc.Mat().createDense(S.shape, None, S, MPI.COMM_SELF)
+            F1B.mult(1.0, 0.0, M.V, SMat)
+            F5B = self.IOMats.FFHT.apply_mat(F1B, F5B)
+            F2B = R.apply_mat(F5B, F2B)     # Used to be F1B instead of F5B
+            F3B = M.apply_mat(F5B, F3B)     # Used to be F1B instead of F5B
+            bv_add(-1.0, F3B, F2B)
+            F6B = self.IOMats.DDHT.apply_mat(F3B, F6B)
+            grad_B_i = R.apply_hermitian_transpose_mat(F6B, grad_B_i) # Used to be F3B instead of F6B
+            Q = LowRankLinearOperator(comm, M.V, M.Sigma.conj().T, B)
+            Q_grad_B_i = Q.apply_mat(grad_B_i, Q_grad_B_i)
+            bv_add(-1.0, grad_B_i, Q_grad_B_i)
+            # grad_p += 2.0*val_i*self.IOMats.compute_dBdp(p, grad_B_i, Bp1, Bp0,\
+            #                                        self.IOMats.compute_dB)
+            grad_p += 2.0*val_i*self.IOMats.compute_grad_p(p, dBdps, grad_B_i)
+            SMat.destroy()
+
+            # Grad with respect to s
+            S = M.Sigma.copy()
+            SMat = PETSc.Mat().createDense(S.shape, None, S, MPI.COMM_SELF)
+            F1C.mult(1.0, 0.0, M.U, SMat)
+            F5C = self.IOMats.DDHT.apply_mat(F1C, F5C)
+            F2C = R.apply_hermitian_transpose_mat(F5C, F2C)     # Used to be F1C instead of F5C
+            F3C = M.apply_hermitian_transpose_mat(F5C, F3C)     # Used to be F1C instead of F5C
+            bv_add(-1.0, F3C, F2C)
+            F6C = self.IOMats.FFHT.apply_mat(F3C, F6C)   # Used to be F3C instead of F6C
+            grad_C_i = R.apply_mat(F6C, grad_C_i)
+            Q = LowRankLinearOperator(comm, M.U, M.Sigma, C)
+            Q_grad_C_i = Q.apply_mat(grad_C_i, Q_grad_C_i)
+            bv_add(-1.0, grad_C_i, Q_grad_C_i)
+            # grad_s += 2.0*val_i*self.IOMats.compute_dBdp(s, grad_C_i, Cp1, Cp0,\
+            #                                        self.IOMats.compute_dC)
+            grad_s += 2.0*val_i*self.IOMats.compute_grad_p(s, dCdss, grad_C_i)
+            SMat.destroy()
+
+            # process = psutil.Process(os.getpid())
+            # value = process.memory_info().rss/(1024 * 1024)
+            # value = sum(comm.allgather(value))
+            # if opt_obj.comm.Get_rank() == 0:
+            #     print(f"Iteration {i} usage {value} MB")
+        objects = [F1K, F2K, F3K, F1B, F2B, F3B, F1C, F2C, F3C, grad_B_i, \
+                   Q_grad_B_i, grad_C_i, Q_grad_C_i, Bp1, Bp0, Cp1, Cp0, B, C, \
+                   RB, RHTC, F5K, F6K, F5B, F6B, F5C, F6C]
+        for obj in objects: obj.destroy()
+        return grad_p.real/denom, grad_K.real/denom, grad_s.real/denom
 
 
 
