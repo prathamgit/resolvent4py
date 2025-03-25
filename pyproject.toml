@@ -1,0 +1,18 @@
+[build-system]
+# Specifies the build system to use
+requires = ["setuptools>=42.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "resolvent4py"
+version = "0.1.0"
+description = """\
+  A parallel Python-based library for the analysis, model reduction and \
+  control of large-scale linear systems.\
+"""
+license = "MIT"
+requires-python = ">=3.8"
+
+
+[tool.setuptools.packages.find]
+where = ["resolvent4py"]  

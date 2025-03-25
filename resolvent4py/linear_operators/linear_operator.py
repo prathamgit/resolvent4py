@@ -2,28 +2,37 @@ from .. import np
 from .. import abc
 from .. import PETSc
 from .. import SLEPc
+from .. import MPI
+from .. import petsctyping
 from ..error_handling_functions import raise_not_implemented_error
 from ..random import generate_random_petsc_vector
 from ..linalg import enforce_complex_conjugacy
 from ..linalg import check_complex_conjugacy
 from ..miscellaneous import get_memory_usage
 
+from typing import Optional
+from typing import Union
+
 class LinearOperator(metaclass=abc.ABCMeta):
     r"""
-        Abstract base class for linear operators :math:`L`
+    Abstract base class for linear operators :math:`L`.
 
-        :param comm: MPI communicator (one of :code:`MPI.COMM_WORLD` or
-            :code:`MPI.COMM_SELF`)
-        :param name: name of the linear operator
-        :type name: str
-        :param dimensions: row and column sizes of the linear operator
-        :type dimensions: `MatSizeSpec`_
-        :param nblocks: number of blocks (if the linear operator has block \
-            structure)
-        :type nblocks: int
+    :param comm: MPI communicator :code:`MPI.COMM_WORLD`
+    :type comm: MPI.Comm
+    :param name: name of the linear operator
+    :type name: str
+    :param dimensions: local and global sizes of the range and domain
+        of the linear operator, :code:`[[local rows, global rows], 
+        [local columns, global columns]]`
+    :type dimensions: tuple[tuple[int, int], tuple[int, int]]
+    :param nblocks: number of blocks (if the linear operator has block \
+        structure)
+    :type nblocks: Optional[int], default is None
     """
 
-    def __init__(self, comm, name, dimensions, nblocks):
+    def __init__(self: "LinearOperator", comm: MPI.Comm, name: str, \
+                 dimensions: tuple[tuple[int, int], tuple[int, int]], \
+                    nblocks: Optional[int] = None) -> None:
         self._comm = comm
         self._name = name
         self._dimensions = dimensions
@@ -32,89 +41,90 @@ class LinearOperator(metaclass=abc.ABCMeta):
         self._block_cc = self.check_if_complex_conjugate_structure() if \
             self._nblocks != None else None
     
-    def get_comm(self):
+    def get_comm(self: "LinearOperator") -> MPI.Comm:
         r"""
-            The MPI communicator
+        The MPI communicator
 
-            :rtype: `MPICOMM`_
+        :rtype: MPI.Comm
         """
         return self._comm
     
-    def get_name(self):
+    def get_name(self: "LinearOperator") -> str:
         r"""
-            The name of the linear operator
+        The name of the linear operator
 
-            :rtype: str
+        :rtype: str
         """
         return self._name
     
-    def get_dimensions(self):
+    def get_dimensions(self: "LinearOperator") \
+        -> tuple[tuple[int, int], tuple[int, int]]:
         r"""
-            The dimensions of the linear operator
-
-            :rtype: `MatSizeSpec`_
+        The local and global dimensions of the linear operator
+        
+        :rtype: tuple[tuple[int, int], tuple[int, int]]
         """
         return self._dimensions
     
-    def get_nblocks(self):
+    def get_nblocks(self: "LinearOperator") -> Union[int, None]:
         r"""
-            The number of blocks of the linear operator
-            
-            :rtype: int
+        The number of blocks of the linear operator
+        
+        :rtype: Union[int, None]
         """
         return self._nblocks
     
-    def create_right_vector(self):
+    def create_right_vector(self: "LinearOperator") -> PETSc.Vec:
         r"""
-            :return: a PETSc vector that :math:`L` can be multiplied against
-            :rtype: `StandardVec`_
+        :return: a PETSc vector that :math:`L` can be multiplied against
+        :rtype: PETSc.Vec
         """
         vec = PETSc.Vec().create(comm=self._comm)
         vec.setSizes(self._dimensions[-1])
-        vec.setUp()
+        vec.setType('standard')
         return vec
 
-    def create_right_bv(self, ncols: int):
+    def create_right_bv(self: "LinearOperator", ncols: int) -> SLEPc.BV:
         r"""
-            :param ncols: number of columns in the BV
-            :param type: int
+        :param ncols: number of columns in the BV
+        :type ncols: int
 
-            :return: a SLEPc BV that :math:`L` can be multiplied against
-            :rtype: `BV`_
+        :return: a SLEPc BV that :math:`L` can be multiplied against
+        :rtype: SLEPc.BV
         """
         bv = SLEPc.BV().create(comm=self._comm)
         bv.setSizes(self._dimensions[-1], ncols)
         bv.setType('mat')
         return bv
 
-    def create_left_vector(self):
+    def create_left_vector(self: "LinearOperator") -> PETSc.Vec:
         r"""
-            :return: a PETSc vector where :math:`Lx` can be stored into
-            :rtype: `StandardVec`_
+        :return: a PETSc vector where :math:`Lx` can be stored into
+        :rtype: PETSc.Vec
         """
         vec = PETSc.Vec().create(comm=self._comm)
         vec.setSizes(self._dimensions[0])
-        vec.setUp()
+        vec.setType('standard')
         return vec
 
-    def create_left_bv(self, ncols: int):
+    def create_left_bv(self: "LinearOperator", ncols: int) -> SLEPc.BV:
         r"""
-            :param ncols: number of columns in the BV
-            :param type: int
+        :param ncols: number of columns in the BV
+        :param type: int
 
-            :return: a SLEPc BV where :math:`LX` can be stored into
-            :rtype: `BV`_
+        :return: a SLEPc BV where :math:`LX` can be stored into
+        :rtype: SLEPc.BV
         """
         bv = SLEPc.BV().create(comm=self._comm)
         bv.setSizes(self._dimensions[0], ncols)
         bv.setType('mat')
         return bv
     
-    def check_if_real_valued(self):
+    def check_if_real_valued(self: "LinearOperator") -> bool:
         r"""
-            :return: :code:`True` if the linear operator is real-valued, 
-                :code:`False` otherwise
-            :rtype: bool
+        :return: :code:`True` if the linear operator is real-valued, 
+            :code:`False` otherwise
+        :rtype: bool
         """
         sizes = self._dimensions[-1]
         x = generate_random_petsc_vector(self._comm, sizes)
@@ -126,21 +136,21 @@ class LinearOperator(metaclass=abc.ABCMeta):
         Lx.destroy()
         return result
     
-    def check_if_complex_conjugate_structure(self):
+    def check_if_complex_conjugate_structure(self: "LinearOperator") -> bool:
         r"""
-            Given a vector
+        Given a vector
 
-            .. math::
-                x = \left(\ldots,x_{-1},x_{0},x_{1},\ldots\right)
+        .. math::
+            x = \left(\ldots,x_{-1},x_{0},x_{1},\ldots\right)
 
-            with vector-valued entries that satisfy \
-            :math:`x_{-i} = \overline{x_i}`, check if the vector :math:`Lx` \
-            satisfies :math:`(Lx)_{-i}=\overline{(Lx)_{i}}`. (Here, the \
-            overline denote complex conjugation.)
+        with vector-valued entries that satisfy \
+        :math:`x_{-i} = \overline{x_i}`, check if the vector :math:`Lx` \
+        satisfies :math:`(Lx)_{-i}=\overline{(Lx)_{i}}`. (Here, the \
+        overline denote complex conjugation.)
 
-            :return: :code:`True` if the linear operator has complex-conjugate
-                structure, :code:`False` otherwise.
-            :rtype: bool
+        :return: :code:`True` if the linear operator has complex-conjugate
+            structure, :code:`False` otherwise.
+        :rtype: bool
         """
         x = generate_random_petsc_vector(self._comm, self._dimensions[-1])
         enforce_complex_conjugacy(self._comm, x, self._nblocks)
@@ -159,112 +169,120 @@ class LinearOperator(metaclass=abc.ABCMeta):
     
     # Methods that must be implemented by subclasses
     @abc.abstractmethod
-    def apply(self, x, y=None):
+    def apply(self: "LinearOperator", x: PETSc.Vec, \
+              y: Optional[PETSc.Vec]=None) -> PETSc.Vec:
         r"""
-            Compute :math:`y = Lx`
+        Compute :math:`y = Lx`.
 
-            :param x: a PETSc vector
-            :type x: `StandardVec`_
-            :param y: [optional] a PETSc vector to store the result
-            :type y: `StandardVec`_
+        :param x: a PETSc vector
+        :type x: PETSc.Vec
+        :param y: a PETSc vector to store the result
+        :type y: Optional[PETSc.Vec], default is None
 
-            :rtype: `StandardVec`_
+        :rtype: PETSc.Vec
         """
     
     @abc.abstractmethod
-    def apply_mat(self, X, Y=None):
+    def apply_mat(self: "LinearOperator", X: SLEPc.BV, \
+                  Y: Optional[SLEPc.BV]=None) -> SLEPc.BV:
         r"""
-            Compute :math:`Y = LX`
+        Compute :math:`Y = LX`
 
-            :param X: a SLEPc BV
-            :type X: `BV`_
-            :param Y: [optional] a SLEPc BV to store the result
-            :type Y: `BV`_
+        :param X: a SLEPc BV
+        :type X: SLEPc.BV
+        :param Y: a SLEPc BV to store the result
+        :type Y: Optional[SLEPc.BV], default is None
 
-            :rtype: `BV`_
+        :rtype: SLEPc.BV
         """
 
     @abc.abstractmethod
-    def destroy(self):
+    def destroy(self: "LinearOperator") -> None:
         r"""
-            Destroy the PETSc objects associated with :math:`L`
+        Destroy the PETSc and SLEPc objects associated with :math:`L`
         """
     
     # Methods that don't necessarily need to be implemented by subclasses
     @raise_not_implemented_error
-    def apply_hermitian_transpose(self, x, y=None):
+    def apply_hermitian_transpose(self: "LinearOperator", x: PETSc.Vec, \
+              y: Optional[PETSc.Vec]=None) -> PETSc.Vec:
         r"""
-            Compute :math:`y = L^*x`
+        Compute :math:`y = L^*x`.
 
-            :param x: a PETSc vector
-            :type x: `StandardVec`_
-            :param y: [optional] a PETSc vector to store the result
-            :type y: `StandardVec`_
+        :param x: a PETSc vector
+        :type x: PETSc.Vec
+        :param y: a PETSc vector to store the result
+        :type y: Optional[PETSc.Vec], default is None
 
-            :rtype: `StandardVec`_
+        :rtype: PETSc.Vec
         """
 
     @raise_not_implemented_error
-    def apply_hermitian_transpose_mat(self, X, Y=None):
+    def apply_hermitian_transpose_mat(self: "LinearOperator", X: SLEPc.BV, \
+                  Y: Optional[SLEPc.BV]=None) -> SLEPc.BV:
         r"""
-            Compute :math:`Y = L^*X`
+        Compute :math:`Y = L^*X`
 
-            :param X: a SLEPc BV
-            :type X: `BV`_
-            :param Y: [optional] a SLEPc BV to store the result
-            :type Y: `BV`_
+        :param X: a SLEPc BV
+        :type X: SLEPc.BV
+        :param Y: a SLEPc BV to store the result
+        :type Y: Optional[SLEPc.BV], default is None
 
-            :rtype: `BV`_
+        :rtype: SLEPc.BV
         """
 
     @raise_not_implemented_error
-    def solve(self, x, y=None):
+    def solve(self: "LinearOperator", x: PETSc.Vec, \
+              y: Optional[PETSc.Vec]=None) -> PETSc.Vec:
         r"""
-            Compute :math:`y = L^{-1}x`
+        Compute :math:`y = L^{-1}x`.
 
-            :param x: a PETSc vector
-            :type x: `StandardVec`_
-            :param y: [optional] a PETSc vector to store the result
-            :type y: `StandardVec`_
+        :param x: a PETSc vector
+        :type x: PETSc.Vec
+        :param y: a PETSc vector to store the result
+        :type y: Optional[PETSc.Vec], default is None
 
-            :rtype: `StandardVec`_
+        :rtype: PETSc.Vec
         """
 
     @raise_not_implemented_error
-    def solve_mat(self, X, Y=None):
+    def solve_mat(self: "LinearOperator", X: SLEPc.BV, \
+                  Y: Optional[SLEPc.BV]=None) -> SLEPc.BV:
         r"""
-            Compute :math:`Y = L^{-1}X`
-            
-            :param X: a SLEPc BV
-            :type X: `BV`_
-            :param Y: [optional] a SLEPc BV to store the result
-            :type Y: `BV`_
+        Compute :math:`Y = L^{-1}X`
 
-            :rtype: `BV`_
+        :param X: a SLEPc BV
+        :type X: SLEPc.BV
+        :param Y: a SLEPc BV to store the result
+        :type Y: Optional[SLEPc.BV], default is None
+
+        :rtype: SLEPc.BV
         """
     
     @raise_not_implemented_error
-    def solve_hermitian_transpose(self, x, y=None):
+    def solve_hermitian_transpose(self: "LinearOperator", x: PETSc.Vec, \
+              y: Optional[PETSc.Vec]=None) -> PETSc.Vec:
         r"""
-            Compute :math:`y = L^{-*}x`
+        Compute :math:`y = L^{-*}x`.
 
-            :param x: a PETSc vector
-            :type x: `StandardVec`_
-            :param y: [optional] a PETSc vector to store the result
-            :type y: `StandardVec`_
+        :param x: a PETSc vector
+        :type x: PETSc.Vec
+        :param y: a PETSc vector to store the result
+        :type y: Optional[PETSc.Vec], default is None
 
-            :rtype: `StandardVec`_
+        :rtype: PETSc.Vec
         """
 
     @raise_not_implemented_error
-    def solve_hermitian_transpose_mat(self, X, Y=None):
+    def solve_hermitian_transpose_mat(self: "LinearOperator", X: SLEPc.BV, \
+                  Y: Optional[SLEPc.BV]=None) -> SLEPc.BV:
         r"""
-            Compute :math:`Y = L^{-*}X`
-            
-            :param X: a SLEPc BV
-            :type X: `BV`_
-            :param Y: [optional] a SLEPc BV to store the result
-            :type Y: `BV`_
-            
-            :rtype: `BV`_
+        Compute :math:`Y = L^{-*}X`
+
+        :param X: a SLEPc BV
+        :type X: SLEPc.BV
+        :param Y: a SLEPc BV to store the result
+        :type Y: Optional[SLEPc.BV], default is None
+
+        :rtype: SLEPc.BV
         """

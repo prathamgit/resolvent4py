@@ -3,76 +3,90 @@ from .. import sp
 from .. import MPI
 from .. import PETSc
 from .. import SLEPc
+from .. import typing
 
+from ..linear_operators import LinearOperator
 from ..linalg import enforce_complex_conjugacy
 from ..miscellaneous import create_dense_matrix
 from ..miscellaneous import petscprint
 
-def randomized_svd(lin_op, lin_op_action, n_rand, n_loops, n_svals):
+def randomized_svd(
+        L: LinearOperator, 
+        action: typing.Callable[[SLEPc.BV, SLEPc.BV], SLEPc.BV], 
+        n_rand: int, 
+        n_loops: int, 
+        n_svals: int
+    ) -> typing.Tuple[SLEPc.BV, np.ndarray, SLEPc.BV]:
     r"""
-        Compute the SVD of the linear operator :math:`L` 
-        specified by :code:`lin_op` using a randomized SVD algorithm.
-        
-        :param lin_op: any child class of the :code:`LinearOperator` class
-        :param lin_op_action: one of :code:`lin_op.apply_mat` or 
-            :code:`lin_op.solve_mat`
-        :param n_rand: number of random vectors to use
-        :type n_rand: int
-        :param n_loops: number of randomized svd iterations
-        :type n_loops: int
-        :param n_svals: number of singular triplets to return
-        :type n_svals: int
+    Compute the singular value decomposition (SVD) of the linear operator 
+    specified by :code:`L` and :code:`action` using a randomized SVD algorithm.
+    For example, with :code:`L.solve_mat` we compute 
 
-        :return: :math:`(U,\,\Sigma,\, V)` a 3-tuple with the leading 
-            :code:`n_svals` singular values and corresponding left and \
-            right singular vectors
-        :rtype: (SLEPc.BV with :code:`n_svals` columns, 
-            numpy.ndarray of size :code:`n_svals x n_svals`, 
-            SLEPc.BV with :code:`n_svals` columns)
+    .. math::
+
+        L^{-1} = U \Sigma V^*.
+    
+    :param L: instance of the :class:`.LinearOperator` class
+    :type L: :class:`.LinearOperator`
+    :param action: one of :meth:`.LinearOperator.apply_mat` or
+        :meth:`.LinearOperator.solve_mat`
+    :type action: Callable[[SLEPc.BV, SLEPc.BV], SLEPc.BV]
+    :param n_rand: number of random vectors
+    :type n_rand: int
+    :param n_loops: number of randomized svd iterations
+    :type n_loops: int
+    :param n_svals: number of singular triplets to return
+    :type n_svals: int
+
+    :return: a tuple :math:`(U,\,\Sigma,\, V)` with the leading 
+        :code:`n_svals` singular values and corresponding left and \
+        right singular vectors
+    :rtype: (SLEPc.BV with :code:`n_svals` columns, 
+        numpy.ndarray of size :code:`n_svals x n_svals`, 
+        SLEPc.BV with :code:`n_svals` columns)
     """
-    if lin_op_action != lin_op.apply_mat and lin_op_action != lin_op.solve_mat:
+    if action != L.apply_mat and action != L.solve_mat:
         raise ValueError (
-            f"lin_op_action must be lin_op.apply_mat or lin_op.solve_mat."
+            f"action must be L.apply_mat or L.solve_mat."
         )
-    if lin_op_action == lin_op.apply_mat:
-        lin_op_action_adj = lin_op.apply_hermitian_transpose_mat
-    if lin_op_action == lin_op.solve_mat:
-        lin_op_action_adj = lin_op.solve_hermitian_transpose_mat
+    action_adj = L.apply_hermitian_transpose_mat if action == L.apply_mat else \
+        L.solve_hermitian_transpose_mat
     # Assemble random BV (this will be multiplied against L^*)
-    rowsizes = lin_op.get_dimensions()[0]
-    X = SLEPc.BV().create(comm=lin_op._comm)
+    rowsizes = L._dimensions[0]
+    X = SLEPc.BV().create(comm=L._comm)
     X.setSizes(rowsizes, n_rand)
     X.setType('mat')
     X.setRandomNormal()
     for j in range (n_rand):
         xj = X.getColumn(j)
-        if lin_op._real:
+        if L._real:
             row_offset = xj.getOwnershipRange()[0]
             rows = np.arange(rowsizes[0], dtype=np.int64) + row_offset
-            array = xj.getArray()
-            xj.setValues(rows, array.real)
+            xj.setValues(rows, xj.getArray().real)
             xj.assemble()
-        if lin_op._block_cc:
-            enforce_complex_conjugacy(lin_op._comm, xj, lin_op._nblocks)
+        if L._block_cc:
+            enforce_complex_conjugacy(L._comm, xj, L._nblocks)
         X.restoreColumn(j, xj)
     X.orthogonalize(None)
     # Perform randomized SVD loop
-    Qadj = SLEPc.BV().create(comm=lin_op._comm)
-    Qadj.setSizes(lin_op.get_dimensions()[-1], n_rand)
+    Qadj = SLEPc.BV().create(comm=L._comm)
+    Qadj.setSizes(L._dimensions[-1], n_rand)
     Qadj.setType('mat')
-    Qfwd = SLEPc.BV().create(comm=lin_op._comm)
-    Qfwd.setSizes(lin_op.get_dimensions()[0], n_rand)
-    Qfwd.setType('mat')
-    lin_op_action_adj(X, Qadj)
+    Qadj = action_adj(X, Qadj)
     Qadj.orthogonalize(None)
+    X.destroy()
+    Qfwd = SLEPc.BV().create(comm=L._comm)
+    Qfwd.setSizes(L._dimensions[0], n_rand)
+    Qfwd.setType('mat')
     R = create_dense_matrix(MPI.COMM_SELF, (n_rand, n_rand))
     for j in range (n_loops):
-        lin_op_action(Qadj, Qfwd)
+        Qfwd = action(Qadj, Qfwd)
         Qfwd.orthogonalize(None)
-        lin_op_action_adj(Qfwd, Qadj)
+        Qadj = action_adj(Qfwd, Qadj)
         Qadj.orthogonalize(R)
     # Compute low-rank SVD
     u, s, v = sp.linalg.svd(R.getDenseArray())
+    R.destroy()
     v = v.conj().T
     s = s[:n_svals]
     u = u[:,:n_svals]
@@ -85,4 +99,49 @@ def randomized_svd(lin_op, lin_op_action, n_rand, n_loops, n_svals):
     Qadj.multInPlace(u, 0, n_svals)
     Qadj.setActiveColumns(0, n_svals)
     Qadj.resize(n_svals, copy=True)
+    u.destroy()
+    v.destroy()
     return (Qfwd, np.diag(s), Qadj)
+
+
+def check_randomized_svd_convergence(
+        action: typing.Callable[[PETSc.Vec, PETSc.Vec], PETSc.Vec], 
+        U: SLEPc.BV,
+        S: np.ndarray,
+        V: SLEPc.BV
+    ) -> None:
+    r"""
+    Check the convergence of the singular value triplets by measuring
+    :math:`\lVert Av/sigma - u\rVert` for every triplet.
+
+    :param action: one of :meth:`.LinearOperator.apply` or 
+        :meth:`.LinearOperator.solve`
+    :type action: Callable[[PETSc.Vec, PETSc.Vec], PETSc.Vec]
+    :param U: left singular vectors
+    :type U: SLEPc.BV
+    :param D: diagonal 2D numpy array with the singular values
+    :type D: numpy.ndarray
+    :param V: right singular vectors
+    :type V: SLEPc.BV
+    
+    :return: None
+    """
+    petscprint(MPI.COMM_WORLD, " ")
+    petscprint(MPI.COMM_WORLD, "Executing SVD triplet convergence check...")
+    x = U.createVec()
+    n_svals = S.shape[-1]
+    for k in range (n_svals):
+        v = V.getColumn(k)
+        u = U.getColumn(k)
+        x = action(v, x)
+        x.scale(1./S[k, k])
+        x.axpy(-1.0, u)
+        error = x.norm()
+        str = "Error for SVD triplet %d = %1.15e"%(k+1, error)
+        petscprint(MPI.COMM_WORLD, str)
+        U.restoreColumn(k, u)
+        V.restoreColumn(k, v)
+    x.destroy()
+    petscprint(MPI.COMM_WORLD, "Executing SVD triplet convergence check...")
+    petscprint(MPI.COMM_WORLD, " ")
+    

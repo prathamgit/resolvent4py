@@ -17,7 +17,7 @@ from ..linear_operators import LowRankUpdatedLinearOperator
 from ..linear_operators import ProductLinearOperator
 from ..solvers_and_preconditioners_functions import create_mumps_solver
 from ..applications import eig
-from ..applications import biorthogonalize_eigenvectors
+from ..applications import match_right_and_left_eigenvectors
 from ..miscellaneous import petscprint
 from ..linalg import bv_add
 from ..linalg import bv_conj
@@ -648,7 +648,7 @@ class StabilityComponent:
                             self.process_evals_adj[i])
             petscprint(self.comm, "   ")
             petscprint(self.comm, np.diag(Dw))
-            V, W, D, Dw = biorthogonalize_eigenvectors(V, W, D, Dw)
+            V, W, D, Dw = match_right_and_left_eigenvectors(V, W, D, Dw)
             petscprint(self.comm, "   ")
             petscprint(self.comm, np.diag(D))
             petscprint(self.comm, "   ")
@@ -771,7 +771,7 @@ class StabilityComponentNew:
                           self.process_evals[i])
             Dw, W = eig(linop, act_ht, self.krylov_dim, self.n_evals, \
                             self.process_evals_adj[i])
-            V, W, D, Dw = biorthogonalize_eigenvectors(V, W, D, Dw)
+            V, W, D, Dw = match_right_and_left_eigenvectors(V, W, D, Dw)
             for obj in linop_tuple[2:]: obj()
             # petscprint(self.comm, ".................................")
             # petscprint(self.comm, "Eigenvalues from gradient........")

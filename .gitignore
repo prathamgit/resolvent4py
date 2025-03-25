@@ -1,5 +1,6 @@
 debugging/data/
 docs/build/
+resolvent4py.egg-info
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -168,3 +169,8 @@ cython_debug/
 *.dat.info
 *.npy
 *.csv
+
+# Ignore all folders data/ and results/
+**/data/
+**/results/
+

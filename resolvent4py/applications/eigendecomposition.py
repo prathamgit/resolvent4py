@@ -3,59 +3,64 @@ from .. import sp
 from .. import MPI
 from .. import PETSc
 from .. import SLEPc
+from .. import typing
+
+from ..linear_operators import LinearOperator
 from ..linalg import enforce_complex_conjugacy
 from ..miscellaneous import petscprint
+from ..random import generate_random_petsc_vector
 
-def arnoldi_iteration(lin_op, lin_op_action, krylov_dim):
+def arnoldi_iteration(
+        L: LinearOperator, 
+        action: typing.Callable[[PETSc.Vec, PETSc.Vec], PETSc.Vec], 
+        krylov_dim: int
+    ) -> typing.Tuple[SLEPc.BV, np.ndarray]:
     r"""
-        This function uses the Arnoldi iteration algorithm to compute an 
-        orthonormal basis and the corresponding Hessenberg matrix 
-        for the range of the linear operator specified by
-        :code:`lin_op` and :code:`lin_op_action`.
+    Perform the Arnoldi iteration algorithm to compute an 
+    orthonormal basis and the corresponding Hessenberg matrix 
+    for the range of the linear operator specified by
+    :code:`L` and :code:`action`.
 
-        :param lin_op: any child class of the :code:`LinearOperator` class
-        :param lin_op_action: one of :code:`lin_op.apply`, :code:`lin_op.solve`,
-            :code:`lin_op.apply_hermitian_transpose` or 
-            :code:`lin_op.solve_hermitian_transpose`
-        :param krylov_dim: dimension of the Krylov subspace
-        :type kyrlov_dim: int
+    :param L: instance of the :class:`.LinearOperator` class
+    :type L: :class:`.LinearOperator`
+    :param action: one of :meth:`.LinearOperator.apply`, 
+        :meth:`.LinearOperator.apply_hermitian_transpose`, 
+        :meth:`.LinearOperator.solve` or 
+        :meth:`.LinearOperator.solve_hermitian_transpose`
+    :type action: Callable[[PETSc.Vec, PETSc.Vec], PETSc.Vec]
+    :param krylov_dim: dimension of the Arnoldi Krylov subspace
+    :type krylov_dim: int
 
-        :return: a 2-tuple with an orthonormal basis for the Krylov subspace
-            and the Hessenberg matrix
-        :rtype: (SLEPc BV with :code:`krylov_dim` columns, \
-            numpy.ndarray of size :code:`krylov_dim x krylov_dim`)
+    :return: tuple with an orthonormal basis for the Krylov subspace
+        and the Hessenberg matrix
+    :rtype: (`BV`_ with :code:`krylov_dim` columns, \
+        numpy.ndarray of size :code:`krylov_dim x krylov_dim`)
     """
-    comm = lin_op.get_comm()
-    sizes = lin_op.get_dimensions()[0]
-    nblocks = lin_op.get_nblocks()
-    block_cc = lin_op._block_cc
-    
-    # Initialize the BV structure and the Hessenberg matrix
+    comm = L._comm
+    sizes = L._dimensions[0] if action == L.apply or action == L.solve else \
+        L._dimensions[1]
+    nblocks = L.get_nblocks()
+    block_cc = L._block_cc
+    # Initialize the Hessenberg matrix and the BV for the Krylov subspace
     Q = SLEPc.BV().create(comm=comm)
     Q.setSizes(sizes, krylov_dim)
     Q.setType('mat')
     H = np.zeros((krylov_dim, krylov_dim), dtype=np.complex128)
-    # Draw the first vector at random
-    q = Q.createVec()
-    qa = np.random.randn(sizes[0]) + 1j*np.random.randn(sizes[0])
-    qa = qa.real if lin_op._real == True else qa
-    q.setArray(qa)
+    complex = False if L._real else True
+    q = generate_random_petsc_vector(comm, sizes, complex)
     enforce_complex_conjugacy(comm, q, nblocks) if block_cc == True else None
     q.scale(1./q.norm())
     Q.insertVec(0, q)
-    v = lin_op.create_left_vector() if lin_op_action == lin_op.apply or \
-        lin_op_action == lin_op.solve else lin_op.create_right_vector()
-    # Perform Arnoldi iteration
+    # Perform the Arnoldi iterations
+    v = L.create_left_vector() if action == L.apply or \
+        action == L.solve else L.create_right_vector()
     for k in range(1, krylov_dim+1):
-        v = lin_op_action(q, v)
-        # string = "Arnoldi iteration (%d/%d) - ||Aq|| "%(k, krylov_dim) + \
-        #             "= %1.15e"%(v.norm())
-        # petscprint(comm, string)
+        v = action(q, v)
         for j in range (k):
             qj = Q.getColumn(j)
             H[j,k-1] = v.dot(qj)
-            v.axpy(-H[j,k-1],qj)
-            Q.restoreColumn(j,qj)
+            v.axpy(-H[j,k-1], qj)
+            Q.restoreColumn(j, qj)
         if k < krylov_dim:
             H[k,k-1] = v.norm()
             v.scale(1./H[k,k-1])
@@ -63,49 +68,92 @@ def arnoldi_iteration(lin_op, lin_op_action, krylov_dim):
         q.destroy()
         q = v.copy()
     q.destroy()
+    v.destroy()
     return (Q, H)
 
-
-def eig(lin_op, lin_op_action, krylov_dim, n_evals, process_evals=None):
+def eig(
+        L: LinearOperator, 
+        action: typing.Callable[[PETSc.Vec, PETSc.Vec], PETSc.Vec], 
+        krylov_dim: int, 
+        n_evals: int, 
+        process_evals: typing.Optional[\
+            typing.Callable[[np.ndarray], np.ndarray]] = None
+    ) -> typing.Tuple[np.ndarray, SLEPc.BV]:
     r"""
-        Compute the eigendecomposition of the linear operator :math:`L` 
-        specified by :code:`lin_op` and :code:`lin_op_action`. Example:
-        to compute the eigenvalues of :math:`L` closest to the origin, 
-        set :code:`lin_op_action = lin_op.solve` and 
-        :code:`process_evals = lambda x: 1./x`.
+    Compute the eigendecomposition of the linear operator specified by 
+    :code:`L` and :code:`action`. For example,
+    to compute the eigenvalues of :math:`L` closest to the origin, 
+    set :code:`action = L.solve` and 
+    :code:`process_evals = lambda x: 1./x`.
 
-        :param lin_op: any child class of the :code:`LinearOperator` class
-        :param lin_op_action: one of :code:`lin_op.apply`, :code:`lin_op.solve`,
-            :code:`lin_op.apply_hermitian_transpose` or 
-            :code:`lin_op.solve_hermitian_transpose`
-        :param krylov_dim: dimension of the Arnoldi Krylov subspace
-        :type krylov_dim: int
-        :param n_evals: number of eigenvalues to return
-        :type n_evals: int
-        :param process_evals: function to extract the desired eigenvalues (see
-            example above).
-        :type process_evals: Callable
+    :param L: instance of the :class:`.LinearOperator` class
+    :type L: :class:`.LinearOperator`
+    :param action: one of :meth:`.LinearOperator.apply`, 
+        :meth:`.LinearOperator.apply_hermitian_transpose`, 
+        :meth:`.LinearOperator.solve` or 
+        :meth:`.LinearOperator.solve_hermitian_transpose`
+    :type action: Callable[[PETSc.Vec, PETSc.Vec], PETSc.Vec]
+    :param krylov_dim: dimension of the Arnoldi Krylov subspace
+    :type krylov_dim: int
+    :param n_evals: number of eigenvalues to return
+    :type n_evals: int
+    :param process_evals: function to extract the desired eigenvalues
+        (see description above for an example).
+    :type process_evals: Optional[Callable[[np.ndarray], np.ndarray]], default
+        is :code:`lambda x: x`
 
-        :return: a 2-tuple with the :code:`n_evals` desired eigenvalues
-            and corresponding eigenvectors
-        :rtype: (numpy.ndarray of size :code:`n_evals x n_evals`, 
-            SLEPc.BV with :code:`n_evals` columns)
+    :return: tuple with the desired eigenvalues and corresponding eigenvectors
+    :rtype: (numpy.ndarray of size :code:`n_evals x n_evals`, 
+        SLEPc.BV with :code:`n_evals` columns)
     """
-    Q, H = arnoldi_iteration(lin_op, lin_op_action, krylov_dim)
+    Q, H = arnoldi_iteration(L, action, krylov_dim)
     evals, evecs = sp.linalg.eig(H)
     idces = np.flipud(np.argsort(np.abs(evals)))[:n_evals]
     evals = evals[idces]
     evecs = evecs[:,idces]
-    evecs_ = PETSc.Mat().createDense(evecs.shape,None,evecs,comm=MPI.COMM_SELF)
-    Q.multInPlace(evecs_,0,n_evals)
-    Q.setActiveColumns(0,n_evals)
-    Q.resize(n_evals,copy=True)
-    process_evals = (lambda x: x) if process_evals == None else process_evals
-    evals = process_evals(evals)
+    evecs_ = PETSc.Mat().createDense(evecs.shape, None, evecs, \
+                                     comm=MPI.COMM_SELF)
+    Q.multInPlace(evecs_,0, n_evals)
+    Q.setActiveColumns(0, n_evals)
+    Q.resize(n_evals, copy=True)
+    evals = evals if process_evals is None else process_evals(evals)
     evecs_.destroy()
     return (np.diag(evals), Q)
 
-def biorthogonalize_eigenvectors(V, W, Dv, Dw):
+def match_right_and_left_eigenvectors(
+        V: SLEPc.BV, 
+        W: SLEPc.BV, 
+        Dv: np.ndarray, 
+        Dw: np.ndarray
+    ) -> typing.Tuple[SLEPc.BV, SLEPc.BV, np.ndarray, np.ndarray]:
+    r"""
+    Scale and sort the right and left eigenvectors and corresponding eigenvalues 
+    of an underlying operator :math:`L`, so that
+
+    .. math::
+
+        W^* L V = D_v = D_w,\quad W^* V = I \in\mathbb{R}^{m\times m}.
+
+
+    :param V: :code:`m` right eigenvectors
+    :type V: SLEPc.BV
+    :param W: :code:`m` left eigenvectors
+    :type W: SLEPc.BV
+    :param Dv: right eigenvalues
+    :type Dv: numpy.ndarray of size :code:`m x m`
+    :param Dv: eigenvalues computed from the right eigendecomposition 
+        of :math:`L`
+    :type Dv: numpy.ndarray of size :code:`m x m`
+    :param Dw: eigenvalues computed from the left eigendecomposition 
+        of :math:`L`. (Attention: these have already been complex conjugated.)
+    :type Dw: numpy.ndarray of size :code:`m x m`
+
+    :return: tuple :math:`(V, W, D_v, D_w)` with the biorthogonalized 
+        eigenvectors and corresponding eigenvalues
+    :rtype: (SLEPc.BV with :code:`m` columns, SLEPc.BV with :code:`m` columns, 
+        numpy.ndarray of size :code:`m x m`,
+        numpy.ndarray of size :code:`m x m`)
+    """
     # Match the right and left eigenvalues/vectors
     Dv = np.diag(Dv)
     Dw = np.diag(Dw)
@@ -128,89 +176,26 @@ def biorthogonalize_eigenvectors(V, W, Dv, Dw):
     V.multInPlace(Minv, 0, V.getSizes()[-1])
     M.destroy()
     Minv.destroy()
-    return V, W, Dv, Dw
+    return (V, W, Dv, Dw)
 
-
-def right_and_left_eig(lin_op, lin_op_action, krylov_dim, n_evals, \
-                       process_evals=None):
+def check_eig_convergence(
+        action: typing.Callable[[PETSc.Vec, PETSc.Vec], PETSc.Vec], 
+        D: np.ndarray,
+        V: SLEPc.BV
+    ) -> None:
     r"""
-        Compute the right and left eigendecomposition of the linear operator 
-        :math:`L` specified by :code:`lin_op` and :code:`lin_op_action`.
-        Example: to compute the eigenvalues of :math:`L` closest to the origin, 
-        set :code:`lin_op_action = lin_op.solve` and 
-        :code:`process_evals = lambda x: 1./x`.
-
-        :param lin_op: any child class of the :code:`LinearOperator` class
-        :param lin_op_action: one of :code:`lin_op.apply`, :code:`lin_op.solve`,
-            :code:`lin_op.apply_hermitian_transpose` or 
-            :code:`lin_op.solve_hermitian_transpose`
-        :param krylov_dim: dimension of the Arnoldi Krylov subspace
-        :type krylov_dim: int
-        :param n_evals: number of eigenvalues to return
-        :type n_evals: int
-        :param process_evals: function to extract the desired eigenvalues (see
-            example above).
-        :type process_evals: Callable
-
-        :return: a 3-tuple with the desired right eigenvectors :math:`V`, the 
-            corresponding eigenvalues :math:`D` and left eigenvectors :math:`W`
-            normalized so that :math:`W^* V = I`.
-        :rtype: (SLEPc.BV with :code:`n_evals` columns, 
-            numpy.ndarray of size :code:`n_evals x n_evals`, 
-            SLEPc.BV with :code:`n_evals` columns)
-    """
+    Check convergence of the eigenpairs by measuring 
+    :math:`\lVert L v - \lambda v\rVert` for each pair :math:`(\lambda, v)`.
     
-    if lin_op_action == lin_op.solve:
-        lin_op_action_adj = lin_op.solve_hermitian_transpose
-    elif lin_op_action == lin_op.apply:
-        lin_op_action_adj = lin_op.apply_hermitian_transpose
-    else:
-        raise ValueError (
-            f"lin_op_action must be one of lin_op.solve or lin_op.apply. "
-            f"See documentation for additional information."
-        )
-    # Compute the right and left eigendecompositions
-    Dfwd, Qfwd = eig(lin_op, lin_op_action, krylov_dim, n_evals, process_evals)
-    Dadj, Qadj = eig(lin_op, lin_op_action_adj, krylov_dim, n_evals, \
-                     lambda x: np.conj(process_evals(x)))
-    # Match the right and left eigenvalues/vectors
-    Dfwdd = np.diag(Dfwd)
-    Dadjd = np.diag(Dadj)
-    idces = [np.argmin(np.abs(Dfwdd - val)) for val in Dadjd]
-    Dadj = np.diag(Dadjd[idces])
-    Qadj_ = Qadj.copy()
-    for j in range (len(idces)):
-        q_ = Qadj_.getColumn(idces[j])
-        Qadj.insertVec(j, q_)
-        Qadj_.restoreColumn(idces[j], q_)
-    Qadj_.destroy()
-    # Biorthogonalize the eigenvectors
-    M = Qfwd.dot(Qadj)
-    evals, evecs = sp.linalg.eig(M.getDenseArray())
-    idces = np.argwhere(np.abs(evals) < 1e-10).reshape(-1)
-    evals[idces] += 1e-10
-    Minv = evecs@np.diag(1./evals)@sp.linalg.inv(evecs)
-    Minv = PETSc.Mat().createDense(Minv.shape, None, Minv, MPI.COMM_SELF)
-    M.destroy()
-    Qfwd.multInPlace(Minv, 0, n_evals)
-    Dfwd = np.diag(Dfwdd)
-    return (Qfwd, Dfwd, Dadj, Qadj)
-
-
-def check_eig_convergence(lin_op_action, D, V):
-    r"""
-        Check convergence of the eigenpairs by measuring 
-        :math:`\lVert L v - \lambda v\rVert`.
-
-        :param lin_op_action: one of :code:`L.apply`, :code:`L.solve`, 
-            :code:`L.apply_hermitian_transpose` or 
-            :code:`L.solve_hermitian_transpose`
-        :param D: diagonal 2D numpy array with the eigenvalues
-        :type D: numpy.ndarray
-        :param V: corresponding eigenvectors
-        :type V: `BV`_
-            
-        :return: None
+    :param action: one of :meth:`.LinearOperator.apply` or 
+        :meth:`.LinearOperator.apply_hermitian_transpose`
+    :type action: Callable[[PETSc.Vec, PETSc.Vec], PETSc.Vec]
+    :param D: diagonal 2D numpy array with the eigenvalues
+    :type D: numpy.ndarray
+    :param V: corresponding eigenvectors
+    :type V: SLEPc.BV
+    
+    :return: None
     """
     petscprint(MPI.COMM_WORLD, " ")
     petscprint(MPI.COMM_WORLD, "Executing eigenpair convergence check...")
@@ -219,7 +204,7 @@ def check_eig_convergence(lin_op_action, D, V):
         v = V.getColumn(j)
         e = v.copy()
         e.scale(D[j,j])
-        w = lin_op_action(v, w)
+        w = action(v, w)
         e.axpy(-1.0, w)
         error = e.norm()
         V.restoreColumn(j, v)
@@ -229,35 +214,3 @@ def check_eig_convergence(lin_op_action, D, V):
     w.destroy()
     petscprint(MPI.COMM_WORLD, "Executing eigenpair convergence check...")
     petscprint(MPI.COMM_WORLD, " ")
-
-
-def check_right_and_left_eigendecomp(lin_op_action, D, V, W):
-    r"""
-        Check convergence of the eigenpairs by measuring 
-        :math:`\lVert L v - \lambda v\rVert`.
-
-        :param lin_op_action: one of :code:`L.apply`, :code:`L.solve`, 
-            :code:`L.apply_hermitian_transpose` or 
-            :code:`L.solve_hermitian_transpose`
-        :param D: diagonal 2D numpy array with the eigenvalues
-        :type D: numpy.ndarray
-        :param V: corresponding eigenvectors
-        :type V: `BV`_
-            
-        :return: None
-    """
-    Av = V.createVec()
-    for j in range (D.shape[-1]):
-        v = V.getColumn(j)
-        w = W.getColumn(j)
-        Av = lin_op_action(v, Av)
-        error = np.abs(Av.dot(w) - D[j, j])/np.abs(D[j, j])
-        petscprint(MPI.COMM_WORLD, Av.dot(w))
-        str = "Error for eval (%1.3f, %1.3f) = %1.15e"%(D[j,j].real, \
-                                                        D[j,j].imag, error)
-        petscprint(MPI.COMM_WORLD, str)
-        W.restoreColumn(j, w)
-        V.restoreColumn(j, v)
-    w.destroy()
-
-        

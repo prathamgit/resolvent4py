@@ -17,7 +17,6 @@ from ..linear_operators import LowRankUpdatedLinearOperator
 from ..linear_operators import ProductLinearOperator
 from ..solvers_and_preconditioners_functions import create_mumps_solver
 from ..applications import eig
-from ..applications import right_and_left_eig
 from ..miscellaneous import petscprint
 from ..linalg import bv_add
 from ..linalg import bv_conj

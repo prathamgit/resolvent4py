@@ -7,7 +7,8 @@
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
 
-import os, sys
+import os
+import sys
 sys.path.insert(0,os.path.abspath('../..'))
 
 project = 'resolvent4py'
@@ -30,6 +31,7 @@ extensions = [
 
 html_logo = "logo.png"
 html_show_sphinx = False
+autosummary_generate = True
 
 templates_path = ['_templates']
 exclude_patterns = []
