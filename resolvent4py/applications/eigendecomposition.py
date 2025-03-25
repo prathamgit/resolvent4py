@@ -4,6 +4,7 @@ from .. import MPI
 from .. import PETSc
 from .. import SLEPc
 from .. import typing
+from typing import TYPE_CHECKING
 
 from ..linear_operators import LinearOperator
 from ..linalg import enforce_complex_conjugacy
@@ -186,7 +187,7 @@ def check_eig_convergence(
     r"""
     Check convergence of the eigenpairs by measuring 
     :math:`\lVert L v - \lambda v\rVert` for each pair :math:`(\lambda, v)`.
-    
+
     :param action: one of :meth:`.LinearOperator.apply` or 
         :meth:`.LinearOperator.apply_hermitian_transpose`
     :type action: Callable[[PETSc.Vec, PETSc.Vec], PETSc.Vec]

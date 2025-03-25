@@ -112,7 +112,7 @@ def check_randomized_svd_convergence(
     ) -> None:
     r"""
     Check the convergence of the singular value triplets by measuring
-    :math:`\lVert Av/sigma - u\rVert` for every triplet.
+    :math:`\lVert Av/\sigma - u\rVert` for every triplet :math:`(u, \sigma, v)`.
 
     :param action: one of :meth:`.LinearOperator.apply` or 
         :meth:`.LinearOperator.solve`

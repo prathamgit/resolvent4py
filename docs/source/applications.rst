@@ -13,8 +13,8 @@ Randomized SVD
    :members:
    :noindex:
 
-H2 optimization
----------------
-.. automodule:: resolvent4py.applications.H2_optimization
+Balanced Truncation
+-------------------
+.. automodule:: resolvent4py.applications.balanced_truncation
    :members:
    :noindex:
