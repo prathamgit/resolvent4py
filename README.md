@@ -24,7 +24,11 @@ and control of large-scale linear systems.
     --with-scalar-type=complex --with-debugging=0 \
     COPTFLAGS=-O3 CXXOPTFLAGS=-O3 FOPTFLAGS=-O3
     ```
-    
+- After configuring, build and check the installation
+    ```bash
+    make PETSC_DIR=/your/petsc/dir PETSC_ARCH=resolvent4py_arch all && \
+    make check all
+    ```
 
 - Install `sphinx` using `pip install sphinx sphinx-rtd-theme` unless already 
 available
