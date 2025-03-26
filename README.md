@@ -9,9 +9,9 @@ and control of large-scale linear systems.
 
 - Download [PETSc](https://petsc.org/release/install/download/) either by 
     cloning the repository or by downloading a tarball. Any version >= 3.20
-    should work. Development was done with version 3.20.1
+    should work. Development was done with version 3.20.1.
 - Configure PETSc following the [configuration guidelines](
-    https://petsc.org/release/install/install/). A required configure option
+    https://petsc.org/release/install/install/). A required configuration option
     is `--with-scalar-type=complex`, and required external libraries include
     `mumps`, `scalapack`, `metis`, `parmetis`, `bison` and `ptscotch`.
     For example, our version of PETSc was configured as follows:
@@ -23,7 +23,8 @@ and control of large-scale linear systems.
     --download-metis --download-ptscotch --download-bison \
     --with-scalar-type=complex --with-debugging=0 \
     COPTFLAGS=-O3 CXXOPTFLAGS=-O3 FOPTFLAGS=-O3
-
+    ```
+    
 
 - Install `sphinx` using `pip install sphinx sphinx-rtd-theme` unless already 
 available
