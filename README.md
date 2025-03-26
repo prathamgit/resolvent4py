@@ -18,11 +18,11 @@ and control of large-scale linear systems.
 
     ```bash
     ./configure PETSC_ARCH=resolvent4py_arch --with-cc=gcc --with-cxx=g++ 
-        --with-fc=gfortran --download-mpich --download-fblaslapack 
-        --download-mumps --download-scalapack --download-parmetis 
-        --download-metis --download-ptscotch --download-bison 
-        --with-scalar-type=complex --with-debugging=0 
-        COPTFLAGS=-O3 CXXOPTFLAGS=-O3 FOPTFLAGS=-O3
+    --with-fc=gfortran --download-mpich --download-fblaslapack 
+    --download-mumps --download-scalapack --download-parmetis 
+    --download-metis --download-ptscotch --download-bison 
+    --with-scalar-type=complex --with-debugging=0 
+    COPTFLAGS=-O3 CXXOPTFLAGS=-O3 FOPTFLAGS=-O3
     ```
 - After configuring, build and check the installation
     ```bash
