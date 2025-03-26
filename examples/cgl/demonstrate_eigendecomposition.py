@@ -1,12 +1,9 @@
-import numpy as np
-import scipy as sp
-import cgl
-
 import os
 import sys
 sys.path.append('../../')
 import resolvent4py as res4py
-
+import numpy as np
+import cgl
 from mpi4py import MPI
 
 import matplotlib.pyplot as plt

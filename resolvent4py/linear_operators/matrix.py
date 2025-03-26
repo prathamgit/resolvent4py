@@ -1,28 +1,36 @@
 from .linear_operator import LinearOperator
 from ..linalg import mat_solve_hermitian_transpose
 from .. import SLEPc
-import gc
+from .. import PETSc
+from .. import MPI
+from .. import typing
 
 class MatrixLinearOperator(LinearOperator):
     r"""
-        Class for a linear operator :math:`L = A`, where :math:`A` is a matrix.
-        In general, :code:`A` can be any matrix (rectangular or square, 
-        invertible or non-invertible). If a :code:`ksp` is provided, however, 
-        :code:`A` must be invertible.
+    Class for a linear operator :math:`L = A`, where :math:`A` is a matrix.
+    In general, :code:`A` can be any matrix (rectangular or square, 
+    invertible or non-invertible). For an invertible :math:`A`, the user 
+    may also provide a PETSc KSP object :code:`ksp` to act with :math:`A^{-1}` 
+    on vectors and matrices.
 
-        :param comm: MPI communicator (one of :code:`MPI.COMM_WORLD` or
-            :code:`MPI.COMM_SELF`)
-        :param A: a PETSc matrix
-        :type A: `MatType`_
-        :param ksp: [optional] a PETSc KSP object to enable the :code:`solve()`
-            and :code:`solve_hermitian_transpose()` methods. If a :code:`KSP` is 
-            provided, its type and the type of :code:`A` must be compatible.
-        :type ksp: `KSP`_
-        :param nblocks: [optional] number of blocks (if the linear operator \
-            has block structure). This must be an odd number.
-        :type nblocks: int
+    :param comm: MPI communicator :code:`MPI.COMM_WORLD`
+    :type comm: MPI.Comm
+    :param A: a PETSc matrix
+    :type A: PETSc.Mat
+    :param ksp: a PETSc KSP object to enable the :code:`solve()`
+        and :code:`solve_hermitian_transpose()` methods
+    :type ksp: Optional[Union[PETSc.KSP, None]], defaults to None
+    :param nblocks: number of blocks (if the linear operator has block 
+        structure). This must be an odd number.
+    :type nblocks: Optional[Union[int, None]], defaults to None
     """
-    def __init__(self, comm, A, ksp=None, nblocks=None):
+    def __init__(
+            self: "MatrixLinearOperator", 
+            comm: MPI.Comm, 
+            A: PETSc.Mat, 
+            ksp: typing.Optional[typing.Union[PETSc.KSP, None]]=None, 
+            nblocks: typing.Optional[typing.Union[int, None]]=None
+        ) -> None:
         self.A = A
         self.ksp = ksp
         super().__init__(comm, 'MatrixLinearOperator', A.getSizes(), nblocks)
@@ -30,7 +38,6 @@ class MatrixLinearOperator(LinearOperator):
     def apply(self, x, y=None):
         y = self.create_left_vector() if y == None else y
         self.A.mult(x,y)
-        # gc.collect()
         return y
     
     def apply_mat(self, X, Y=None):
@@ -140,7 +147,14 @@ class MatrixLinearOperator(LinearOperator):
                 f"Please provide a PETSc KSP object at initialization to use "
                 f"the solve() method."
             )
-        
-    def destroy(self):
+    
+    def destroy_matrix(self):
         self.A.destroy()
+
+    def destroy_ksp(self):
         self.ksp.destroy() if self.ksp is not None else None
+
+    def destroy(self):
+        self.destroy_matrix()
+        self.destroy_ksp()
+        

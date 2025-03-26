@@ -30,9 +30,12 @@ class LinearOperator(metaclass=abc.ABCMeta):
     :type nblocks: Optional[int], default is None
     """
 
-    def __init__(self: "LinearOperator", comm: MPI.Comm, name: str, \
-                 dimensions: tuple[tuple[int, int], tuple[int, int]], \
-                    nblocks: Optional[int] = None) -> None:
+    def __init__(
+            self: "LinearOperator", 
+            comm: MPI.Comm, name: str,
+            dimensions: tuple[tuple[int, int], tuple[int, int]], 
+            nblocks: Optional[int] = None
+        ) -> None:
         self._comm = comm
         self._name = name
         self._dimensions = dimensions

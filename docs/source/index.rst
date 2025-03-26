@@ -14,9 +14,10 @@ capabilities of the PETSc library.
 Current functionalities include:
 
 - Right and left eigendecomposition 
-- Resolvent analysis
-- Balanced truncation
-- :math:`H_2`-optimal sensor and actuator placement
+- Resolvent analysis (algebraic and using time-stepping techniques)
+- Harmonic resolvent analysis
+- Balanced truncation (time-invariant and time-periodic)
+- One-Way Navier-Stokes (OWNS)
 
 
 .. toctree::

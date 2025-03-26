@@ -24,16 +24,16 @@ sizes = ((Nl, N), (Nl, N))
 names = [load_path + 'rows.dat', load_path + 'cols.dat', load_path + 'vals.dat']
 A = res4py.read_coo_matrix(comm, names, sizes)
 
-# Compute the SVD of the resolvent operator R = 1j*omega*I - A using
+# Compute the SVD of the resolvent operator R = inv(1j*omega*I - A) using
 # the randomized SVD algorithm
 res4py.petscprint(comm, "Computing LU decomposition...")
 s = -1j*0.648
-M = res4py.create_AIJ_identity(comm, sizes)
-M.scale(s)
-M.axpy(-1.0, A)
-ksp = res4py.create_mumps_solver(comm, M)
-res4py.check_lu_factorization(comm, M, ksp)
-L = res4py.MatrixLinearOperator(comm, M, ksp)
+Rinv = res4py.create_AIJ_identity(comm, sizes)
+Rinv.scale(s)
+Rinv.axpy(-1.0, A)
+ksp = res4py.create_mumps_solver(comm, Rinv)
+res4py.check_lu_factorization(comm, Rinv, ksp)
+L = res4py.MatrixLinearOperator(comm, Rinv, ksp)
 
 # Compute the svd
 res4py.petscprint(comm, "Running randomized SVD...")

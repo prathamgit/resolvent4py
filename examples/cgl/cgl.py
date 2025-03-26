@@ -2,9 +2,7 @@ import numpy as np
 import scipy
 
 class CGL:
-    
-    def __init__(self, x, nu, gamma, mu0, mu2, sigma):
-        """
+    """
         Class for the linear complex Ginzburg-Landau equation
 
         .. math::
@@ -20,7 +18,7 @@ class CGL:
         .. math::
 
             d_t q = Aq,
-
+        
         where now :math:`q` is a complex-valued vector. 
 
         :param x: array of unfiformly-spaced nodes :math:`x_i`
@@ -36,6 +34,8 @@ class CGL:
         :param sigma: (see above)
         :type sigma: float
         """
+    
+    def __init__(self, x, nu, gamma, mu0, mu2, sigma):
         self.x = x
         self.nx = len(x)
         self.dx = x[1] - x[0]

@@ -1,24 +1,13 @@
 from .. import np
-from .. import sp
 from .. import MPI
 from .. import PETSc
 from .. import SLEPc
 from .. import typing
 
-from ..io_functions import read_coo_matrix
-from ..io_functions import read_bv
-from ..linalg import bv_real
-from ..linalg import bv_imag
 from ..linalg import compute_local_size
-from ..miscellaneous import petscprint
 from ..miscellaneous import create_dense_matrix
-from ..comms import distributed_to_sequential_matrix
 
-
-from ..linear_operators import MatrixLinearOperator
-
-
-def sample_gramian_factors(
+def compute_gramian_factors(
         L_generators: typing.Callable,
         frequencies: np.ndarray,
         weights: np.ndarray,
@@ -27,32 +16,53 @@ def sample_gramian_factors(
     ) -> typing.Tuple[PETSc.Mat, PETSc.Mat]:
     r"""
     Compute the Gramian factors as outlined in section 2 of [Dergham2011]_.
-    In particular, we efficiently approximate the Reachability and Observability
-    Gramians 
+    In particular, we approximate the Reachability and Observability
+    Gramians as follows
 
     .. math::
 
-        G_R = \frac{1}{2\pi}\int_{-\infty}^{\infty}R(\omega)BB^*R(\omega)^*\
-        \,d\omega, \quad G_O = \frac{1}{2\pi}\int_{-\infty}^{\infty}\
-        R(\omega)^*CC^*R(\omega)\,d\omega
+        \begin{align}
+        G_R &= \frac{1}{2\pi}\int_{-\infty}^{\infty}R(\omega)BB^*R(\omega)^*\
+            \,d\omega \approx \sum_j w_j X(\omega_j)X(\omega_j)^* = XX^* \\
+        G_O &= \frac{1}{2\pi}\int_{-\infty}^{\infty}R(\omega)^*CC^*R(\omega)\,\
+            d\omega \approx \sum_j w_j Y(\omega_j)Y(\omega_j)^* = YY^*
+        \end{align}
+        
+    where :math:`\omega_j\in\Omega` are quadrature points and :math:`w_j` are
+    corresponding quadrature weights. Here, :math:`X(\omega_j) = R(\omega_j)B`,
+    and :math:`R(\omega) = \left(i\omega I - A\right)^{-1}`.
+    When the linear operator :math:`A` is real valued, the Gramians may be 
+    further manipulated into
 
-    using quadrature over a discrete set of frequencies :math:`\Omega`. Here,
-    :math:`R(\omega) = \left(i\omega I - A\right)^{-1}`.
-    The quadrature points and appropriate quadrature weights are supplied by
-    the user.
+    .. math::
+
+        G_R = \frac{1}{\pi}\int_{0}^{\infty}R(\omega)BB^*R(\omega)^*\
+        \,d\omega \approx \sum_j \delta_j w_j\left(X_\mathrm{r}(\omega_i)\
+        X_\mathrm{r}(\omega)^* + X_{\mathrm{i}}(\omega_j)\
+            X_{\mathrm{i}}(\omega_j)^*\right),
+
+    where the subscripts "r" and "i" denote the real and imaginary parts,
+    and :math:`\delta_j = 1` if :math:`\omega_j = 0` and 
+    :math:`\delta_j = 1/2` otherwise.
 
     :param L_generators: tuple of functions that define the linear operator \
         :math:`R(\omega)^{-1}`, the action of :math:`R(\omega)` on matrices,
         and destructors to avoid memory leaks. (See examples.)
-    :type L_generators: Tuple[[Callable, Callable, ...]]
-    :param frequencies: quadrature points
+    :type L_generators: Tuple[[Callable, Callable, Tuple[Callable, Callable, \
+        ...]]]
+    :param frequencies: quadrature points :math:`\omega_j`
     :type frequencies: numpy.ndarray
-    :param weights: quadrature weights
+    :param weights: quadrature weights :math:`w_j` (see description above to 
+        see how the definition of :math:`w_j` changes depending on whether the 
+        system is real-valued).
     :type weights: numpy.ndarray
     :param B: input matrix
     :type B: SLEPc.BV
     :param C: output matrix
     :type C: SLEPc.BV
+
+    :return: tuple :math:`(X, Y)` (see definitions above)
+    :rtype: Tuple[PETSc.Mat, PETSc.Mat]
 
     References
     ----------
@@ -77,9 +87,9 @@ def sample_gramian_factors(
         else L.solve_hermitian_transpose_mat
     
     LB = L.create_left_bv(nb)
-    LHTC = L.create_right_bv(nc)
-    Xarray = np.zeros((LB.getSizes()[0], nb*nf), dtype=np.complex128)
-    Yarray = np.zerso((LHTC.getSizes()[0], nc*nf), dtype=np.complex128)
+    LC = L.create_right_bv(nc)
+    Xarray = np.zeros((LB.getSizes()[0][0], nb*nf), dtype=np.complex128)
+    Yarray = np.zeros((LC.getSizes()[0][0], nc*nf), dtype=np.complex128)
     for k in range (len(frequencies)):
         if k > 0:
             L, action, destroyers = L_generators[k](frequencies[k])
@@ -95,35 +105,62 @@ def sample_gramian_factors(
         LCMat = LC.getMat()
         LCMat_ = LCMat.getDenseArray().copy()
         LC.restoreMat(LCMat)
-        if not split:
+        if not split:   # The system is complex-valued
             Xarray[:,k*nb:(k+1)*nb] = LBMat_
             Yarray[:,k*nc:(k+1)*nc] = LCMat_
-        else:
+        else:           # The system is real-valued
+            delta = np.sqrt(1/2)
             if k == 0:
-                Xarray[:,0:nb] = LBMat_.real
-                Yarray[:,0:nc] = LCMat_.real
+                # Handle the zero frequency separately if necessary
+                delta = 1.0 if frequencies[k] == 0.0 else delta 
+                Xarray[:,0:nb] = delta*LBMat_.real
+                Yarray[:,0:nc] = delta*LCMat_.real
             else:
                 k0 = nb + 2*(k-1)*nb
                 k1 = k0 + 2*nb
-                Xarray[:,k0:k1] = np.concatenate((LBMat_.real, LBMat_.imag), -1)
+                Xarray[:,k0:k1] = delta*np.concatenate((\
+                    LBMat_.real, LBMat_.imag), -1)
                 k0 = nc + 2*(k-1)*nc
                 k1 = k0 + 2*nc
-                Yarray[:,k0:k1] = np.concatenate((LCMat_.real, LCMat_.imag), -1)
+                Yarray[:,k0:k1] = delta*np.concatenate((\
+                    LCMat_.real, LCMat_.imag), -1)
         for destroy in destroyers: destroy()
+    Xsizes = (LB.getSizes()[0], Xarray.shape[-1])
+    Ysizes = (LC.getSizes()[0], Yarray.shape[-1])
+    X = PETSc.Mat().createDense(Xsizes, None, Xarray, MPI.COMM_WORLD)
+    Y = PETSc.Mat().createDense(Ysizes, None, Yarray, MPI.COMM_WORLD)
     LB.destroy()
-    X = PETSc.Mat().createDense(LB.getSizes(), None, Xarray, MPI.COMM_WORLD)
-    Y = PETSc.Mat().createDense(LC.getSizes(), None, Yarray, MPI.COMM_WORLD)
+    LC.destroy()
     return (X, Y)
 
 
-def compute_projection(
+def compute_balanced_projection(
         X: SLEPc.BV,
         Y: SLEPc.BV,
         r: int
     ) -> typing.Tuple[SLEPc.BV, SLEPc.BV, np.ndarray]:
+    r"""
+    Given the output :math:`(X, Y)` of :func:`.compute_gramian_factors`, compute
+    :math:`\Phi` and :math:`\Psi` (each of dimension :math:`N\times r`). 
+    Given the singular value decomposition :math:`Y^*X = U\Sigma V^*`, these
+    are given by
 
+    .. math::
+
+        \Phi = X V \Sigma^{-1/2},\quad \Psi = Y U \Sigma^{-1/2}.
+
+    :param X: reachability Gramian factor
+    :type X: PETSc.Mat
+    :param Y: observability Gramian factor
+    :type Y: PETSc. Mat
+    :param r: number of columns of :math:`\Phi` and :math:`\Psi`
+    :type r: int
+
+    :return: tuple :math:`(\Phi, \Psi, \Sigma)`
+    :rtype: Tuple[SLEPc.BV, SLEPc.BV, numpy.ndarray]
+    """
     comm = MPI.COMM_WORLD
-
+    # Compute product Y^*@X
     Y.hermitianTranspose()
     Z = Y.matMult(X)
     Y.hermitianTranspose()
@@ -134,8 +171,7 @@ def compute_projection(
     svd.setWhichSingularTriplets(SLEPc.SVD.Which.LARGEST)
     svd.setUp()
     svd.solve()
-    Z.destroy()
-
+    # Extract singular triplets
     r = np.min([r, svd.getConverged()])
     rloc = compute_local_size(r)
     u = Z.createVecLeft()
@@ -151,194 +187,22 @@ def compute_projection(
         U_[:, i] = u.getArray().copy()
         V_[:, i] = v.getArray().copy()
         S_[i, i] = s
-        S.setValue(i, i, 1./np.sqrt(s))
+        S.setValue(i, i, 1./np.sqrt(s), addv=False)
     S.assemble(None)
-    Phi_mat = X.matMatMult(V, S)
-    Psi_mat = Y.matMatMult(U, S)
+    u.destroy()
+    v.destroy()
+    svd.destroy()
+    # Compute matrices Phi and Psi for projection
+    VS = V.matMult(S, None)
+    US = U.matMult(S, None)
+    Phi_mat = X.matMult(VS, None)
+    Psi_mat = Y.matMult(US, None)
     Phi_ = SLEPc.BV().createFromMat(Phi_mat)
     Phi_.setType('mat')
     Phi = Phi_.copy()
     Psi_ = SLEPc.BV().createFromMat(Psi_mat)
     Psi_.setType('mat')
     Psi = Psi_.copy()
-    objs = [Phi_, Psi_, Phi_mat, Psi_mat, U, V, S]
+    objs = [Phi_, Psi_, Phi_mat, Psi_mat, U, V, S, Z, VS, US]
     for obj in objs: obj.destroy()
     return (Phi, Psi, S_)
-
-    
-    
-
-
-
-
-
-
-
-
-
-class BalancedTruncation:
-
-    def __init__(self, comm, fnames_jacobian, jacobian_sizes, fname_B, \
-                 B_sizes, fname_C, C_sizes, path_factors, \
-                 fname_frequencies, fname_weights):
-        
-        self.comm = comm
-        self.jacobian_sizes = jacobian_sizes
-        A = read_coo_matrix(self.comm, fnames_jacobian, jacobian_sizes)
-        self.A = MatrixLinearOperator(comm, A)
-        self.B = read_bv(comm, fname_B, B_sizes)
-        self.C = read_bv(comm, fname_C, C_sizes)
-
-        self.freqs = np.load(fname_frequencies)
-        self.weights = np.load(fname_weights)
-        self.load_factors(path_factors)
-    
-    def load_factors(self, path_factors):
-        
-        sizes_B = self.B.getSizes()
-        sizes_C = self.C.getSizes()
-        self.Xf, self.Yf = [], []
-        for i in range (len(self.freqs)):
-            fname_x = path_factors + 'Xf_omega_%1.5f.dat'%self.freqs[i]
-            fname_y = path_factors + 'Yf_omega_%1.5f.dat'%self.freqs[i]
-            self.Xf.append(read_bv(self.comm, fname_x, sizes_B))
-            self.Yf.append(read_bv(self.comm, fname_y, sizes_C))
-
-
-    def compute_balancing_factors(self, rdim=None):
-
-        if np.min(self.freqs) > 0.0:
-            negative_freqs = False
-            nf = 2*len(self.freqs)
-        else:
-            negative_freqs = True
-            nf = len(self.freqs)
-
-        nb = self.B.getSizes()[-1]
-        nc = self.C.getSizes()[-1]
-        M = np.zeros((nf*nc, nf*nb), dtype=np.complex128)
-        if negative_freqs:
-            for i in range (len(self.Yf)):
-                wi = self.weights[i]
-                Yi = self.Yf[i]
-                idxi0, idxi1 = i*nc, (i+1)*nc
-                for j in range (len(self.Xf)):
-                    wj = self.weights[j]
-                    Xj = self.Xf[j]
-                    idxj0, idxj1 = j*nb, (j+1)*nb
-                    f = np.sqrt(wi*wj)
-                    Mat = Xj.dot(Yi)
-                    M[idxi0:idxi1, idxj0:idxj1] = f*Mat.getDenseArray()
-                    Mat.destroy()
-        else:
-            shift_i = [0, nc*nf//2]
-            shift_j = [0, nb*nf//2]
-            for i in range (len(self.Yf)):
-                wi = self.weights[i]
-                Yi = self.Yf[i]
-                Yreal = bv_real(Yi)
-                Yimag = bv_imag(Yi)
-                for (ii, Y) in enumerate([Yreal, Yimag]):
-                    idxi0 = i*nc + shift_i[ii]
-                    idxi1 = (i+1)*nc + shift_i[ii]
-                    for j in range (len(self.Xf)):
-                        wj = self.weights[j]
-                        Xj = self.Xf[j]
-                        Xreal = bv_real(Xj)
-                        Ximag = bv_imag(Xj)
-                        for (jj, X) in enumerate([Xreal, Ximag]):
-                            idxj0 = j*nb + shift_j[jj]
-                            idxj1 = (j+1)*nb + shift_j[jj]
-                            f = 2*np.sqrt(wi*wj)
-                            Mat = X.dot(Y)
-                            M[idxi0:idxi1, idxj0:idxj1] = f*Mat.getDenseArray()
-                            Mat.destroy()
-                        Xreal.destroy()
-                        Ximag.destroy()
-                Yreal.destroy()
-                Yimag.destroy()
-
-        U, S, VHT = sp.linalg.svd(M, full_matrices=False)
-        V = VHT.conj().T
-        idces = np.argwhere(S > 1e-11).reshape(-1)
-        U = U[:, idces]
-        S = S[idces]
-        V = V[:, idces]
-        USsqrt = U@np.diag(1./np.sqrt(S))
-        VSsqrt = V@np.diag(1./np.sqrt(S))
-
-        Phi = SLEPc.BV().create(comm=self.comm)
-        Phi.setSizes(self.Xf[0].getSizes()[0], len(idces))
-        Phi.setType('mat')
-        Phi.scale(0.0)
-        Psi = Phi.copy()
-        if negative_freqs:
-            for i in range (len(self.Xf)):
-                wi = np.sqrt(self.weights[i])
-                VSsqrt_i = wi*VSsqrt[i*nb:(i+1)*nb,]
-                Vi = PETSc.Mat().createDense(VSsqrt_i.shape, None, \
-                                             VSsqrt_i, MPI.COMM_SELF)
-                Phi.mult(1.0, 1.0, self.Xf[i], Vi)
-                USsqrt_i = wi*USsqrt[i*nc:(i+1)*nc,]
-                Ui = PETSc.Mat().createDense(USsqrt_i.shape, None, \
-                                            USsqrt_i, MPI.COMM_SELF)
-                Psi.mult(1.0, 1.0, self.Yf[i], Ui)
-                Vi.destroy()
-                Ui.destroy()
-        else:
-            shift_i = [0, nc*nf//2]
-            shift_j = [0, nb*nf//2]
-            for i in range (len(self.Xf)):
-                wi = np.sqrt(2*self.weights[i])
-                Xreal = bv_real(self.Xf[i])
-                Ximag = bv_imag(self.Xf[i])
-                for (ii, X) in enumerate([Xreal, Ximag]):
-                    VSsqrt_i = wi*VSsqrt[i*nb+shift_j[ii]:(i+1)*nb+shift_j[ii],]
-                    Vi = PETSc.Mat().createDense(VSsqrt_i.shape, None, \
-                                                 VSsqrt_i, MPI.COMM_SELF)
-                    Phi.mult(1.0, 1.0, X, Vi)
-                    Vi.destroy()
-                Yreal = bv_real(self.Yf[i])
-                Yimag = bv_imag(self.Yf[i])
-                for (ii, Y) in enumerate([Yreal, Yimag]):
-                    USsqrt_i = wi*USsqrt[i*nc+shift_i[ii]:(i+1)*nc+shift_i[ii],]
-                    Ui = PETSc.Mat().createDense(USsqrt_i.shape, None, \
-                                                USsqrt_i, MPI.COMM_SELF)
-                    Psi.mult(1.0, 1.0, Y, Ui)
-                    Ui.destroy()
-                BVs = [Xreal, Ximag, Yreal, Yimag]
-                for bv in BVs: bv.destroy()
-
-        if rdim != None and rdim < Phi.getSizes()[-1]:
-            Phi.resize(rdim, copy=True)
-            Psi.resize(rdim, copy=True)
-            S = S[:rdim]
-        
-        return (Phi, Psi, S)
-
-
-    def compute_reduced_order_tensors(self, Phi, Psi):
-
-        APhi = self.A.apply_mat(Phi)
-        Arm = APhi.dot(Psi)
-        Brm = self.B.dot(Psi)
-        Crm = self.C.dot(Phi)
-        Ar = Arm.getDenseArray().copy()
-        Br = Brm.getDenseArray().copy()
-        Cr = Crm.getDenseArray().copy()
-        Arm.destroy()
-        Brm.destroy()
-        Crm.destroy()
-        return (Ar, Br, Cr)
-
-
-
-
-
-
-
-
-
-
-
-
