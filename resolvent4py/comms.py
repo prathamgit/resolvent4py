@@ -1,18 +1,24 @@
 from . import np
 from . import MPI
 from . import PETSc
+from . import typing
 from .miscellaneous import get_mpi_type
+from .linalg import compute_local_size
 
-def sequential_to_distributed_matrix(Mat_seq, Mat_dist):
+def sequential_to_distributed_matrix(
+        Mat_seq: PETSc.Mat,
+        Mat_dist: PETSc.Mat
+    ) -> None:
     r"""
-        Populate a distributed dense matrix from a sequential dense matrix
-        
-        :param Mat_seq: a sequential dense matrix
-        :type Mat_seq: PETSc.Mat.Type.DENSE
-        :param Mat_dist: a distributed dense matrix
-        :type Mat_dist: PETSc.Mat.Type.DENSE
+    Scatter a sequential dense PETSc matrix (type PETSc.Mat.Type.DENSE) to 
+    a distributed dense PETSc matrix (type PETSc.Mat.Type.DENSE)
+    
+    :param Mat_seq: a sequential dense matrix
+    :type Mat_seq: PETSc.Mat.Type.DENSE
+    :param Mat_dist: a distributed dense matrix
+    :type Mat_dist: PETSc.Mat.Type.DENSE
 
-        :return: None
+    :return: None
     """
     array = Mat_seq.getDenseArray()
     r0, r1 = Mat_dist.getOwnershipRange()
@@ -21,33 +27,41 @@ def sequential_to_distributed_matrix(Mat_seq, Mat_dist):
     Mat_dist.setValues(rows,cols,array[r0:r1,].reshape(-1))
     Mat_dist.assemble(None)
 
-def sequential_to_distributed_vector(vec_seq, vec_dist):
+def sequential_to_distributed_vector(
+        vec_seq: PETSc.Vec,
+        vec_dist: PETSc.Vec
+    ) -> None:
     r"""
-        Populate a distributed vector from a sequential vector
+    Scatter a sequential dense PETSc matrix (type PETSc.Vec.Type.SEQ) to 
+    a distributed dense PETSc matrix (type PETSc.Vec.Type.STANDARD)
 
-        :param vec_seq: a sequential vector
-        :type vec_seq: PETSc.Vec.Type.SEQ
-        :param vec_dist: a distributed vector
-        :type vec_dist: PETSc.Mat.Type.MPI
+    :param vec_seq: a sequential vector
+    :type vec_seq: PETSc.Vec.Type.SEQ
+    :param vec_dist: a distributed vector
+    :type vec_dist: PETSc.Vec.Type.STANDARD
 
-        :return: None
+    :return: None
     """
     array = vec_seq.getArray()
     r0, r1 = vec_dist.getOwnershipRange()
     rows = np.arange(r0,r1)
-    vec_dist.setValues(rows,array[r0:r1,])
+    vec_dist.setValues(rows, array[r0:r1,])
     vec_dist.assemble(None)
 
-def distributed_to_sequential_matrix(comm, Mat_dist):
+def distributed_to_sequential_matrix(
+        comm: MPI.Comm, 
+        Mat_dist: PETSc.Mat
+    ) -> PETSc.Mat:
     r"""
-        Populate a sequential dense matrix from a distributed dense matrix
-        (equivalent to a gatherall operation)
+    Allgather dense distributed PETSc matrix into a dense sequential PETSc
+    matrix.
 
-        :param comm: MPI communicator
-        :param Mat_dist: a distributed dense matrix
-        :type Mat_dist: PETSc.Mat.Type.DENSE
+    :param comm: MPI communicator :code:`MPI.COMM_WORLD`
+    :type comm: MPI.Comm
+    :param Mat_dist: a distributed dense matrix
+    :type Mat_dist: PETSc.Mat.Type.DENSE
 
-        :rtype: PETSc.Mat.Type.DENSE
+    :rtype: PETSc.Mat.Type.DENSE
     """
     array = Mat_dist.getDenseArray().copy().reshape(-1)
     counts = np.asarray(comm.allgather(len(array)))
@@ -56,20 +70,23 @@ def distributed_to_sequential_matrix(comm, Mat_dist):
     comm.Allgatherv(array, (recvbuf, counts, disps, get_mpi_type(array.dtype)))
     sizes = Mat_dist.getSizes()
     nr, nc = sizes[0][-1], sizes[-1][-1]
-    recvbuf = recvbuf.reshape((nr,nc))
-    Mat_seq = PETSc.Mat().createDense((nr,nc), None, recvbuf, MPI.COMM_SELF)
+    recvbuf = recvbuf.reshape((nr, nc))
+    Mat_seq = PETSc.Mat().createDense((nr, nc), None, recvbuf, MPI.COMM_SELF)
     return Mat_seq
 
-def distributed_to_sequential_vector(comm, vec_dist):
+def distributed_to_sequential_vector(
+        comm: MPI.Comm, 
+        vec_dist: PETSc.Vec
+    ) -> PETSc.Vec:
     r"""
-        Populate a sequential vector from a distributed vector 
-        (equivalent to a gatherall operation)
+    Allgather distribued PETSc vector into PETSc sequential vector.
 
-        :param comm: MPI communicator
-        :param vec_dist: a distributed dense matrix
-        :type vec_dist: PETSc.Mat.Type.MPI
-        
-        :rtype: PETSc.Vec.Type.SEQ
+    :param comm: MPI communicator
+    :type comm: MPI.Comm
+    :param vec_dist: a distributed vector
+    :type vec_dist: PETSc.Vec.Type.STANDARD
+    
+    :rtype: PETSc.Vec.Type.SEQ
     """
     array = vec_dist.getArray().copy()
     counts = comm.allgather(len(array))
@@ -79,20 +96,24 @@ def distributed_to_sequential_vector(comm, vec_dist):
     vec_seq = PETSc.Vec().createWithArray(recvbuf, comm=MPI.COMM_SELF)
     return vec_seq
 
-def scatter_array_from_root_to_all(comm, array, locsize=None):
+def scatter_array_from_root_to_all(
+        comm: MPI.Comm, 
+        array: np.array, 
+        locsize: typing.Optional[int]
+    ) -> np.array:
     r"""
-        Scatter numpy array from root to all other processors
+    Scatter numpy array from root to all other processors
 
-        :param comm: MPI communicator
-        :param array: numpy array to be scattered from root to the rest of
-            the MPI pool
-        :type array: numpy.array
-        :param locsize: local size owned by each processor. If :code:`None`
-            :code:`locsize` is computed using the same logic as in the
-            :code:`resolvent4py.linalg.compute_local_size()` routine
-
-        :return: scattered array
-        :rtype: numpy.array
+    :param comm: MPI communicator
+    :type comm: MPI.Comm
+    :param array: numpy array to be scattered
+    :type array: numpy.array
+    :param locsize: local size owned by each processor. If :code:`None`,
+        this is computed using the same logic as in the
+        :func:`.compute_local_size` routine.
+    :type locsize: Optional[int]
+    
+    :rtype: numpy.array
     """
     size, rank = comm.Get_size(), comm.Get_rank()
     counts, displs = None, None
