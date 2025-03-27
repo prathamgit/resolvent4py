@@ -123,8 +123,13 @@ class LowRankUpdatedLinearOperator(LinearOperator):
             m: int
         ) -> SLEPc.BV:
         r"""
-        Create matrix where to store :math:`X D Y^* Z`, for any matrix
-        Z with :math:`m` columns.
+        Create matrix to store :math:`X D Y^* Z`, for any matrix
+        Z with :math:`m` columns. 
+
+        .. attention::
+        
+            It is the user's responsibility to destroy this object 
+            when no longer needed.
 
         :param m: number of columns of :math:`Z`
         :type m: int
@@ -141,8 +146,13 @@ class LowRankUpdatedLinearOperator(LinearOperator):
             m: int
         ) -> SLEPc.BV:
         r"""
-        Create matrix where to store :math:`Y D X^* Z`, for any matrix
+        Create matrix to store :math:`Y D X^* Z`, for any matrix
         Z with :math:`m` columns.
+
+        .. attention::
+        
+            It is the user's responsibility to destroy this object 
+            when no longer needed.
 
         :param m: number of columns of :math:`Z`
         :type m: int

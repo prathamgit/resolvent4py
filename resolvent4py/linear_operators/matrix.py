@@ -12,7 +12,7 @@ class MatrixLinearOperator(LinearOperator):
     invertible or non-invertible). For an invertible :math:`A`, the user 
     may also provide a PETSc KSP object :code:`ksp` to act with :math:`A^{-1}` 
     on vectors and matrices.
-    
+
     :param comm: MPI communicator :code:`MPI.COMM_WORLD`
     :type comm: MPI.Comm
     :param A: a PETSc matrix
@@ -148,10 +148,10 @@ class MatrixLinearOperator(LinearOperator):
                 f"the solve() method."
             )
     
-    def destroy_matrix(self):
+    def destroy_matrix(self: "MatrixLinearOperator"):
         self.A.destroy()
 
-    def destroy_ksp(self):
+    def destroy_ksp(self: "MatrixLinearOperator"):
         self.ksp.destroy() if self.ksp is not None else None
 
     def destroy(self):

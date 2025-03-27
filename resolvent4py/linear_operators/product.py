@@ -1,36 +1,48 @@
 from .linear_operator import LinearOperator
 from .. import SLEPc
+from .. import PETSc
+from .. import MPI
+from .. import typing
 
 class ProductLinearOperator(LinearOperator):
     r"""
-        Linear operator of the form
+    Linear operator of the form
 
-        .. math::
+    .. math::
 
-            L = L_{r}L_{r-1}\ldots L_{2}L_{1}
+        L = L_{r}L_{r-1}\ldots L_{2}L_{1}
 
-        where :math:`L_i` are themselves linear operators.
-        For example, by setting :code:`linops = (L2, L1)` and 
-        :code:`linops_actions = (L2.solve, L1.apply_hermitian_transpose)` 
-        we define a linear operator
+    where :math:`L_i` are instances of the :class:`.LinearOperator` class.
+    For example, by setting :code:`linops = (L2, L1)` and 
+    :code:`linops_actions = (L2.solve, L1.apply_hermitian_transpose)` 
+    we define a linear operator
 
-        .. math:
+    .. math:
 
-            L = L_2^{-1}L_1^*.
+        L = L_2^{-1}L_1^*.
 
 
-        :param comm: MPI communicator
-        :param linops: tuple of linear operators. (See example above.)
-        :param linops_actions: tuple of actions (one of :code:`apply`, 
-            :code:`solve`, :code:`apply_hermitian_transpose` or 
-            :code:`solve_hermitian_transpose`) to define the overall action
-            of the product operator :math:`L`. (See example above.)
-        :param nblocks: [optional] number of blocks (if the linear operator \
-            has block structure). This must be an odd number.
-        :type nblocks: int
+    :param comm: MPI communicator :code:`MPI.COMM_WORLD`
+    :type comm: MPI.Comm
+    :param linops: list of linear operators (see example above).
+    :type linops: List[LinearOperator]
+    :param linops_actions: list of actions (see example above). Must be one of
+        :meth:`.LinearOperator.apply`, :meth:`.LinearOperator.solve`, 
+        :meth:`.LinearOperator.apply_hermitian_transpose` or 
+        :meth:`.LinearOperator.solve_hermitian_transpose`
+    :type linops_actions: List[Callable[[PETSc.Vec, PETSc.Vec], PETSc.Vec]]
+    :param nblocks: number of blocks (if the operator has block structure)
+    :type nblocks: Optional[Union[int, None]], default is None
     """
-    def __init__(self, comm, linops, linops_actions, nblocks=None):
-
+    def __init__(
+            self: "ProductLinearOperator",
+            comm: MPI.Comm,
+            linops: typing.List[LinearOperator],
+            linops_actions: typing.List[\
+                typing.Callable[[PETSc.Vec, typing.Optional[PETSc.Vec]], \
+                                PETSc.Vec]],
+            nblocks: typing.Optional[int]=None
+        ) -> None:
         linops.reverse()
         linops_actions.reverse()
         if len(linops) == 1:
@@ -98,7 +110,9 @@ class ProductLinearOperator(LinearOperator):
         dims = (dimr, dimc)
         super().__init__(comm, 'ProductLinearOperator', dims, nblocks)
     
-    def create_intermediate_vectors(self):
+    def create_intermediate_vectors(
+            self: "ProductLinearOperator"
+        ) -> None:
         self.intermediate_vecs = []
         for j in range (self.nlops - 1):
             L = getattr(self, self.names[j])
@@ -121,7 +135,24 @@ class ProductLinearOperator(LinearOperator):
         self.names.reverse()
         self.actions.reverse()
                 
-    def create_intermediate_bvs(self, m):
+    def create_intermediate_bvs(
+            self: "ProductLinearOperator",
+            m: int
+        ) -> typing.List[SLEPc.BV]:
+        r"""
+        Create list of matrices to store :math:`L_i Z`, for any matrix
+        Z with :math:`m` columns.
+        
+        .. attention::
+        
+            It is the user's responsibility to destroy this object 
+            when no longer needed.
+
+        :param m: number of columns of :math:`Z`
+        :type m: int
+
+        :rtype: List[SLEPc.BV]
+        """
         intermediate_bvs = []
         for j in range (self.nlops - 1):
             L = getattr(self, self.names[j])
@@ -133,7 +164,24 @@ class ProductLinearOperator(LinearOperator):
             intermediate_bvs.append(X)
         return intermediate_bvs
 
-    def create_intermediate_bvs_hermitian_transpose(self, m):
+    def create_intermediate_bvs_hermitian_transpose(
+            self: "ProductLinearOperator",
+            m: int
+        ) -> typing.List[SLEPc.BV]:
+        r"""
+        Create list of matrices to store :math:`L_i^* Z`, for any matrix
+        Z with :math:`m` columns.
+
+        .. attention::
+        
+            It is the user's responsibility to destroy this object 
+            when no longer needed.
+
+        :param m: number of columns of :math:`Z`
+        :type m: int
+
+        :rtype: List[SLEPc.BV]
+        """
         self.names.reverse()
         self.actions.reverse()
         intermediate_bvs = []
@@ -218,7 +266,7 @@ class ProductLinearOperator(LinearOperator):
             for Zj in Z: Zj.destroy()
         return Y
     
-    def destroy_intermediate_vectors(self):
+    def destroy_intermediate_vectors(self: "ProductLinearOperator"):
         for vec in self.intermediate_vecs: vec.destroy()
         for vec in self.intermediate_vecs_hermitian_transpose: vec.destroy()
 

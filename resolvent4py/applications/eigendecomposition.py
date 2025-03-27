@@ -4,7 +4,6 @@ from .. import MPI
 from .. import PETSc
 from .. import SLEPc
 from .. import typing
-from typing import TYPE_CHECKING
 
 from ..linear_operators import LinearOperator
 from ..linalg import enforce_complex_conjugacy
@@ -13,7 +12,8 @@ from ..random import generate_random_petsc_vector
 
 def arnoldi_iteration(
         L: LinearOperator, 
-        action: typing.Callable[[PETSc.Vec, PETSc.Vec], PETSc.Vec], 
+        action: typing.Callable[[PETSc.Vec, \
+                                 typing.Optional[PETSc.Vec]], PETSc.Vec], 
         krylov_dim: int
     ) -> typing.Tuple[SLEPc.BV, np.ndarray]:
     r"""
