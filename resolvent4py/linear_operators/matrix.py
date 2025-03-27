@@ -25,10 +25,10 @@ class MatrixLinearOperator(LinearOperator):
     :type nblocks: Optional[Union[int, None]], defaults to None
     """
     def __init__(
-            self: "MatrixLinearOperator", 
-            comm: MPI.Comm, 
-            A: PETSc.Mat, 
-            ksp: typing.Optional[typing.Union[PETSc.KSP, None]]=None, 
+            self: "MatrixLinearOperator",
+            comm: MPI.Comm,
+            A: PETSc.Mat,
+            ksp: typing.Optional[typing.Union[PETSc.KSP, None]]=None,
             nblocks: typing.Optional[typing.Union[int, None]]=None
         ) -> None:
         self.A = A
@@ -125,7 +125,7 @@ class MatrixLinearOperator(LinearOperator):
                 f"Please provide a PETSc KSP object at initialization to use "
                 f"the solve_hermitian_transpose() method."
             )
-        
+
     def solve_hermitian_transpose_mat(self, X, Y=None):
         if self.ksp != None:
             Xm = X.getMat()
