@@ -12,7 +12,7 @@ class MatrixLinearOperator(LinearOperator):
     invertible or non-invertible). For an invertible :math:`A`, the user 
     may also provide a PETSc KSP object :code:`ksp` to act with :math:`A^{-1}` 
     on vectors and matrices.
-
+    
     :param comm: MPI communicator :code:`MPI.COMM_WORLD`
     :type comm: MPI.Comm
     :param A: a PETSc matrix

@@ -7,62 +7,66 @@ from .. import sp
 from .. import MPI
 from .. import PETSc
 from .. import SLEPc
+from .. import typing
 
 
 class LowRankUpdatedLinearOperator(LinearOperator):
     r"""
-        Class for a linear operator of the form
+    Class for a linear operator of the form
 
-        .. math::
+    .. math::
 
-            L = A + B K C^*
-        
-        where :math:`A` is an instance of any subclass of the 
-        `resolvent4py.linear_operator.LinearOperator` class,
-        and :math:`B`, :math:`K` and :math:`C` are low-rank (dense) matrices of 
-        conformal size.
-        If :code:`A.solve()` is enabled, then the :code:`solve()` method 
-        in this class if implemented using the Woodbury matrix identity
+        L = A + B K C^*
+    
+    where :math:`A` is an instance of the :class:`.LinearOperator` class,
+    and :math:`B`, :math:`K` and :math:`C` are low-rank (dense) matrices of 
+    conformal sizes. If :code:`A.solve()` is enabled, then the :code:`solve()` 
+    method in this class is implemented using the Woodbury matrix identity
 
-        .. math::
+    .. math::
 
-            L^{-1} = A^{-1} - X D Y^*,
+        L^{-1} = A^{-1} - X D Y^*,
 
-        where
+    where :math:`X`, :math:`D` and :math:`Y` the Woodbury factors defined as
 
-        .. math::
+    .. math::
 
-            \textcolor{black}{X}
-            = A^{-1}B,\quad \textcolor{black}{D} = 
-            K\left(I + C^* A^{-1}B K\right)^{-1},\quad
-            \textcolor{black}{Y} = A^{-*}C,
+        \textcolor{black}{X}
+        = A^{-1}B,\quad \textcolor{black}{D} = 
+        K\left(I + C^* A^{-1}B K\right)^{-1},\quad
+        \textcolor{black}{Y} = A^{-*}C,
 
-        are the Woodbury factors.
-        The same goes for the :code:`solve_hermitian_transpose()` method. 
-
-        :param comm: MPI communicator (one of :code:`MPI.COMM_WORLD` or
-            :code:`MPI.COMM_SELF`)
-        :param A: instance of a subclass of the 
-            `resolvent4py.linear_operators.LinearOperator` class
-        :param B: dense PETSc matrix
-        :type B: PETSc.Mat.Type.DENSE
-        :param K: dense PETSc matrix
-        :type K: PETSc.Mat.Type.DENSE
-        :param C: dense PETSc matrix
-        :type C: PETSc.Mat.Type.DENSE
-        :param woodbury_factors: [optional] 3-tuple of PETsc dense matrices
-            containing the Woodbury factors :code:`X`, :code:`D` and :code:`Y`
-            in that order.
-            If :code:`woodbury_factors == None` and :code:`A.solve()` is
-            enabled, the factors are computed using the 
-            :code:`compute_woodbury_factors()` method.
-        :param nblocks: [optional] number of blocks (if the linear operator \
-            has block structure)
-        :type nblocks: int
+    
+    :param comm: MPI communicator :code:`MPI.COMM_WORLD`
+    :type comm: MPI.Comm
+    :param A: instance of the :class:`.LinearOperator` class
+    :param B: tall and skinny matrix
+    :type B: SLEPc.BV
+    :param K: dense matrix
+    :type K: numpy.ndarray
+    :param C: tall and skinny matrix
+    :type C: SLEPc.BV
+    :param woodbury_factors: tuple :math:`(X, D, Y)` of Woodbury factors. If
+        :code:`A.solve()` is enabled and the argument :code:`woodbury_factors`
+        is :code:`None`, the factors :math:`X`, :math:`D` and :math:`Y` are 
+        computed at initialization
+    :type woodbury_factors: Optional[Tuple[SLEPc.BV, numpy.ndarray, 
+        SLEPc.BV], None], default is None
+    :param nblocks: number of blocks (if the operator has block structure)
+    :type nblocks: Optional[Union[int, None]], default is None
     """
 
-    def __init__(self, comm, A, B, K, C, woodbury_factors=None, nblocks=None):
-
+    def __init__(
+            self: "LowRankUpdatedLinearOperator", 
+            comm: MPI.Comm,
+            A: LinearOperator,
+            B: SLEPc.BV,
+            K: np.ndarray,
+            C: SLEPc.BV,
+            woodbury_factors: typing.Optional[\
+                typing.Tuple[SLEPc.BV, np.ndarray, SLEPc.BV]]=None,
+            nblocks: typing.Optional[int]=None
+        ) -> None:
         self.A = A
         self.L = LowRankLinearOperator(comm, B, K, C, nblocks)
         self.W = self.compute_woodbury_operator(comm, nblocks) \
@@ -73,10 +77,20 @@ class LowRankUpdatedLinearOperator(LinearOperator):
                          A.get_dimensions(), nblocks)
         
     
-    def compute_woodbury_operator(self, comm, nblocks):
+    def compute_woodbury_operator(
+            self: "LowRankUpdatedLinearOperator",
+            comm: MPI.Comm,
+            nblocks: typing.Union[int, None]
+        ) -> LowRankLinearOperator:
         r"""
-            :return: a :code:`LowRankLinearOperator` constructed from the 
-                Woodbury factors :code:`X`, :code:`D` and :code:`Y` 
+        :param comm: MPI communicator :code:`MPI.COMM_WORLD`
+        :type comm: MPI.Comm
+        :param nblocks: number of blocks (if the operator has block structure)
+        :type nblocks: Unions[int, None]
+
+        :return: a :class:`.LowRankLinearOperator` constructed from the 
+            Woodbury factors :code:`X`, :code:`D` and :code:`Y`
+        :rtype: LowRankUpdatedLinearOperator
         """
         try:
             X = self.A.solve_mat(self.L.U)
@@ -98,17 +112,43 @@ class LowRankUpdatedLinearOperator(LinearOperator):
             W = None
         return W
     
-    def create_intermediate_vectors(self):
+    def create_intermediate_vectors(
+            self: "LowRankUpdatedLinearOperator"
+        ) -> None:
         self.Ax = self.A.create_left_vector()
         self.ATx = self.A.create_right_vector()
 
-    def create_intermediate_bv(self, m):
+    def create_intermediate_bv(
+            self: "LowRankUpdatedLinearOperator",
+            m: int
+        ) -> SLEPc.BV:
+        r"""
+        Create matrix where to store :math:`X D Y^* Z`, for any matrix
+        Z with :math:`m` columns.
+
+        :param m: number of columns of :math:`Z`
+        :type m: int
+
+        :rtype: SLEPc.BV
+        """
         X = SLEPc.BV().create(self._comm)
         X.setSizes(self._dimensions[0], m)
         X.setType('mat')
         return X
 
-    def create_intermediate_bv_hermitian_transpose(self, m):
+    def create_intermediate_bv_hermitian_transpose(
+            self: "LowRankUpdatedLinearOperator",
+            m: int
+        ) -> SLEPc.BV:
+        r"""
+        Create matrix where to store :math:`Y D X^* Z`, for any matrix
+        Z with :math:`m` columns.
+
+        :param m: number of columns of :math:`Z`
+        :type m: int
+
+        :rtype: SLEPc.BV
+        """
         X = SLEPc.BV().create(self._comm)
         X.setSizes(self._dimensions[-1], m)
         X.setType('mat')
@@ -188,13 +228,19 @@ class LowRankUpdatedLinearOperator(LinearOperator):
         Z.destroy() if destroy else None
         return Y
     
-    def destroy_woodbury_operator(self):
+    def destroy_woodbury_operator(
+            self: "LowRankUpdatedLinearOperator"
+        ) -> None:
         self.W.destroy() if self.W is not None else None
 
-    def destroy_low_rank_update(self):
+    def destroy_low_rank_update(
+            self: "LowRankUpdatedLinearOperator"
+        ) -> None:
         self.L.destroy()
 
-    def destroy_intermediate_vectors(self):
+    def destroy_intermediate_vectors(
+            self: "LowRankUpdatedLinearOperator"
+        ) -> None:
         self.Ax.destroy()
         self.ATx.destroy()
         

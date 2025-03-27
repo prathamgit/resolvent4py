@@ -1,31 +1,40 @@
 from .linear_operator import LinearOperator
 from .. import MPI
 from .. import PETSc
+from .. import SLEPc
+from .. import np
+from .. import typing
 
 class LowRankLinearOperator(LinearOperator):
     r"""
-        Class for a linear operator of the form
+    Class for a linear operator of the form
 
-        .. math::
-        
-            L = U \Sigma V^*,
+    .. math::
+    
+        L = U \Sigma V^*,
 
-        where :math:`U`, :math:`\Sigma` and :math:`V` are matrices of
-        conformal sizes (and :math:`\Sigma` is not necessarily diagonal).
+    where :math:`U`, :math:`\Sigma` and :math:`V` are matrices of
+    conformal sizes (and :math:`\Sigma` is not necessarily diagonal).
 
-        :param comm: MPI communicator (one of :code:`MPI.COMM_WORLD` or
-            :code:`MPI.COMM_SELF`)
-        :param U: a SLEPc BV
-        :type U: `BV`_
-        :param Sigma: 2D numpy array
-        :type Sigma: numpy.ndarray
-        :param V: a SLEPc BV
-        :type V: `BV`_
-        :param nblocks: [optional] number of blocks (if the linear operator \
-            has block structure)
-        :type nblocks: int
+    :param comm: MPI communicator :code:`MPI.COMM_WORLD`
+    :type comm: MPI.Comm
+    :param U: a tall and skinny matrix
+    :type U: SLEPc.BV
+    :param Sigma: 2D numpy array
+    :type Sigma: numpy.ndarray
+    :param V: a tall and skinny matrix
+    :type V: SLEPc.BV
+    :param nblocks: number of blocks (if the operator has block structure)
+    :type nblocks: Optional[Union[int, None]], default is None
     """
-    def __init__(self, comm, U, Sigma, V, nblocks=None):
+    def __init__(
+            self: "LowRankLinearOperator",
+            comm: MPI.Comm,
+            U: SLEPc.BV,
+            Sigma: np.ndarray,
+            V: SLEPc.BV,
+            nblocks: typing.Optional[int]=None
+        ) -> None:
         self.U = U
         self.Sigma = Sigma
         self.V = V
@@ -63,8 +72,17 @@ class LowRankLinearOperator(LinearOperator):
         Lm.destroy()
         M.destroy()
         return Y
+    
+    def destroy_U(self: "LowRankLinearOperator") -> None:
+        self.U.destroy()
+
+    def destroy_V(self: "LowRankLinearOperator") -> None:
+        self.V.destroy()
+    
+    def destroy_Sigma(self: "LowRankLinearOperator") -> None:
+        del self.Sigma
 
     def destroy(self):
-        self.U.destroy()
-        self.V.destroy()
-        # del self.Sigma
+        self.destroy_U()
+        self.destroy_V()
+        self.destroy_Sigma()
