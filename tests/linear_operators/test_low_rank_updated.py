@@ -1,9 +1,7 @@
-import scipy as sp
-import numpy as np
-import sys
 import os
 
-sys.path.append('../../')
+import numpy as np
+import scipy as sp
 
 import resolvent4py as res4py
 from mpi4py import MPI
@@ -79,7 +77,7 @@ if rank == 0:
                                      MPI.COMM_SELF)
     
     objs = [xvec, Ax, ATx, Ainvx, AinvTx, Xmat, AX, ATX, AinvX, AinvTX]
-    fnames_ = ['x', 'Ax', 'ATx', 'Ainvx', 'AinvTx', 'X', 'AX', 'ATX', \
+    fnames_ = ['xvec', 'Axvec', 'ATxvec', 'Ainvxvec', 'AinvTxvec', 'X', 'AX', 'ATX', \
                'AinvX', 'AinvTX']
     fnames = [path + root + '.dat' for root in fnames_]
     for (k, obj) in enumerate(objs):

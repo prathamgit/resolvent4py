@@ -1,10 +1,6 @@
-import scipy as sp
-import numpy as np
-import sys
 import os
 
-sys.path.append('../../')
-
+import numpy as np
 import resolvent4py as res4py
 from mpi4py import MPI
 from petsc4py import PETSc
@@ -48,7 +44,7 @@ if rank == 0:
     ATX = PETSc.Mat().createDense((N, s), None, A.conj().T@X, MPI.COMM_SELF)
     
     objs = [xvec, Ax, ATx, Xmat, AX, ATX]
-    fnames_ = ['x', 'Ax', 'ATx', 'X', 'AX', 'ATX']
+    fnames_ = ['xvec', 'Axvec', 'ATxvec', 'X', 'AX', 'ATX']
     fnames = [path + root + '.dat' for root in fnames_]
     for (k, obj) in enumerate(objs):
         res4py.write_to_file(MPI.COMM_SELF, fnames[k], obj)
