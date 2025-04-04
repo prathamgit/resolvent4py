@@ -1,12 +1,11 @@
 import os
-import sys
-sys.path.append('../../')
-import resolvent4py as res4py
+
 import numpy as np
-import scipy as sp
-import cgl
+import resolvent4py as res4py
 from mpi4py import MPI
 from petsc4py import PETSc
+
+import cgl
 
 comm = MPI.COMM_WORLD
 

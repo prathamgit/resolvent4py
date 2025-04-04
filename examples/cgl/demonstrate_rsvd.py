@@ -1,15 +1,13 @@
-import numpy as np
-import scipy as sp
-import cgl
-
 import os
-import sys
-sys.path.append('../../')
-import resolvent4py as res4py
-
-from mpi4py import MPI
 
 import matplotlib.pyplot as plt
+import numpy as np
+import resolvent4py as res4py
+import scipy as sp
+from mpi4py import MPI
+
+import cgl
+
 plt.rcParams.update({"font.family":"serif","font.sans-serif":\
                      ["Computer Modern"],'font.size':18, 'text.usetex':True})
 
