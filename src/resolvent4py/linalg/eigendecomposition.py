@@ -6,9 +6,9 @@ from .. import SLEPc
 from .. import typing
 
 from ..linear_operators import LinearOperator
-from ..linalg import enforce_complex_conjugacy
+from ..vec_helpers import enforce_complex_conjugacy
 from ..miscellaneous import petscprint
-from ..random import generate_random_petsc_vector
+from ..random_helpers import generate_random_petsc_vector
 
 
 def arnoldi_iteration(

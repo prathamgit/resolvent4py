@@ -1,21 +1,30 @@
 from . import np
 from . import sp
 from . import PETSc
-from .comms import scatter_array_from_root_to_all
-from .linalg import convert_coo_to_csr
+from . import MPI
+from . import typing
+from .comms_helpers import scatter_array_from_root_to_all
+from .mat_helpers import convert_coo_to_csr
 
 
-def generate_random_petsc_sparse_matrix(comm, sizes, complex=None):
+def generate_random_petsc_sparse_matrix(
+    comm: MPI.Comm,
+    sizes: typing.Tuple[typing.Tuple[int, int], typing.Tuple[int, int]],
+    nnz: int,
+    complex: typing.Optional[bool] = False,
+) -> PETSc.Mat:
     r"""
     :param comm: MPI communicator
-    :param sizes: matrix sizes
-    :type sizes: `MatSizeSpec`_
-    :param complex: [optional] set to :code:`True` if you desire a
-        complex-valued matrix
-    :type complex: Bool
+    :type comm: MPI.Comm
+    :param sizes: :code:`((local rows, global rows), (local cols, global cols))`
+    :type sizes: Tuple[Tuple[int, int], Tuple[int, int]]
+    :param nnz: number of non-zero entries
+    :type nnz: int
+    :param complex: :code:`True` if you want a complex-valued matrix
+    :type complex: Optional[bool], default is False
 
     :return: a sparse PETSc matrix
-    :rtype: PETSc.Mat.Type.AIJ
+    :rtype: PETSc.Mat
     """
     rank = comm.Get_rank()
     nrows, ncols = sizes[0][-1], sizes[-1][-1]
@@ -24,7 +33,11 @@ def generate_random_petsc_sparse_matrix(comm, sizes, complex=None):
     if rank == 0:
         dtype = np.complex128 if complex == True else np.float64
         A = sp.sparse.random(
-            nrows, ncols, density=0.001, format="csr", dtype=dtype
+            nrows,
+            ncols,
+            density=nnz / (nrows * ncols),
+            format="csr",
+            dtype=dtype,
         )
         if nrows == ncols:  # add identity to make A invertible
             A += sp.sparse.identity(nrows, dtype=dtype, format="csr")
@@ -42,17 +55,20 @@ def generate_random_petsc_sparse_matrix(comm, sizes, complex=None):
     return A
 
 
-def generate_random_petsc_vector(comm, sizes, complex=False):
+def generate_random_petsc_vector(
+    comm: MPI.Comm,
+    sizes: typing.Tuple[int, int],
+    complex: typing.Optional[bool] = False,
+) -> PETSc.Vec:
     r"""
     :param comm: MPI communicator
+    :type comm: MPI.Comm
     :param sizes: vector sizes
-    :type sizes: `LayoutSizeSpec`_
-    :param complex: [optional] set to :code:`True` if you desire a
-        complex-valued vector
-    :type complex: Bool
+    :type sizes: Tuple[int, int]
+    :param complex: :code:`True` if you want a complex-valued vector
+    :type complex: Optional[bool], default is False
 
-    :return: a PETSc vector
-    :rtype: PETSc.Vec.Type.STANDARD
+    :rtype: PETSc.Vec
     """
     array = None
     if comm.Get_rank() == 0:

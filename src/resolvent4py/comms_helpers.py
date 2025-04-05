@@ -3,7 +3,35 @@ from . import MPI
 from . import PETSc
 from . import typing
 from .miscellaneous import get_mpi_type
-from .linalg import compute_local_size
+
+
+def compute_local_size(Ng: int) -> int:
+    r"""
+    Given the global size :code:`Nglob` of a vector, compute
+    the local size :code:`Nloc` that will be owned by each processor
+    in the MPI pool according to the formula
+
+    .. math::
+
+        N_l = \begin{cases}
+            \left\lfloor \frac{N_g}{S} \right\rfloor + 1 & \text{if} 
+                \, N_g \text{mod} S > r \\
+            \left\lfloor \frac{N_g}{S} \right\rfloor & \text{otherwise}
+        \end{cases}
+
+    where :math:`N_g` is the global size, :math:`N_l` is the local size,
+    :math:`S` is the size of the MPI pool (i.e., the total number of processors)
+    and :math:`r` is the rank of the current processor.
+
+    :param Ng: global size
+    :type Ng: int
+    
+    :return: local size
+    :rtype: int
+    """
+    size, rank = MPI.COMM_WORLD.Get_size(), MPI.COMM_WORLD.Get_rank()
+    Nl = Ng // size + 1 if np.mod(Ng, size) > rank else Ng // size
+    return Nl
 
 
 def sequential_to_distributed_matrix(

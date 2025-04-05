@@ -3,12 +3,11 @@ from .. import abc
 from .. import PETSc
 from .. import SLEPc
 from .. import MPI
-from .. import petsctyping
-from ..error_handling_functions import raise_not_implemented_error
-from ..random import generate_random_petsc_vector
-from ..linalg import enforce_complex_conjugacy
-from ..linalg import check_complex_conjugacy
-from ..miscellaneous import get_memory_usage
+
+from ..errors_helpers import raise_not_implemented_error
+from ..random_helpers import generate_random_petsc_vector
+from ..vec_helpers import enforce_complex_conjugacy
+from ..vec_helpers import check_complex_conjugacy
 
 from typing import Optional
 from typing import Union

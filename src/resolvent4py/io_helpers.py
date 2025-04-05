@@ -4,8 +4,8 @@ from . import MPI
 from . import np
 from . import typing
 
-from .linalg import convert_coo_to_csr
-from .linalg import compute_local_size
+from .mat_helpers import convert_coo_to_csr
+from .comms_helpers import compute_local_size
 
 
 def read_vector(
@@ -129,7 +129,7 @@ def read_bv(
 def write_to_file(
     comm: MPI.Comm,
     filename: str,
-    petsc_object: typing.Union[PETSc.Mat, PETSc.Vec],
+    object: typing.Union[PETSc.Mat, PETSc.Vec, SLEPc.BV],
 ) -> None:
     r"""
     Write PETSc object to file.
@@ -138,29 +138,34 @@ def write_to_file(
     :type comm: MPI.Comm
     :param filename: name of the file to store the object
     :type filename: str
-    :param petsc_object: any PETSc matrix or vector
-    :type petsc_object: Union[PETSc.Mat, PETSc.Vec]
+    :param object: any PETSc matrix or vector
+    :type object: Union[PETSc.Mat, PETSc.Vec, SLEPc.BV]
     """
     viewer = PETSc.Viewer().createBinary(filename, "w", comm=comm)
-    petsc_object.view(viewer)
+    if isinstance(object, SLEPc.BV):
+        mat = object.getMat()
+        mat.view(viewer)
+        object.restoreMat(mat)
+    else:
+        object.view(viewer)
     viewer.destroy()
 
 
-def write_bv_to_file(
-    comm: MPI.Comm, filename: str, object: typing.Union[PETSc.Mat, PETSc.Vec]
-) -> None:
-    r"""
-    Write SLEPc BV to file.
+# def write_bv_to_file(
+#     comm: MPI.Comm, filename: str, object: typing.Union[PETSc.Mat, PETSc.Vec]
+# ) -> None:
+#     r"""
+#     Write SLEPc BV to file.
 
-    :param comm: MPI communicator (MPI.COMM_WORLD or MPI.COMM_SELF)
-    :type comm: MPI.Comm
-    :param filename: name of the file to store the object
-    :type filename: str
-    :param object: SLEPc BV
-    :type object: SLEPc.BV
-    """
-    mat = object.getMat()
-    viewer = PETSc.Viewer().createBinary(filename, "w", comm=comm)
-    mat.view(viewer)
-    viewer.destroy()
-    object.restoreMat(mat)
+#     :param comm: MPI communicator (MPI.COMM_WORLD or MPI.COMM_SELF)
+#     :type comm: MPI.Comm
+#     :param filename: name of the file to store the object
+#     :type filename: str
+#     :param object: SLEPc BV
+#     :type object: SLEPc.BV
+#     """
+#     mat = object.getMat()
+#     viewer = PETSc.Viewer().createBinary(filename, "w", comm=comm)
+#     mat.view(viewer)
+#     viewer.destroy()
+#     object.restoreMat(mat)

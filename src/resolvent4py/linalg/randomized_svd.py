@@ -6,9 +6,9 @@ from .. import SLEPc
 from .. import typing
 
 from ..linear_operators import LinearOperator
-from ..linalg import enforce_complex_conjugacy
-from ..miscellaneous import create_dense_matrix
+from ..vec_helpers import enforce_complex_conjugacy
 from ..miscellaneous import petscprint
+from ..mat_helpers import create_dense_matrix
 
 
 def randomized_svd(

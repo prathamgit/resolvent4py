@@ -19,13 +19,10 @@ path = "data/"
 fnames_jac, fnames = None, None
 if rank == 0:
     os.makedirs(path) if os.path.isdir(path) == False else None
-    A = sp.sparse.csr_matrix(
-        np.random.randn(N, N) + 1j * np.random.randn(N, N)
-    )
+    A = sp.sparse.random(N, N, 0.1, "csr", np.complex128)
+    A += sp.sparse.identity(N, np.complex128, "csr")
     A = A.tocoo()
-    rows, cols = A.nonzero()
-    data = A.data
-    arrays = [rows, cols, data]
+    arrays = [A.row, A.col, A.data]
     fnames_jac = [path + "rows.dat", path + "cols.dat", path + "vals.dat"]
     for i, array in enumerate(arrays):
         vec = PETSc.Vec().createWithArray(
@@ -35,7 +32,6 @@ if rank == 0:
         vec.destroy()
     A = A.todense()
     evals, evecs = sp.linalg.eig(A)
-
 comm.Barrier()
 
 omega = 20.0
@@ -49,14 +45,21 @@ oId.axpy(-1.0, A)
 ksp = res4py.create_mumps_solver(comm, oId)
 linop = res4py.MatrixLinearOperator(comm, oId, ksp)
 
-V, D, W = res4py.right_and_left_eig(
+D, V = res4py.linalg.eig(
     linop,
     linop.solve,
     100,
     10,
-    lambda x: 1j * omega - 1.0 / x,
-    "smallest_real",
+    lambda x: 1j * omega - 1.0 / x
 )
+Da, W = res4py.linalg.eig(
+    linop,
+    linop.solve_hermitian_transpose,
+    100,
+    10,
+    lambda x: 1j * omega - np.conj(1.0 / x)
+)
+V, W, D, Da = res4py.linalg.match_right_and_left_eigenvectors(V, W, D, Da)
 Dseq = np.diag(D)
 
 if rank == 0:

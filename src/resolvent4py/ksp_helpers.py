@@ -1,6 +1,6 @@
 from . import PETSc
 from . import MPI
-from .random import generate_random_petsc_vector
+from .random_helpers import generate_random_petsc_vector
 
 
 def create_mumps_solver(comm: MPI.Comm, A: PETSc.Mat) -> PETSc.KSP:

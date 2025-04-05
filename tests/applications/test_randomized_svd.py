@@ -11,19 +11,18 @@ comm = MPI.COMM_WORLD
 rank, size = comm.Get_rank(), comm.Get_size()
 
 N = 100
-Nc = 5
+Nc = 90
 
 path = "data/"
 
 fnames_jac, fnames = None, None
 if rank == 0:
     os.makedirs(path) if os.path.isdir(path) == False else None
-    A = sp.sparse.csr_matrix(
-        np.random.randn(N, Nc) + 1j * np.random.randn(N, Nc)
-    )
-    rows, cols = A.nonzero()
-    data = A.data
-    arrays = [rows, cols, data]
+    A = sp.sparse.random(N, Nc, 0.1, "csr", np.complex128)
+    if Nc == N:
+        A += sp.sparse.identity(N, np.complex128, "csr")
+    A = A.tocoo()
+    arrays = [A.row, A.col, A.data]
     fnames_jac = [path + "rows.dat", path + "cols.dat", path + "vals.dat"]
     for i, array in enumerate(arrays):
         vec = PETSc.Vec().createWithArray(
@@ -32,7 +31,7 @@ if rank == 0:
         res4py.write_to_file(MPI.COMM_SELF, fnames_jac[i], vec)
         vec.destroy()
     A = A.todense()
-    u, s, v = sp.linalg.svd(A.conj().T)
+    u, s, v = sp.linalg.svd(A)
     v = v.conj().T
 
 comm.Barrier()
@@ -44,7 +43,7 @@ A = res4py.read_coo_matrix(comm, fnames_jac, ((Nl, N), (Ncl, Nc)))
 # ksp = res4py.create_mumps_solver(comm, A)
 linop = res4py.MatrixLinearOperator(comm, A)
 
-U, S, V = res4py.randomized_svd(linop, linop.apply_mat, 10, 3, 3)
+U, S, V = res4py.linalg.randomized_svd(linop, linop.apply_mat, 90, 3, 3)
 Sseq = np.diag(S)
 
 if rank == 0:
@@ -57,11 +56,4 @@ if rank == 0:
     # print(np.abs(u[:,0]))
     # print(np.abs(v[:,0]))
 
-for i in range(len(Sseq)):
-    u = U.getColumn(i)
-    v = V.getColumn(i)
-    Av = linop.apply(v)
-    error = np.abs(Av.dot(u) - Sseq[i])
-    res4py.petscprint(comm, "Error = %1.15e" % error)
-    U.restoreColumn(i, u)
-    V.restoreColumn(i, v)
+res4py.linalg.check_randomized_svd_convergence(linop.apply, U, S, V)

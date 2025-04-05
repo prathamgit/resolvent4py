@@ -30,14 +30,19 @@ from .linear_operators import MatrixLinearOperator
 from .linear_operators import LowRankLinearOperator
 from .linear_operators import LowRankUpdatedLinearOperator
 from .linear_operators import ProductLinearOperator
-from .applications import *
-from .io_functions import *
-from .linalg import *
-from .comms import *
-from .random import *
-from .solvers_and_preconditioners_functions import *
-from .miscellaneous import *
-from .my_pymanopt_classes import myAdaptiveLineSearcher
 
+from . import linalg
+
+from .io_helpers import *
+from .vec_helpers import *
+from .mat_helpers import *
+from .bv_helpers import *
+from .comms_helpers import *
+from .random_helpers import *
+from .ksp_helpers import *
+from .errors_helpers import *
+from .miscellaneous import *
+
+from .my_pymanopt_classes import myAdaptiveLineSearcher
 
 np.seterr(over="raise")
