@@ -1,9 +1,6 @@
 import scipy as sp
 import numpy as np
-import sys
 import os
-
-# sys.path.append("../../src/")
 
 import resolvent4py as res4py
 from mpi4py import MPI
