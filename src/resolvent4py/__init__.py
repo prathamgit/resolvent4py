@@ -32,6 +32,7 @@ from .linear_operators import LowRankUpdatedLinearOperator
 from .linear_operators import ProductLinearOperator
 
 from . import linalg
+from . import model_reduction
 
 from .io_helpers import *
 from .vec_helpers import *

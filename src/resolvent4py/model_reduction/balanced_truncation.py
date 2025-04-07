@@ -120,10 +120,10 @@ def compute_gramian_factors(
             Xarray[:, k * nb : (k + 1) * nb] = LBMat_
             Yarray[:, k * nc : (k + 1) * nc] = LCMat_
         else:  # The system is real-valued
-            delta = np.sqrt(1 / 2)
+            delta = 1.0
             if k == 0:
                 # Handle the zero frequency separately if necessary
-                delta = 1.0 if frequencies[k] == 0.0 else delta
+                delta = np.sqrt(1 / 2) if frequencies[k] == 0.0 else delta
                 Xarray[:, 0:nb] = delta * LBMat_.real
                 Yarray[:, 0:nc] = delta * LCMat_.real
             else:
