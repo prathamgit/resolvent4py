@@ -59,7 +59,7 @@ def read_coo_matrix(
     rows = np.asarray(rowsvec.getArray().real, dtype=np.int32)
     cols = np.asarray(colsvec.getArray().real, dtype=np.int32)
     vals = valsvec.getArray()
-    # Delete zeros for efficiencies
+    # Delete zeros for efficiency
     idces = np.argwhere(np.abs(vals) <= 1e-16)
     rows = np.delete(rows, idces)
     cols = np.delete(cols, idces)
@@ -73,6 +73,81 @@ def read_coo_matrix(
     rowsvec.destroy()
     colsvec.destroy()
     valsvec.destroy()
+    return M
+
+
+def read_harmonic_balanced_matrix(
+    comm: MPI.Comm,
+    filenames_lst: typing.List[typing.Tuple[str, str, str]],
+    bflow_freqs: np.array,
+    pertb_freqs: np.array,
+    block_sizes: typing.Tuple[typing.Tuple[int, int], typing.Tuple[int, int]],
+    full_sizes: typing.Tuple[typing.Tuple[int, int], typing.Tuple[int, int]]
+) -> PETSc.Mat:
+
+    if len(bflow_freqs) != len(filenames_lst):
+        raise ValueError (
+            f"Error in read_harmonic_balanced_matrix(). filenames_lst "
+            f"should have the same length as bflow_freqs."
+        )
+    # Read list of COO vectors
+    rows_lst, cols_lst, vals_lst = [], [], []
+    for filenames in filenames_lst:
+        fname_rows, fname_cols, fname_vals = filenames
+        rowsvec = read_vector(comm, fname_rows)
+        colsvec = read_vector(comm, fname_cols)
+        valsvec = read_vector(comm, fname_vals)
+        rowsvec_arr = np.asarray(rowsvec.getArray().real, dtype=np.int32).copy()
+        colsvec_arr = np.asarray(colsvec.getArray().real, dtype=np.int32).copy()
+        valsvec_arr = valsvec.getArray().copy()
+        rows_lst.append(rowsvec_arr)
+        cols_lst.append(colsvec_arr)
+        vals_lst.append(valsvec_arr)
+        rowsvec.destroy()
+        colsvec.destroy()
+        valsvec.destroy()
+    
+    put_back = False
+    if np.min(bflow_freqs) == 0.0:
+        put_back = True
+        for i in range (1, len(bflow_freqs)):
+            idx_lst = i - 1 - nfp
+            rows_lst.insert(0, rows_lst[idx_lst])
+            cols_lst.insert(0, cols_lst[idx_lst])
+            vals_lst.insert(0, np.conj(vals_lst[idx_lst]))
+        bflow_freqs = np.concatenate((-np.flipud(bflow_freqs[1:]), bflow_freqs))
+
+    rows, cols, vals = [], [], []
+    Nrb = block_sizes[0][-1]            # Number of block rows
+    Ncb = block_sizes[-1][-1]           # Number of block columns
+    nfb = (len(bflow_freqs) - 1)//2     # Number of perturbation frequencies
+    nfp = (len(pertb_freqs) - 1)//2     # Number of baseflow frequencies
+    for i in range (2*nfp + 1):
+        for j in range (2*nfp + 1):
+            k = i - j + nfb
+            if k >= 0:
+                rows.extend(rows_lst[k] + i*Nrb)
+                cols.extend(cols_lst[k] + j*Ncb)
+                vals.extend(vals_lst[k])
+    rows = np.asarray(rows, dtype=np.int32)
+    cols = np.asarray(cols, dtype=np.int32)
+    vals = np.asarray(vals)
+
+    # Delete zeros for efficiency
+    idces = np.argwhere(np.abs(vals) <= 1e-16)
+    rows = np.delete(rows, idces)
+    cols = np.delete(cols, idces)
+    vals = np.delete(vals, idces)
+    # Convert COO to CSR and create the sparse matrix
+    rows_ptr, cols, vals = convert_coo_to_csr(comm, \
+                                              [rows, cols, vals], full_sizes)
+    M = PETSc.Mat().createAIJ(full_sizes, comm=comm)
+    M.setPreallocationCSR((rows_ptr, cols))
+    M.setValuesCSR(rows_ptr, cols, vals, True)
+    M.assemble(False)
+
+    bflow_freqs = bflow_freqs[nfb:] if put_back else bflow_freqs
+    
     return M
 
 
@@ -150,22 +225,3 @@ def write_to_file(
         object.view(viewer)
     viewer.destroy()
 
-
-# def write_bv_to_file(
-#     comm: MPI.Comm, filename: str, object: typing.Union[PETSc.Mat, PETSc.Vec]
-# ) -> None:
-#     r"""
-#     Write SLEPc BV to file.
-
-#     :param comm: MPI communicator (MPI.COMM_WORLD or MPI.COMM_SELF)
-#     :type comm: MPI.Comm
-#     :param filename: name of the file to store the object
-#     :type filename: str
-#     :param object: SLEPc BV
-#     :type object: SLEPc.BV
-#     """
-#     mat = object.getMat()
-#     viewer = PETSc.Viewer().createBinary(filename, "w", comm=comm)
-#     mat.view(viewer)
-#     viewer.destroy()
-#     object.restoreMat(mat)
