@@ -47,14 +47,14 @@ L = res4py.MatrixLinearOperator(comm, M, ksp)
 res4py.petscprint(comm, "Running Arnoldi iteration...")
 krylov_dim = 200
 n_evals = 20
-D, V = res4py.applications.eig(
+D, V = res4py.linalg.eig(
     L, L.solve, krylov_dim, n_evals, lambda x: s - 1.0 / x
 )
 
 # Check convergence
 L.destroy()
 L = res4py.MatrixLinearOperator(comm, A)
-res4py.applications.check_eig_convergence(L.apply, D, V)
+res4py.linalg.check_eig_convergence(L.apply, D, V)
 
 # Destroy objects
 L.destroy()
