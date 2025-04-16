@@ -6,4 +6,5 @@ API-reference
    :caption: Modules
 
    linear_operators.rst
-   applications.rst
+   linalg.rst
+   model_reduction.rst

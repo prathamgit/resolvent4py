@@ -1,0 +1,36 @@
+[build-system]
+# Specifies the build system to use
+requires = ["setuptools>=42.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "resolvent4py"
+version = "0.1.0"
+description = """\
+  A parallel Python-based library for the analysis, model reduction and \
+  control of large-scale linear systems.\
+"""
+license = "MIT"
+requires-python = ">=3.8"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 79
+target-version = "py39"
+lint.extend-select = ["I", "UP", "B"]
+lint.ignore = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "local: marks tests as local development tests",
+    "development: marks tests for development branch CI",
+    "main: marks tests for main branch CI",
+]
+python_files = ["linalg/test_*.py"]
+addopts = "-ra -q"
