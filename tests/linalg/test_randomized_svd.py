@@ -66,7 +66,7 @@ def test_randomized_svd(comm, rank_size, matrix_size, random_matrix, test_output
     
     # Run randomized SVD
     k = min(10, min(N, Nc))  # Number of singular values to compute
-    U, S, V = res4py.randomized_svd(linop, linop.apply_mat, k, 3, 3)
+    U, S, V = res4py.linalg.randomized_svd(linop, linop.apply_mat, k, 3, 3)
     Sseq = np.diag(S)
     
     if rank == 0:

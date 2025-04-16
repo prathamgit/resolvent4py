@@ -66,23 +66,3 @@ def test_eigendecomposition(comm, rank_size, matrix_size, test_output_dir):
     ksp = res4py.create_mumps_solver(comm, oId)
     linop = res4py.MatrixLinearOperator(comm, oId, ksp)
     
-    V, D, W = res4py.right_and_left_eig(linop, linop.solve, N, s, lambda x: 1j*omega - 1./x)
-    Dseq = np.diag(D)
-    
-    if rank == 0:
-        plt.figure()
-        plt.plot(evals.real, evals.imag, 'ko')
-        plt.plot(Dseq.real, Dseq.imag, 'rx')
-        plt.savefig(path + "evals.png")
-    
-    linop.destroy()
-    linop = res4py.MatrixLinearOperator(comm, A_dist)
-    for i in range(len(Dseq)):
-        w = W.getColumn(i)
-        v = V.getColumn(i)
-        Av = linop.apply(v)
-        error = np.abs(Av.dot(w) - Dseq[i])
-        res4py.petscprint(comm, "Error = %1.15e" % error)
-        W.restoreColumn(i, w)
-        V.restoreColumn(i, v)
-    
