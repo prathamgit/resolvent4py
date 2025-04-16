@@ -24,3 +24,13 @@ line-length = 79
 target-version = "py39"
 lint.extend-select = ["I", "UP", "B"]
 lint.ignore = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "local: marks tests as local development tests",
+    "development: marks tests for development branch CI",
+    "main: marks tests for main branch CI",
+]
+python_files = ["linalg/test_*.py"]
+addopts = "-ra -q"
