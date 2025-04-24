@@ -172,7 +172,7 @@ def bv_slice(
     Q = np.zeros((X.getSizes()[-1], len(columns)))
     for i in range (len(columns)):
         Q[columns[i], i] = 1.0
-    Q = PETSc.Mat().createDense(Q.shape, None, Q.reshape(-1), MPI.COMM_SELF)
+    Q = PETSc.Mat().createDense(Q.shape, None, Q, MPI.COMM_SELF)
     Y.mult(1.0, 0.0, X, Q)
     Q.destroy()
     return Y
@@ -202,7 +202,7 @@ def bv_roll(
     if axis == -1:
         Q = np.diag(np.ones(Y.getSizes()[-1]))
         Q = np.roll(Q, roll, axis=-1)
-        Q = PETSc.Mat().createDense(Q.shape, None, Q.reshape(-1), MPI.COMM_SELF)
+        Q = PETSc.Mat().createDense(Q.shape, None, Q, MPI.COMM_SELF)
         Y.multInPlace(Q, 0, Y.getSizes()[-1])
         Q.destroy()
     else:
