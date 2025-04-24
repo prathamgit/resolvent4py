@@ -12,6 +12,9 @@ import numpy as np
 from mpi4py import MPI
 from slepc4py import SLEPc
 
+from .mat_helpers import convert_coo_to_csr
+from ..linear_operators import MatrixLinearOperator
+
 
 def bv_add(alpha: float, X: SLEPc.BV, Y: SLEPc.BV) -> None:
     r"""
@@ -145,3 +148,76 @@ def assemble_harmonic_balanced_bv(
         bvs_lst[nfb:]
 
     return BV
+
+def bv_slice(
+        comm: MPI.Comm,
+        X: SLEPc.BV,
+        columns: np.array,
+        Y: typing.Optional[SLEPc.BV]=None
+):
+    r"""
+    Extract a subset of columns from X and store into Y
+
+    :type X: SLEPc.BV
+    :param columns: array of columns to extract
+    :type columns: np.array
+    :type Y: Optional[SLEPc.BV], default is None
+
+    :rtype: SLEPc.BV
+    """
+    if Y == None:
+        Y = SLEPc.BV().create(comm)
+        Y.setSizes(X.getSizes()[0], len(columns))
+        Y.setType('mat')
+    Q = np.zeros((X.getSizes()[-1], len(columns)))
+    for i in range (len(columns)):
+        Q[columns[i], i] = 1.0
+    Q = PETSc.Mat().createDense(Q.shape, None, Q.reshape(-1), MPI.COMM_SELF)
+    Y.mult(1.0, 0.0, X, Q)
+    Q.destroy()
+    return Y
+
+
+def bv_roll(
+        comm: MPI.Comm,
+        X: SLEPc.BV,
+        roll: int,
+        axis: int,
+        in_place: typing.Optional[bool]=False
+):
+    r"""
+    If :code:`axis=0` roll the rows of X by amount :code:`roll`, if 
+    :code:`axis=-1` roll the columns of X by amount :code:`roll`. This operation
+    can be done in place if :code:`in_place == True` (default is :code:`False`).
+
+    :type X: SLEPc.BV
+    :type roll: int
+    :type axis: int
+    :type in_place: Optional[bool], default is :code:`False`
+
+    :rtype: SLEPc.BV
+    """
+    Y = X.copy() if not in_place else X
+
+    if axis == -1:
+        Q = np.diag(np.ones(Y.getSizes()[-1]))
+        Q = np.roll(Q, roll, axis=-1)
+        Q = PETSc.Mat().createDense(Q.shape, None, Q.reshape(-1), MPI.COMM_SELF)
+        Y.multInPlace(Q, 0, Y.getSizes()[-1])
+        Q.destroy()
+    else:
+        Ym = Y.getMat()
+        r0, r1 = Ym.getOwnershipRange()
+        cols = np.arange(r1 - r0) + r0
+        rows = np.mod(cols.copy() + roll, Y.getSizes()[0][-1])
+        vals = np.ones(len(rows))
+        sizes = (Y.getSizes()[0], Y.getSizes()[0])
+        row_ptr, col, val = convert_coo_to_csr(comm, [rows, cols, vals], sizes)
+        M = PETSc.Mat().createAIJ(sizes, comm=comm)
+        M.setPreallocationCSR((row_ptr, col))
+        M.setValuesCSR(row_ptr, col, val, True)
+        M.assemble(False)
+        Mlop = MatrixLinearOperator(comm, M)
+        Y = Mlop.apply_mat(X, Y)
+        Mlop.destroy()
+    return Y

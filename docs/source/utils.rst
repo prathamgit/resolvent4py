@@ -12,7 +12,7 @@ Vec
 .. automodule:: src.resolvent4py.utils.vec_helpers
    :members:
 
-Bv
+BV
 ---
 .. automodule:: src.resolvent4py.utils.bv_helpers
    :members:

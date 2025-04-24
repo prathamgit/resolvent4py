@@ -55,8 +55,3 @@ X, Y = res4py.model_reduction.compute_gramian_factors(
 
 res4py.petscprint(comm, "Computing balanced projection...")
 Phi, Psi, S = res4py.model_reduction.compute_balanced_projection(X, Y, 10)
-# res4py.petscprint(comm, np.diag(S))
-
-# Id = Phi.dot(Psi)
-# Id_ = Id.getDenseArray()
-# res4py.petscprint(comm, np.diag(Id_))

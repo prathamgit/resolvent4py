@@ -44,22 +44,22 @@ class MatrixLinearOperator(LinearOperator):
         self.A.mult(x, y)
         return y
 
-    def hermitian_transpose(self):
-        self.A.hermitianTranspose()
+    # def hermitian_transpose(self):
+    #     self.A.hermitianTranspose()
 
-    def axpy(self, alpha, X, Y=None):
-        Xm = X.A
-        if Y != None:
-            Ym = Y.A
-            Ym.axpy(alpha, Xm)
-            Y.restoreMat(Ym)
-        else:
-            Ym = Xm.duplicate()
-            Ym.axpy(alpha, Xm)
-            Y = SLEPc.BV().createFromMat(Ym)
-            Y.setType("mat")
-            Ym.destroy()
-        return Y
+    # def axpy(self, alpha, X, Y=None):
+    #     Xm = X.A
+    #     if Y != None:
+    #         Ym = Y.A
+    #         Ym.axpy(alpha, Xm)
+    #         Y.restoreMat(Ym)
+    #     else:
+    #         Ym = Xm.duplicate()
+    #         Ym.axpy(alpha, Xm)
+    #         Y = SLEPc.BV().createFromMat(Ym)
+    #         Y.setType("mat")
+    #         Ym.destroy()
+    #     return Y
 
     def apply_mat(self, X, Y=None):
         Xm = X.getMat()
