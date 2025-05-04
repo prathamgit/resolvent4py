@@ -149,11 +149,12 @@ def assemble_harmonic_balanced_bv(
 
     return BV
 
+
 def bv_slice(
-        comm: MPI.Comm,
-        X: SLEPc.BV,
-        columns: np.array,
-        Y: typing.Optional[SLEPc.BV]=None
+    comm: MPI.Comm,
+    X: SLEPc.BV,
+    columns: np.array,
+    Y: typing.Optional[SLEPc.BV] = None,
 ):
     r"""
     Extract a subset of columns from X and store into Y
@@ -168,9 +169,9 @@ def bv_slice(
     if Y == None:
         Y = SLEPc.BV().create(comm)
         Y.setSizes(X.getSizes()[0], len(columns))
-        Y.setType('mat')
+        Y.setType("mat")
     Q = np.zeros((X.getSizes()[-1], len(columns)))
-    for i in range (len(columns)):
+    for i in range(len(columns)):
         Q[columns[i], i] = 1.0
     Q = PETSc.Mat().createDense(Q.shape, None, Q, MPI.COMM_SELF)
     Y.mult(1.0, 0.0, X, Q)
@@ -179,14 +180,14 @@ def bv_slice(
 
 
 def bv_roll(
-        comm: MPI.Comm,
-        X: SLEPc.BV,
-        roll: int,
-        axis: int,
-        in_place: typing.Optional[bool]=False
+    comm: MPI.Comm,
+    X: SLEPc.BV,
+    roll: int,
+    axis: int,
+    in_place: typing.Optional[bool] = False,
 ):
     r"""
-    If :code:`axis=0` roll the rows of X by amount :code:`roll`, if 
+    If :code:`axis=0` roll the rows of X by amount :code:`roll`, if
     :code:`axis=-1` roll the columns of X by amount :code:`roll`. This operation
     can be done in place if :code:`in_place == True` (default is :code:`False`).
 
@@ -217,9 +218,11 @@ def bv_roll(
         M.setPreallocationCSR((row_ptr, col))
         M.setValuesCSR(row_ptr, col, val, True)
         M.assemble(False)
-        raise ValueError ("This error is coming from utils.bv.bv_roll(). " + \
-                          "Need to fix this function because it was causing a" \
-                            + "circular import.")
+        raise ValueError(
+            "This error is coming from utils.bv.bv_roll(). "
+            + "Need to fix this function because it was causing a"
+            + "circular import."
+        )
         # Mlop = MatrixLinearOperator(comm, M)
         # Y = Mlop.apply_mat(X, Y)
         # Mlop.destroy()

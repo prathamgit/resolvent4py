@@ -118,7 +118,9 @@ linop_ = res4py.linear_operators.MatrixLinearOperator(comm, A, ksp)
 Sig = np.load(path + "Sigma.npy")
 U = res4py.read_bv(comm, fnames_factors[0], ((Nl, N), r))
 V = res4py.read_bv(comm, fnames_factors[1], ((Nl, N), q))
-linop = res4py.linear_operators.LowRankUpdatedLinearOperator(comm, linop_, U, Sig, V)
+linop = res4py.linear_operators.LowRankUpdatedLinearOperator(
+    comm, linop_, U, Sig, V
+)
 x = res4py.read_vector(comm, fnames_vecs[0])
 actions = [
     linop.apply,

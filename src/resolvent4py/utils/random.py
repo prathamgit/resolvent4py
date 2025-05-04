@@ -1,4 +1,7 @@
-__all__ = ["generate_random_petsc_sparse_matrix", "generate_random_petsc_vector"]
+__all__ = [
+    "generate_random_petsc_sparse_matrix",
+    "generate_random_petsc_vector",
+]
 
 import typing
 

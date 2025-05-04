@@ -8,6 +8,7 @@ from petsc4py import PETSc
 
 import os
 
+
 def L_generator(omega, A):
     comm = MPI.COMM_WORLD
     Rinv = res4py.create_AIJ_identity(comm, A.getSizes())

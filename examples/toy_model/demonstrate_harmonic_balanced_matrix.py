@@ -62,20 +62,14 @@ H.mult(y, x2)
 x2.axpy(-1.0, x)
 res4py.petscprint(comm, x2.norm())
 
-fnames_lst = [
-    (
-        save_path + "Aj_%02d.dat" % j
-    )
-    for j in range(len(bflow_freqs))
-]
+fnames_lst = [(save_path + "Aj_%02d.dat" % j) for j in range(len(bflow_freqs))]
 
-bv = res4py.read_harmonic_balanced_bv(comm, fnames_lst, True, ((nl, n), 3), \
-                                 ((Nl, N), N))
+bv = res4py.read_harmonic_balanced_bv(
+    comm, fnames_lst, True, ((nl, n), 3), ((Nl, N), N)
+)
 
 # bv.view()
 L = bv.getMat().getDenseArray()
 H.convert(PETSc.Mat.Type.DENSE)
 H_ = H.getDenseArray()
 print(np.linalg.norm(H_ - L))
-
-

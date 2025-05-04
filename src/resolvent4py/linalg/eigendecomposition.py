@@ -201,7 +201,7 @@ def check_eig_convergence(
     action: typing.Callable[[PETSc.Vec, PETSc.Vec], PETSc.Vec],
     D: np.ndarray,
     V: SLEPc.BV,
-    monitor: typing.Optional[bool]=False,
+    monitor: typing.Optional[bool] = False,
 ) -> np.array:
     r"""
     Check convergence of the eigenpairs by measuring

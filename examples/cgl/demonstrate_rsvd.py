@@ -72,7 +72,7 @@ if comm.Get_rank() == 0:
 
     save_path = "results/"
     os.makedirs(save_path) if not os.path.exists(save_path) else None
-    print("Plotting (see output in %s)..."%save_path)
+    print("Plotting (see output in %s)..." % save_path)
 
     Id = sp.sparse.identity(N)
     R = sp.linalg.inv((s * Id - system.A).todense())

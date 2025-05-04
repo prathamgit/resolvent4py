@@ -95,7 +95,7 @@ for j in range(Ahat.shape[-1]):
 
     Aj = Aj.todense()
     Aj_mat = PETSc.Mat().createDense((3, 3), None, Aj, MPI.COMM_SELF)
-    res4py.write_to_file(MPI.COMM_WORLD, save_path + 'Aj_%02d.dat'%j, Aj_mat)
+    res4py.write_to_file(MPI.COMM_WORLD, save_path + "Aj_%02d.dat" % j, Aj_mat)
 
 perts_freqs = freqs.copy()
 bflow_freqs = freqs[len(freqs) // 2 :]

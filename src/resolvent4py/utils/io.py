@@ -322,7 +322,7 @@ def read_harmonic_balanced_bv(
             f"The number of blocks must be larger than the number of Fourier "
             f"coefficients of A(t). (See function description.)"
         )
-    
+
     bv_mat = bvs_lst[0].getMat()
     r0, r1 = bv_mat.getOwnershipRange()
     bvs_lst[0].restoreMat(bv_mat)

@@ -117,7 +117,7 @@ def check_randomized_svd_convergence(
     U: SLEPc.BV,
     S: np.ndarray,
     V: SLEPc.BV,
-    monitor: typing.Optional[bool]=False,
+    monitor: typing.Optional[bool] = False,
 ) -> np.array:
     r"""
     Check the convergence of the singular value triplets by measuring
@@ -139,7 +139,9 @@ def check_randomized_svd_convergence(
     """
     if monitor:
         petscprint(MPI.COMM_WORLD, " ")
-        petscprint(MPI.COMM_WORLD, "Executing SVD triplet convergence check...")
+        petscprint(
+            MPI.COMM_WORLD, "Executing SVD triplet convergence check..."
+        )
     x = U.createVec()
     n_svals = S.shape[-1]
     error_vec = np.zeros(n_svals)
@@ -158,5 +160,7 @@ def check_randomized_svd_convergence(
         V.restoreColumn(k, v)
     x.destroy()
     if monitor:
-        petscprint(MPI.COMM_WORLD, "Executing SVD triplet convergence check...")
+        petscprint(
+            MPI.COMM_WORLD, "Executing SVD triplet convergence check..."
+        )
         petscprint(MPI.COMM_WORLD, " ")

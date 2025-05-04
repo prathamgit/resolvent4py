@@ -8,8 +8,7 @@ from slepc4py import SLEPc
 
 from ..utils.errors import raise_not_implemented_error
 from ..utils.random import generate_random_petsc_vector
-from ..utils.vector import (check_complex_conjugacy,
-                                 enforce_complex_conjugacy)
+from ..utils.vector import check_complex_conjugacy, enforce_complex_conjugacy
 
 
 class LinearOperator(metaclass=abc.ABCMeta):

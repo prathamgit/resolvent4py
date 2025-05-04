@@ -47,7 +47,7 @@ def compute_local_size(Ng: int) -> int:
 
 def sequential_to_distributed_matrix(
     Mat_seq: PETSc.Mat, Mat_dist: PETSc.Mat
-) -> None:
+) -> PETSc.Mat:
     r"""
     Scatter a sequential dense PETSc matrix (type PETSc.Mat.Type.DENSE) to
     a distributed dense PETSc matrix (type PETSc.Mat.Type.DENSE)
@@ -57,7 +57,8 @@ def sequential_to_distributed_matrix(
     :param Mat_dist: a distributed dense matrix
     :type Mat_dist: PETSc.Mat.Type.DENSE
 
-    :return: None
+    :return: a distributed dense matrix
+    :rtype: PETSc.Mat.Type.DENSE
     """
     array = Mat_seq.getDenseArray()
     r0, r1 = Mat_dist.getOwnershipRange()
@@ -65,27 +66,30 @@ def sequential_to_distributed_matrix(
     cols = np.arange(0, Mat_seq.getSizes()[-1][-1])
     Mat_dist.setValues(rows, cols, array[r0:r1,].reshape(-1))
     Mat_dist.assemble(None)
+    return Mat_dist
 
 
 def sequential_to_distributed_vector(
     vec_seq: PETSc.Vec, vec_dist: PETSc.Vec
-) -> None:
+) -> PETSc.Vec:
     r"""
-    Scatter a sequential dense PETSc matrix (type PETSc.Vec.Type.SEQ) to
-    a distributed dense PETSc matrix (type PETSc.Vec.Type.STANDARD)
+    Scatter a sequential PETSc vector (type PETSc.Vec.Type.SEQ) to
+    a distributed PETSc vector (type PETSc.Vec.Type.STANDARD)
 
     :param vec_seq: a sequential vector
     :type vec_seq: PETSc.Vec.Type.SEQ
     :param vec_dist: a distributed vector
     :type vec_dist: PETSc.Vec.Type.STANDARD
 
-    :return: None
+    :return: a distributed vector
+    :rtype: PETSc.Vec.Type.STANDARD
     """
     array = vec_seq.getArray()
     r0, r1 = vec_dist.getOwnershipRange()
     rows = np.arange(r0, r1)
     vec_dist.setValues(rows, array[r0:r1,])
     vec_dist.assemble(None)
+    return vec_dist
 
 
 def distributed_to_sequential_matrix(
@@ -129,7 +133,7 @@ def distributed_to_sequential_vector(
     """
     array = vec_dist.getArray().copy()
     counts = comm.allgather(len(array))
-    disps = np.concatenate(([0], np.cumsum(counts[:-1])))
+    disps = np.concatenate(([0], np.cumsum(counts[:-1]))).astype(np.int32)
     recvbuf = np.zeros(np.sum(counts), dtype=array.dtype)
     comm.Allgatherv(array, (recvbuf, counts, disps, get_mpi_type(array.dtype)))
     vec_seq = PETSc.Vec().createWithArray(recvbuf, comm=MPI.COMM_SELF)
@@ -137,7 +141,7 @@ def distributed_to_sequential_vector(
 
 
 def scatter_array_from_root_to_all(
-    comm: MPI.Comm, array: np.array, locsize: typing.Optional[int]=None
+    comm: MPI.Comm, array: np.array, locsize: typing.Optional[int] = None
 ) -> np.array:
     r"""
     Scatter numpy array from root to all other processors

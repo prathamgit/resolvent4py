@@ -126,7 +126,14 @@ for k in range(3):
     else:
         ax[k].set_xticks(Tw * np.arange(0, 51, 10))
         ax[k].set_xticklabels(
-            [r"$0$", r"$10\,T$", r"$20\,T$", r"$30\,T$", r"$40\,T$", r"$50\,T$"]
+            [
+                r"$0$",
+                r"$10\,T$",
+                r"$20\,T$",
+                r"$30\,T$",
+                r"$40\,T$",
+                r"$50\,T$",
+            ]
         )
         ax[k].set_xlabel("Time $t$")
 
