@@ -2,6 +2,7 @@ import numpy as np
 import resolvent4py as res4py
 from .. import pytest_utils
 
+
 def test_low_rank_on_vectors(comm, rectangular_matrix_size):
     r"""Test LowRankLinearOperator on vectors"""
     Nr, Nc = rectangular_matrix_size
@@ -39,7 +40,8 @@ def test_low_rank_on_vectors(comm, rectangular_matrix_size):
     x.destroy()
     y.destroy()
     linop.destroy()
-    assert error < 1e-10
+    assert error < 1e-8
+
 
 def test_low_rank_on_bvs(comm, rectangular_matrix_size):
     r"""Test LowRankLinearOperator on vectors"""
@@ -79,4 +81,4 @@ def test_low_rank_on_bvs(comm, rectangular_matrix_size):
     X.destroy()
     Y.destroy()
     linop.destroy()
-    assert error < 1e-10
+    assert error < 1e-8

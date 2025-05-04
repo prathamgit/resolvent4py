@@ -1,6 +1,7 @@
 __all__ = [
     "compute_gramian_factors",
     "compute_balanced_projection",
+    "assemble_reduced_order_tensors",
 ]
 
 import typing
@@ -12,6 +13,7 @@ from slepc4py import SLEPc
 
 from ..utils.comms import compute_local_size
 from ..utils.matrix import create_dense_matrix
+from ..linear_operators import LinearOperator
 
 
 def compute_gramian_factors(
@@ -206,6 +208,16 @@ def compute_balanced_projection(
         V_[:, i] = v.getArray().copy()
         S_[i, i] = s
         S.setValue(i, i, 1.0 / np.sqrt(s), addv=False)
+        # Rotate the modes to minimize the imaginary part (this will keep
+        # the modes real if the underlying system is real-valued)
+        angle = 0
+        if comm.Get_rank() == 0:
+            idx = np.argmax(np.abs(U_[:, i].imag))
+            angle = np.angle(U_[idx, i])
+        angle = comm.bcast(angle, root=0)
+        U_[:, i] *= np.exp(-1j*angle)
+        V_[:, i] *= np.exp(-1j*angle)
+
     S.assemble(None)
     u.destroy()
     v.destroy()
@@ -225,3 +237,38 @@ def compute_balanced_projection(
     for obj in objs:
         obj.destroy()
     return (Phi, Psi, S_)
+
+def assemble_reduced_order_tensors(
+        L: LinearOperator,
+        B: SLEPc.BV,
+        C: SLEPc.BV,
+        Phi: SLEPc.BV,
+        Psi: SLEPc.BV,
+) -> typing.Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    r"""
+    Assemble the reduced-order tensors :math:`A_r = \Psi^\intercal L \Phi`,
+    :math:`B_r = \Psi^\intercal B` and :math:`C_r = \Phi^\intercal C`.
+
+    :param L: linear operator governing the dynamics of the full-order system
+    :type L: LinearOperator
+    :param B: input matrix of the full-order system
+    :type B: SLEPc.BV
+    :param C: (complex-conj. transpose) of the output matrix of the full-order
+        system
+    :type C: SLEPc.BV
+
+    :return: Tuple with :math:`A_r`, :math:`B_r` and :math:`C_r`
+    :rtype: Tuple[numpy.ndarray, numpy.ndarray, numpy.ndarray]
+    """
+    LPhi = L.apply_mat(Phi)
+    Amat = LPhi.dot(Psi)
+    Bmat = B.dot(Psi)
+    Cmat = C.dot(Phi)
+    Ar = Amat.getDenseArray().copy()
+    Br = Bmat.getDenseArray().copy()
+    Cr = Cmat.getDenseArray().copy()
+    objs = [LPhi, Amat, Bmat, Cmat]
+    for obj in objs:
+        obj.destroy()
+    return Ar, Br, Cr
+
