@@ -137,7 +137,7 @@ def distributed_to_sequential_vector(
 
 
 def scatter_array_from_root_to_all(
-    comm: MPI.Comm, array: np.array, locsize: typing.Optional[int]
+    comm: MPI.Comm, array: np.array, locsize: typing.Optional[int]=None
 ) -> np.array:
     r"""
     Scatter numpy array from root to all other processors

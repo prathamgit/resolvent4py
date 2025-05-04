@@ -201,7 +201,8 @@ def check_eig_convergence(
     action: typing.Callable[[PETSc.Vec, PETSc.Vec], PETSc.Vec],
     D: np.ndarray,
     V: SLEPc.BV,
-) -> None:
+    monitor: typing.Optional[bool]=False,
+) -> np.array:
     r"""
     Check convergence of the eigenpairs by measuring
     :math:`\lVert L v - \lambda v\rVert` for each pair :math:`(\lambda, v)`.
@@ -214,10 +215,14 @@ def check_eig_convergence(
     :param V: corresponding eigenvectors
     :type V: SLEPc.BV
 
-    :return: None
+    :return: Error vector (each entry is the error of the corresponding
+        eigen pair)
+    :rtype: np.array
     """
-    petscprint(MPI.COMM_WORLD, " ")
-    petscprint(MPI.COMM_WORLD, "Executing eigenpair convergence check...")
+    if monitor:
+        petscprint(MPI.COMM_WORLD, " ")
+        petscprint(MPI.COMM_WORLD, "Executing eigenpair convergence check...")
+    error_vec = np.zeros(D.shape[0])
     w = V.createVec()
     for j in range(D.shape[-1]):
         v = V.getColumn(j)
@@ -226,10 +231,14 @@ def check_eig_convergence(
         w = action(v, w)
         e.axpy(-1.0, w)
         error = e.norm()
+        error_vec[j] = error.real
         V.restoreColumn(j, v)
         e.destroy()
-        str = "Error for eigenpair %d = %1.15e" % (j + 1, error)
-        petscprint(MPI.COMM_WORLD, str)
+        if monitor:
+            str = "Error for eigenpair %d = %1.15e" % (j + 1, error)
+            petscprint(MPI.COMM_WORLD, str)
     w.destroy()
-    petscprint(MPI.COMM_WORLD, "Executing eigenpair convergence check...")
-    petscprint(MPI.COMM_WORLD, " ")
+    if monitor:
+        petscprint(MPI.COMM_WORLD, "Executing eigenpair convergence check...")
+        petscprint(MPI.COMM_WORLD, " ")
+    return error_vec

@@ -117,7 +117,8 @@ def check_randomized_svd_convergence(
     U: SLEPc.BV,
     S: np.ndarray,
     V: SLEPc.BV,
-) -> None:
+    monitor: typing.Optional[bool]=False,
+) -> np.array:
     r"""
     Check the convergence of the singular value triplets by measuring
     :math:`\lVert Av/\sigma - u\rVert` for every triplet :math:`(u, \sigma, v)`.
@@ -132,12 +133,16 @@ def check_randomized_svd_convergence(
     :param V: right singular vectors
     :type V: SLEPc.BV
 
-    :return: None
+    :return: Error vector (each entry is the error of the corresponding
+        singular triplet)
+    :rtype: np.array
     """
-    petscprint(MPI.COMM_WORLD, " ")
-    petscprint(MPI.COMM_WORLD, "Executing SVD triplet convergence check...")
+    if monitor:
+        petscprint(MPI.COMM_WORLD, " ")
+        petscprint(MPI.COMM_WORLD, "Executing SVD triplet convergence check...")
     x = U.createVec()
     n_svals = S.shape[-1]
+    error_vec = np.zeros(n_svals)
     for k in range(n_svals):
         v = V.getColumn(k)
         u = U.getColumn(k)
@@ -145,10 +150,13 @@ def check_randomized_svd_convergence(
         x.scale(1.0 / S[k, k])
         x.axpy(-1.0, u)
         error = x.norm()
-        str = "Error for SVD triplet %d = %1.15e" % (k + 1, error)
-        petscprint(MPI.COMM_WORLD, str)
+        error_vec[k] = error.real
+        if monitor:
+            str = "Error for SVD triplet %d = %1.15e" % (k + 1, error)
+            petscprint(MPI.COMM_WORLD, str)
         U.restoreColumn(k, u)
         V.restoreColumn(k, v)
     x.destroy()
-    petscprint(MPI.COMM_WORLD, "Executing SVD triplet convergence check...")
-    petscprint(MPI.COMM_WORLD, " ")
+    if monitor:
+        petscprint(MPI.COMM_WORLD, "Executing SVD triplet convergence check...")
+        petscprint(MPI.COMM_WORLD, " ")

@@ -11,9 +11,9 @@ import typing
 import numpy as np
 from mpi4py import MPI
 from slepc4py import SLEPc
+from petsc4py import PETSc
 
-from .mat_helpers import convert_coo_to_csr
-from ..linear_operators import MatrixLinearOperator
+from .matrix import convert_coo_to_csr
 
 
 def bv_add(alpha: float, X: SLEPc.BV, Y: SLEPc.BV) -> None:
@@ -217,7 +217,10 @@ def bv_roll(
         M.setPreallocationCSR((row_ptr, col))
         M.setValuesCSR(row_ptr, col, val, True)
         M.assemble(False)
-        Mlop = MatrixLinearOperator(comm, M)
-        Y = Mlop.apply_mat(X, Y)
-        Mlop.destroy()
+        raise ValueError ("This error is coming from utils.bv.bv_roll(). " + \
+                          "Need to fix this function because it was causing a" \
+                            + "circular import.")
+        # Mlop = MatrixLinearOperator(comm, M)
+        # Y = Mlop.apply_mat(X, Y)
+        # Mlop.destroy()
     return Y
