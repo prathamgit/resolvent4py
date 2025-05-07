@@ -32,5 +32,5 @@ markers = [
     "development: marks tests for development branch CI",
     "main: marks tests for main branch CI",
 ]
-python_files = ["linalg/test_*.py"]
+python_files = ["test_*.py"]
 addopts = "-ra -q"

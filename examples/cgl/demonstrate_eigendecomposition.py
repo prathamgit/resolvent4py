@@ -21,7 +21,7 @@ comm = MPI.COMM_WORLD
 # Read the A matrix from file
 res4py.petscprint(comm, "Reading matrix from file...")
 load_path = "data/"
-N = 2000
+N = 61105
 Nl = res4py.compute_local_size(N)
 sizes = ((Nl, N), (Nl, N))
 names = [

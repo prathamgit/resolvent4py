@@ -46,18 +46,20 @@ class MatrixLinearOperator(LinearOperator):
         self.A.hermitianTranspose()
 
     def axpy(self, alpha, X, Y=None):
-        Xm = X.A
-        if Y != None:
-            Ym = Y.A
-            Ym.axpy(alpha, Xm)
-            Y.restoreMat(Ym)
-        else:
-            Ym = Xm.duplicate()
-            Ym.axpy(alpha, Xm)
-            Y = SLEPc.BV().createFromMat(Ym)
-            Y.setType('mat')
-            Ym.destroy()
-        return Y
+        # Xm = X.A
+        # if Y != None:
+        #     Ym = Y.A
+        #     Ym.axpy(alpha, Xm)
+        #     Y.restoreMat(Ym)
+        # else:
+        #     Ym = Xm.duplicate()
+        #     Ym.axpy(alpha, Xm)
+        #     Y = SLEPc.BV().createFromMat(Ym)
+        #     Y.setType('mat')
+        #     Ym.destroy()
+        # return Y
+        self.A.axpy(alpha, X.A)
+        return self
 
     def apply_mat(self, X, Y=None):
         Xm = X.getMat()
@@ -176,3 +178,21 @@ class MatrixLinearOperator(LinearOperator):
     def destroy(self):
         self.destroy_matrix()
         self.destroy_ksp()
+
+    def duplicate(self, copy_values=True):
+        A_copy = self.A.duplicate(copy_values)
+        if self.ksp is not None:
+            ksp_copy = PETSc.KSP().create(comm=self.get_comm())
+            ksp_copy.setOperators(A_copy)
+            ksp_copy.setType(self.ksp.getType())
+            ksp_copy.setFromOptions()
+            ksp_copy.setTolerances(rtol=self.ksp.getTolerances()[0])
+        else:
+            ksp_copy = None
+
+        return MatrixLinearOperator(
+            comm=self.get_comm(),
+            A=A_copy,
+            ksp=ksp_copy,
+            nblocks=self.get_nblocks()
+        )
