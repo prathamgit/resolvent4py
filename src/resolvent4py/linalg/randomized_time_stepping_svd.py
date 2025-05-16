@@ -6,8 +6,10 @@ from .. import SLEPc
 from math import ceil
 import copy
 
+from ..linear_operators import MatrixLinearOperator, ProductLinearOperator
 from ..linalg import enforce_complex_conjugacy
-from ..mat_helpers import create_dense_matrix
+from ..mat_helpers import create_dense_matrix, create_AIJ_identity
+from ..ksp_helpers import create_mumps_solver, create_gmres_bjacobi_solver
 
 np.seterr(all='raise')
 
@@ -137,6 +139,7 @@ def randomized_time_stepping_svd(lin_op, lin_op_mass, omega, n_periods, n_timest
     print(f"t_ratio = {t_ratio}")
     X = []
     for k in range(n_rand):
+        comm.barrier()
         X_k = SLEPc.BV().create(comm=MPI.COMM_WORLD)
         X_k.setSizes(N, n_omega // 2)
         X_k.setType('vecs')
@@ -144,60 +147,120 @@ def randomized_time_stepping_svd(lin_op, lin_op_mass, omega, n_periods, n_timest
         X_k.orthogonalize(None)
         X.append(X_k)
 
+    id_mat = create_dense_matrix(MPI.COMM_SELF, (n_rand, n_rand))
+    for i in range(n_rand):
+        id_mat.setValue(i, i, 1.0)
+    id_mat.assemblyBegin(PETSc.Mat.AssemblyType.FINAL)
+    id_mat.assemblyEnd(PETSc.Mat.AssemblyType.FINAL)
+
     # Assemble DFT matrices
     dft_mat, i_dft_mat = construct_dft_mats(n_omega, n_timesteps, N)
 
-    lhs = lin_op_mass.duplicate(True)
-    lhs.axpy(-dt/2, lin_op)
+    # rhs_mat = lin_op_mass.A.copy()
+    # rhs_mat.axpy(dt/2, lin_op.A)
+    # ksp = create_gmres_bjacobi_solver(comm, rhs_mat, nblocks=comm.Get_size())
+    # ksp = create_mumps_solver(comm, rhs_mat)
+    # rhs_1 = MatrixLinearOperator(comm, rhs_mat, ksp)
+    
+    # lhs_mat = lin_op_mass.A.copy()
+    # lhs_mat.axpy(-dt, lin_op.A)
+    # ksp2 = create_gmres_bjacobi_solver(comm, lhs_mat, nblocks=comm.Get_size())
+    # ksp2 = create_mumps_solver(comm, lhs_mat)
+    # ksp2 = PETSc.KSP().create(comm=MPI.COMM_WORLD)
+    # ksp2.setOperators(lhs_mat)
+    # ksp2.setType('fgmres')
 
-    rhs_1 = lin_op_mass.duplicate(True)
-    rhs_1.axpy(dt/2, lin_op)
+    # pc = ksp.getPC()
+    # pc = ksp2.getPC()
+    # pc.setType('asm')
+    # pc.setReusePreconditioner(True)
 
-    ksp = PETSc.KSP().create(comm=MPI.COMM_WORLD)
-    ksp.setOperators(lhs.A)
-    ksp.setType('gmres')
+    # ksp2.setTolerances(rtol=1e-10, atol=1e-10, max_it=500)
+    # ksp2.setInitialGuessNonzero(False)
+    # ksp2.setUp()
+    # ksp2.setErrorIfNotConverged(True)
 
-    pc = ksp.getPC()
-    pc.setType('asm')
+    # subksps = pc.getASMSubKSP()
 
-    ksp.setTolerances(rtol=1e-10, atol=1e-10, max_it=500)
-    ksp.setUp()
-    ksp.setErrorIfNotConverged(True)
+    # for sub in subksps:
+    #     sub.getPC().setType('ilu')
+    #     sub.getPC().setFactorLevels(0)
+    # lhs = MatrixLinearOperator(comm, lhs_mat, ksp2)
+    # direct_step = ProductLinearOperator(comm, [lhs, rhs_1], [lhs.solve, rhs_1.apply])
 
-    subksps = pc.getASMSubKSP()
+    # lin_op_mass.hermitian_transpose()
+    # lin_op.hermitian_transpose()
 
-    for sub in subksps:
-        sub.getPC().setType('ilu')
-        sub.getPC().setFactorLevels(2)
+    # rhs_mat_2 = lin_op_mass.A.copy()
+    # rhs_mat_2.axpy(dt/2, lin_op.A)
+    # ksp3 = create_gmres_bjacobi_solver(comm, rhs_mat_2, nblocks=comm.Get_size())
+    # ksp3 = create_mumps_solver(comm, rhs_mat_2)
+    # rhs_2 = MatrixLinearOperator(comm, rhs_mat_2, ksp3)
+    
+    # lhs_mat_2 = lin_op_mass.A.copy()
+    # lhs_mat_2.axpy(-dt, lin_op.A)
+    # ksp4 = create_gmres_bjacobi_solver(comm, lhs_mat_2, nblocks=comm.Get_size())
+    # ksp4 = create_mumps_solver(comm, lhs_mat_2)
+    # ksp4 = PETSc.KSP().create(comm=MPI.COMM_WORLD)
+    # ksp4.setOperators(lhs_mat_2)
+    # ksp4.setType('fgmres')
 
-    lin_op_mass.hermitian_transpose()
-    lin_op.hermitian_transpose()
+    # pc2 = ksp.getPC()
+    # pc2 = ksp4.getPC()
+    # pc2.setType('asm')
+    # pc2.setReusePreconditioner(True)
 
-    lhs_2 = lin_op_mass.duplicate(True)
-    lhs_2.axpy(-dt/2, lin_op)
+    # ksp4.setTolerances(rtol=1e-10, atol=1e-10, max_it=500)
+    # ksp4.setInitialGuessNonzero(False)
+    # ksp4.setUp()
+    # ksp4.setErrorIfNotConverged(True)
 
-    rhs_2 = lin_op_mass.duplicate(True)
-    rhs_2.axpy(dt/2, lin_op)
+    # subksps2 = pc2.getASMSubKSP()
 
-    ksp_2 = PETSc.KSP().create(comm=MPI.COMM_WORLD)
-    ksp_2.setOperators(lhs_2.A)
-    ksp_2.setType('gmres')
+    # for sub in subksps2:
+    #     sub.getPC().setType('ilu')
+    #     sub.getPC().setFactorLevels(0)
+    # lhs_2 = MatrixLinearOperator(comm, lhs_mat_2, ksp4)
+    # adjoint_step = ProductLinearOperator(comm, [lhs_2, rhs_2], [lhs_2.solve, rhs_2.apply])
 
-    pc_2 = ksp_2.getPC()
-    pc_2.setType('asm')
+    # lin_op_mass.hermitian_transpose()
+    # lin_op.hermitian_transpose()
 
-    ksp_2.setTolerances(rtol=1e-10, atol=1e-10, max_it=500)
-    ksp_2.setUp()
-    ksp_2.setErrorIfNotConverged(True)
+    q_temp = SLEPc.BV().create(comm=MPI.COMM_WORLD)
+    q_temp.setSizes(N, n_rand)
+    q_temp.setType('vecs')
 
-    subksps = pc_2.getASMSubKSP()
+    k1 = SLEPc.BV().create(comm=MPI.COMM_WORLD)
+    k1.setSizes(N, n_rand)
+    k1.setType('vecs')
 
-    for sub in subksps:
-        sub.getPC().setType('ilu')
-        sub.getPC().setFactorLevels(2)
+    k2 = SLEPc.BV().create(comm=MPI.COMM_WORLD)
+    k2.setSizes(N, n_rand)
+    k2.setType('vecs')
 
-    lin_op_mass.hermitian_transpose()
-    lin_op.hermitian_transpose()
+    k3 = SLEPc.BV().create(comm=MPI.COMM_WORLD)
+    k3.setSizes(N, n_rand)
+    k3.setType('vecs')
+
+    k4 = SLEPc.BV().create(comm=MPI.COMM_WORLD)
+    k4.setSizes(N, n_rand)
+    k4.setType('vecs')
+
+    temp_rhs = SLEPc.BV().create(comm=MPI.COMM_WORLD)
+    temp_rhs.setSizes(N, n_rand)
+    temp_rhs.setType('vecs')
+
+    f = SLEPc.BV().create(comm=MPI.COMM_WORLD)
+    f.setSizes(N, n_rand)
+    f.setType('vecs')
+
+    f_next = SLEPc.BV().create(comm=MPI.COMM_WORLD)
+    f_next.setSizes(N, n_rand)
+    f_next.setType('vecs')
+
+    f_sum = SLEPc.BV().create(comm=MPI.COMM_WORLD)
+    f_sum.setSizes(N, n_rand)
+    f_sum.setType('vecs')
 
     # Forcing sampling function
     def sample_forcing(f, forcing_mat, idx):
@@ -208,59 +271,86 @@ def randomized_time_stepping_svd(lin_op, lin_op_mass, omega, n_periods, n_timest
             f.restoreColumn(i, f_col)
 
     # Timestepping functions
-    def direct_action(forcing_mat, rhs_1, ksp):
-        q_temp = SLEPc.BV().create(comm=MPI.COMM_WORLD)
-        q_temp.setSizes(N, n_rand)
-        q_temp.setType('vecs')
+    def direct_action(forcing_mat, rhs_1):
+        print("direct_action")
         q_temp.scale(0.0)
+        temp_rhs.scale(0.0)
+        f.scale(0.0)
+        f_next.scale(0.0)
+        f_sum.scale(0.0)
         Y_hat = []
-        temp_rhs = SLEPc.BV().create(comm=MPI.COMM_WORLD)
-        temp_rhs.setSizes(N, n_rand)
-        temp_rhs.setType('vecs')
-        f = SLEPc.BV().create(comm=MPI.COMM_WORLD)
-        f.setSizes(N, n_rand)
-        f.setType('vecs')
-        f_next = SLEPc.BV().create(comm=MPI.COMM_WORLD)
-        f_next.setSizes(N, n_rand)
-        f_next.setType('vecs')
-        f_sum = SLEPc.BV().create(comm=MPI.COMM_WORLD)
-        f_sum.setSizes(N, n_rand)
-        f_sum.setType('vecs')
         for period in range(n_periods):
+            print(f"period = {period}")
             for i in range(n_timesteps):
                 print(f"timestep = {i}")
-                sample_forcing(f, forcing_mat, (2*(i-1)) % (2*n_timesteps))
-                sample_forcing(f_next, forcing_mat, (2*(i-1)+2) % (2*n_timesteps))
-                temp_rhs.scale(0.0)
-                rhs_1.apply_mat(q_temp, temp_rhs)
-                f_sum.scale(0.0)
-                for k in range(n_rand):
-                    v_f = f.getColumn(k)
-                    v_fn = f_next.getColumn(k)
-                    v_sum = f_sum.getColumn(k)
-                    v_sum.axpy(1.0, v_f)
-                    v_sum.axpy(1.0, v_fn)
-                    v_sum.scale(dt / 2)
-                    v_rhs = temp_rhs.getColumn(k)
-                    v_rhs.axpy(1.0, v_sum)
-                    f.restoreColumn(k, v_f)
-                    f_next.restoreColumn(k, v_fn)
-                    f_sum.restoreColumn(k, v_sum)
-                    sol_col = q_temp.getColumn(k)
-                    ksp.solve(v_rhs, sol_col)
-                    temp_rhs.restoreColumn(k, v_rhs)
-                    q_temp.restoreColumn(k, sol_col)
+                # sample_forcing(f, forcing_mat, (2*(i-1)) % (2*n_timesteps))
+                # sample_forcing(f_next, forcing_mat, (2*(i-1)+2) % (2*n_timesteps))
+                # f_sum.mult(1.0, 0.0, f, id_mat)
+                # f_sum.mult(dt/2, dt/2, f_next, id_mat)
+
+                # for k in range(n_rand):
+                #     v_q = q_temp.getColumn(k)
+                #     v_rhs = temp_rhs.getColumn(k)
+                #     v_f = f_sum.getColumn(k)
+                #     direct_step.apply(v_q)
+                #     lhs.solve(v_f, v_q)
+                #     q_temp.restoreColumn(k, v_q)
+                #     temp_rhs.restoreColumn(k, v_rhs)
+                #     f_sum.restoreColumn(k, v_f)
+                # direct_step.apply_mat(q_temp, temp_rhs)
+                # lhs.solve_mat(f_sum, q_temp)
+                # q_temp.mult(1.0, 1.0, temp_rhs, id_mat)
+
+                # sample_forcing(f_next, forcing_mat, (2*(i-1)+2) % (2*n_timesteps))
+                # f_next.scale(dt)
+
+                # lin_op_mass.apply_mat(q_temp, temp_rhs)
+                # temp_rhs.mult(1.0, 1.0, f_next, id_mat)
+
+                # for k in range(n_rand):
+                #     v_q = q_temp.getColumn(k)
+                #     v_rhs = temp_rhs.getColumn(k)
+                #     lhs.solve(v_rhs, v_q)
+                #     temp_rhs.restoreColumn(k, v_rhs)
+                #     q_temp.restoreColumn(k, v_q)
+                # lhs.solve_mat(temp_rhs, q_temp)
+
+                sample_forcing(f, forcing_mat, (2*(n_timesteps - i)) % (2*n_timesteps))
+                sample_forcing(f_next, forcing_mat, (2*(n_timesteps - i) - 2) % (2*n_timesteps))
+                f_sum.mult(1.0, 0.0, f, id_mat)
+                f_sum.mult(0.5, 0.5, f_next, id_mat)
+
+                lin_op.apply_mat(q_temp, k1)
+                k1.mult(1.0, 1.0, f, id_mat)
+
+                q_temp.mult(dt/2, 1.0, k1, id_mat)
+                lin_op.apply_mat(q_temp, k2)
+                q_temp.mult(-dt/2, 1.0, k1, id_mat)
+                k2.mult(1.0, 1.0, f_sum, id_mat)
+
+                q_temp.mult(dt/2, 1.0, k2, id_mat)
+                lin_op.apply_mat(q_temp, k3)
+                q_temp.mult(-dt/2, 1.0, k2, id_mat)
+                k3.mult(1.0, 1.0, f_sum, id_mat)
+
+                q_temp.mult(dt, 1.0, k3, id_mat)
+                lin_op.apply_mat(q_temp, k4)
+                q_temp.mult(-dt, 1.0,k3, id_mat)
+                k4.mult(1.0, 1.0, f_next, id_mat)
+
+                q_temp.mult(dt/6, 1.0, k1, id_mat)
+                q_temp.mult(dt/3, 1.0, k2, id_mat)
+                q_temp.mult(dt/3, 1.0, k3, id_mat)
+                q_temp.mult(dt/6, 1.0, k4, id_mat)
+
+                assert not np.isnan(q_temp.norm()) and not q_temp.norm() >= 10e10, "NaNs already present before solve"
+
                 if period == n_periods - 1 and i % t_ratio == 0:
                     Y_new = SLEPc.BV().create(comm=MPI.COMM_WORLD)
                     Y_new.setSizes(N, n_rand)
                     Y_new.setType('vecs')
                     q_temp.copy(Y_new)
                     Y_hat.append(Y_new)
-        temp_rhs.destroy()
-        f.destroy()
-        f_next.destroy()
-        f_sum.destroy()
-        q_temp.destroy()
         Y_temp = []
         Y_hat = permute_mat_to_k_list_full(Y_hat)
         for i in range(n_rand):
@@ -276,61 +366,88 @@ def randomized_time_stepping_svd(lin_op, lin_op_mass, omega, n_periods, n_timest
             Y_temp.append(Y_temp_i)
         return Y_temp
 
-    def adjoint_action(forcing_mat, rhs_2, ksp_2):
-        z_temp = SLEPc.BV().create(comm=MPI.COMM_WORLD)
-        z_temp.setSizes(N, n_rand)
-        z_temp.setType('vecs')
-        z_temp.scale(0.0)
+    def adjoint_action(forcing_mat, rhs_2):
+        print("adjoint_action")
+        q_temp.scale(0.0)
+        temp_rhs.scale(0.0)
+        f.scale(0.0)
+        f_next.scale(0.0)
+        f_sum.scale(0.0)
         S_hat = []
-        temp_rhs = SLEPc.BV().create(comm=MPI.COMM_WORLD)
-        temp_rhs.setSizes(N, n_rand)
-        temp_rhs.setType('vecs')
-        s = SLEPc.BV().create(comm=MPI.COMM_WORLD)
-        s.setSizes(N, n_rand)
-        s.setType('vecs')
-        s_next = SLEPc.BV().create(comm=MPI.COMM_WORLD)
-        s_next.setSizes(N, n_rand)
-        s_next.setType('vecs')
-        s_sum = SLEPc.BV().create(comm=MPI.COMM_WORLD)
-        s_sum.setSizes(N, n_rand)
-        s_sum.setType('vecs')
         for period in range(n_periods):
+            print(f"period = {period}")
             for i in range(n_timesteps):
                 print(f"timestep = {i}")
-                sample_forcing(s, forcing_mat, (2*(n_timesteps - i)) % (2*n_timesteps))
-                sample_forcing(s_next, forcing_mat, (2*(n_timesteps - i) - 2) % (2*n_timesteps))
-                temp_rhs.scale(0.0)
-                rhs_2.apply_mat(z_temp, temp_rhs)
-                s_sum.scale(0.0)
-                for k in range(n_rand):
-                    sol_col = z_temp.getColumn(k)
-                    v_rhs = temp_rhs.getColumn(k)
-                    v_s = s.getColumn(k)
-                    v_sn = s_next.getColumn(k)
-                    v_sum = s_sum.getColumn(k)
-                    v_sum.axpy(1.0, v_s)
-                    v_sum.axpy(1.0, v_sn)
-                    v_sum.scale(dt / 2)
-                    v_rhs.axpy(1.0, v_sum)
-                    ksp_2.solve(v_rhs, sol_col)
-                    s.restoreColumn(k, v_s)
-                    s_next.restoreColumn(k, v_sn)
-                    s_sum.restoreColumn(k, v_sum)
-                    temp_rhs.restoreColumn(k, v_rhs)
-                    z_temp.restoreColumn(k, sol_col)
+                # sample_forcing(f, forcing_mat, (2*(n_timesteps - i)) % (2*n_timesteps))
+                # sample_forcing(f_next, forcing_mat, (2*(n_timesteps - i) - 2) % (2*n_timesteps))
+                # f_sum.mult(1.0, 0.0, f, id_mat)
+                # f_sum.mult(dt/2, dt/2, f_next, id_mat)
+
+                # for k in range(n_rand):
+                #     v_q = q_temp.getColumn(k)
+                #     v_rhs = temp_rhs.getColumn(k)
+                #     v_f = f_sum.getColumn(k)
+                #     direct_step.apply(v_q)
+                #     lhs.solve(v_f, v_q)
+                #     q_temp.restoreColumn(k, v_q)
+                #     temp_rhs.restoreColumn(k, v_rhs)
+                #     f_sum.restoreColumn(k, v_f)
+
+                # adjoint_step.apply_mat(q_temp, temp_rhs)
+                # lhs_2.solve_mat(f_sum, q_temp)
+                # q_temp.mult(1.0, 1.0, temp_rhs, id_mat)
+
+                # sample_forcing(f_next, forcing_mat, (2*(n_timesteps - i) - 2) % (2*n_timesteps))
+                # f_next.scale(dt)
+
+                # lin_op_mass.apply_mat(q_temp, temp_rhs)
+                # temp_rhs.mult(1.0, 1.0, f_next, id_mat)
+
+                # for k in range(n_rand):
+                #     v_q = q_temp.getColumn(k)
+                #     v_rhs = temp_rhs.getColumn(k)
+                #     lhs_2.solve(v_rhs, v_q)
+                #     temp_rhs.restoreColumn(k, v_rhs)
+                #     q_temp.restoreColumn(k, v_q)
+                # lhs_2.solve_mat(temp_rhs, q_temp)
+
+                sample_forcing(f, forcing_mat, (2*(n_timesteps - i)) % (2*n_timesteps))
+                sample_forcing(f_next, forcing_mat, (2*(n_timesteps - i) - 2) % (2*n_timesteps))
+                f_sum.mult(1.0, 0.0, f, id_mat)
+                f_sum.mult(0.5, 0.5, f_next, id_mat)
+
+                lin_op.apply_mat(q_temp, k1)
+                k1.mult(1.0, 1.0, f, id_mat)
+
+                q_temp.mult(dt/2, 1.0, k1, id_mat)
+                lin_op.apply_mat(q_temp, k2)
+                q_temp.mult(-dt/2, 1.0, k1, id_mat)
+                k2.mult(1.0, 1.0, f_sum, id_mat)
+
+                q_temp.mult(dt/2, 1.0, k2, id_mat)
+                lin_op.apply_mat(q_temp, k3)
+                q_temp.mult(-dt/2, 1.0, k2, id_mat)
+                k3.mult(1.0, 1.0, f_sum, id_mat)
+
+                q_temp.mult(dt, 1.0, k3, id_mat)
+                lin_op.apply_mat(q_temp, k4)
+                q_temp.mult(-dt, 1.0,k3, id_mat)
+                k4.mult(1.0, 1.0, f_next, id_mat)
+
+                q_temp.mult(dt/6, 1.0, k1, id_mat)
+                q_temp.mult(dt/3, 1.0, k2, id_mat)
+                q_temp.mult(dt/3, 1.0, k3, id_mat)
+                q_temp.mult(dt/6, 1.0, k4, id_mat)
+
+                assert not np.isnan(q_temp.norm()), "NaNs already present before solve"
                     
                 if period == n_periods - 1 and i % t_ratio == 0:
                     S_new = SLEPc.BV().create(comm=MPI.COMM_WORLD)
                     S_new.setSizes(N, n_rand)
                     S_new.setType('vecs')
-                    z_temp.copy(S_new)
+                    q_temp.copy(S_new)
                     S_hat.append(S_new)
-        temp_rhs.destroy()
-        s.destroy()
-        s_next.destroy()
-        s_sum.destroy()
         S_hat.reverse()
-        z_temp.destroy()
         S_temp = []
         S_hat = permute_mat_to_k_list_full(S_hat)
         for i in range(n_rand):
@@ -413,11 +530,14 @@ def randomized_time_stepping_svd(lin_op, lin_op_mass, omega, n_periods, n_timest
             Z[i] = Z_i
         return Z
 
-    Y_hat = permute_mat_to_k_list(orthogonalize_timestepped_mat(permute_mat_to_Nw_list(direct_action(X, rhs_1, ksp))))
+    rhs_1 = None
+    rhs_2 = None
+
+    Y_hat = permute_mat_to_k_list(orthogonalize_timestepped_mat(permute_mat_to_Nw_list(direct_action(X, rhs_1))))
     for q in range(n_loops):
-        S_hat = permute_mat_to_k_list(orthogonalize_timestepped_mat(permute_mat_to_Nw_list(adjoint_action(Y_hat, rhs_2, ksp_2))))
-        Y_hat = permute_mat_to_k_list(orthogonalize_timestepped_mat(permute_mat_to_Nw_list(direct_action(S_hat, rhs_1, ksp))))
-    S_hat = permute_mat_to_Nw_list(adjoint_action(Y_hat, rhs_2, ksp_2))
+        S_hat = permute_mat_to_k_list(orthogonalize_timestepped_mat(permute_mat_to_Nw_list(adjoint_action(Y_hat, rhs_2))))
+        Y_hat = permute_mat_to_k_list(orthogonalize_timestepped_mat(permute_mat_to_Nw_list(direct_action(S_hat, rhs_1))))
+    S_hat = permute_mat_to_Nw_list(adjoint_action(Y_hat, rhs_2))
 
     Y_hat = permute_mat_to_Nw_list(Y_hat)
 
@@ -464,5 +584,11 @@ def randomized_time_stepping_svd(lin_op, lin_op_mass, omega, n_periods, n_timest
             V.append(V_i)
             
             print(s)
+
+    temp_rhs.destroy()
+    f.destroy()
+    f_next.destroy()
+    f_sum.destroy()
+    q_temp.destroy()
 
     return U, S, V
