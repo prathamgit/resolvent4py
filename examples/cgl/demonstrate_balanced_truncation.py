@@ -21,7 +21,7 @@ def L_generator(omega, A):
     Rinv.scale(1j * omega)
     Rinv.axpy(-1.0, A)
     ksp = res4py.create_mumps_solver(comm, Rinv)
-    L = res4py.MatrixLinearOperator(comm, Rinv, ksp)
+    L = res4py.linear_operators.MatrixLinearOperator(comm, Rinv, ksp)
     return (L, L.solve_mat, (L.destroy,))
 
 
@@ -49,12 +49,9 @@ L_gen = partial(L_generator, A=A)
 L_generators = [L_gen for _ in range(len(omegas))]
 
 res4py.petscprint(comm, "Computing Gramian factors...")
-X, Y = res4py.model_reduction.compute_gramian_factors(L_generators, omegas, weights, B, C)
+X, Y = res4py.model_reduction.compute_gramian_factors(
+    L_generators, omegas, weights, B, C
+)
 
 res4py.petscprint(comm, "Computing balanced projection...")
 Phi, Psi, S = res4py.model_reduction.compute_balanced_projection(X, Y, 10)
-# res4py.petscprint(comm, np.diag(S))
-
-# Id = Phi.dot(Psi)
-# Id_ = Id.getDenseArray()
-# res4py.petscprint(comm, np.diag(Id_))

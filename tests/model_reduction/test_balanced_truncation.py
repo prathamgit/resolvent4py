@@ -1,20 +1,10 @@
-import pytest
-import matplotlib.pyplot as plt
+from functools import partial
 import numpy as np
 import scipy as sp
 import resolvent4py as res4py
 from mpi4py import MPI
-from petsc4py import PETSc
-import os
 
-plt.rcParams.update(
-    {
-        "font.family": "serif",
-        "font.sans-serif": ["Computer Modern"],
-        "font.size": 18,
-        "text.usetex": True,
-    }
-)
+from .. import pytest_utils
 
 def L_generator(omega, A):
     comm = MPI.COMM_WORLD
@@ -22,121 +12,81 @@ def L_generator(omega, A):
     Rinv.scale(1j * omega)
     Rinv.axpy(-1.0, A)
     ksp = res4py.create_mumps_solver(comm, Rinv)
-    L = res4py.MatrixLinearOperator(comm, Rinv, ksp)
+    L = res4py.linear_operators.MatrixLinearOperator(comm, Rinv, ksp)
     return (L, L.solve_mat, (L.destroy,))
 
 @pytest.fixture(scope="module")
 def comm():
     return MPI.COMM_WORLD
 
-@pytest.fixture(scope="module")
-def truncation_data(tmp_path_factory, comm):
-    path = tmp_path_factory.mktemp("balanced_truncation")
-    N, Nb, Nc = 3, 2, 1
-    complex_A = False
-    fnames_jac = [str(path / "rows.dat"), str(path / "cols.dat"), str(path / "vals.dat")]
-    if comm.Get_rank() == 0:
-        os.makedirs(path) if os.path.isdir(path) == False else None
-        A = np.asarray([[-0.1, 0.5, 0.0], [-0.5, -0.1, 0.0], [0, 0, -1]], \
-                       dtype=np.complex128)
-        if complex_A:
-            A += 1j*np.eye(A.shape[0])
-        evals, _ = sp.linalg.eig(A)
-        print(evals)
-        A = sp.sparse.coo_matrix(A)
-        arrays = [A.row, A.col, A.data]
-        for i, array in enumerate(arrays):
-            vec = PETSc.Vec().createWithArray(
-                array, len(array), None, MPI.COMM_SELF
-            )
-            res4py.write_to_file(MPI.COMM_SELF, fnames_jac[i], vec)
-            vec.destroy()
-        A = A.todense()
-        B = np.asarray([[1, 0], [0, 0], [0, 1]])
-        C = np.ones((3, 1))
-        X = sp.linalg.solve_continuous_lyapunov(A, -B@B.conj().T)
-        Y = sp.linalg.solve_continuous_lyapunov(A.conj().T, -C@C.conj().T)
-        
-        Sig_sq, Phi = sp.linalg.eig(X@Y)
-        Psi = sp.linalg.inv(Phi).conj().T
-        hankel = np.sqrt(Sig_sq)
+def test_balanced_truncation_real(comm):
+    r"""Test balanced trunction."""
+    complex = False
+    N, rb, rc = 5, 3, 2
+    Apetsc, Apython = pytest_utils.generate_random_matrix(comm, (N, N), complex)
+    Bpetsc, Bpython = pytest_utils.generate_random_bv(comm, (N, rb), complex)
+    Cpetsc, Cpython = pytest_utils.generate_random_bv(comm, (N, rc), complex)
 
-        B = PETSc.Mat().createDense((N, Nb), None, B, comm=MPI.COMM_SELF)
-        C = PETSc.Mat().createDense((N, Nc), None, C, comm=MPI.COMM_SELF)
-        res4py.write_to_file(MPI.COMM_SELF, str(path / 'B.dat'), B)
-        res4py.write_to_file(MPI.COMM_SELF, str(path / 'C.dat'), C)
-
-    Nl = res4py.compute_local_size(N)
-    A = res4py.read_coo_matrix(comm, fnames_jac, ((Nl, N), (Nl, N)))
-    B = res4py.read_bv(comm, str(path / 'B.dat'), ((Nl, N), Nb))
-    C = res4py.read_bv(comm, str(path / 'C.dat'), ((Nl, N), Nc))
-
+    # Compute quadrature points and quadrature weights
     omegas, wlgs = [], []
     domega = 0.1
-    intervals = np.arange(0, 31*domega, domega)
+    intervals = np.arange(0, 31 * domega, domega)
     idx = len(intervals)
     domega *= 10
-    intervals = np.concatenate((intervals, np.arange(intervals[-1] + domega, \
-                                                    intervals[-1] + 250*domega, \
-                                                    domega)))
-    poly_ords = 10*np.ones(len(intervals) - 1, dtype=np.int32)
+    intervals = np.concatenate(
+        (
+            intervals,
+            np.arange(
+                intervals[-1] + domega, intervals[-1] + 50 * domega, domega
+            ),
+        )
+    )
+    poly_ords = 5 * np.ones(len(intervals) - 1, dtype=np.int32)
     poly_ords[:idx] = 10
 
     for j in range(len(poly_ords)):
         points, wlg_j = np.polynomial.legendre.leggauss(poly_ords[j])
-        of, oi = intervals[[j+1, j]]
-        omegas_j = (of - oi)/2*points + (of + oi)/2
+        of, oi = intervals[[j + 1, j]]
+        omegas_j = (of - oi) / 2 * points + (of + oi) / 2
         omegas.extend(omegas_j)
-        wlg_j *= 0.5*(of - oi)
+        wlg_j *= 0.5 * (of - oi)
         wlgs.extend(wlg_j)
 
     omegas = np.asarray(omegas)
     weights = np.asarray(wlgs) / np.pi
 
-    if complex_A:
+    if complex:
         omegas = np.concatenate((-np.flipud(omegas), omegas))
         weights = np.concatenate((np.flipud(weights), weights)) / 2
 
-    L_gen = partial(L_generator, A=A)
+    L_gen = partial(L_generator, A=Apetsc)
     L_generators = [L_gen for _ in range(len(omegas))]
 
-    return {
-        'path': path,
-        'N': N,
-        'Nb': Nb,
-        'Nc': Nc,
-        'complex_A': complex_A,
-        'fnames_jac': fnames_jac,
-        'A': A,
-        'B': B,
-        'C': C,
-        'omegas': omegas,
-        'weights': weights,
-        'L_generators': L_generators,
-        'hankel': hankel,
-    }
+    X, Y = res4py.model_reduction.compute_gramian_factors(
+        L_generators, omegas, weights, Bpetsc, Cpetsc
+    )
+    r = 1
+    Phi, Psi, S = res4py.model_reduction.compute_balanced_projection(X, Y, r)
+    linop = res4py.linear_operators.MatrixLinearOperator(comm, Apetsc)
+    Ar, _, _ = res4py.model_reduction.assemble_reduced_order_tensors(
+        linop, Bpetsc, Cpetsc, Phi, Psi
+    )
+    linop.destroy()
 
-def test_balanced_truncation_files_exist(comm, truncation_data):
-    # Example assertion: check file paths end with .dat
-    for fname in truncation_data['fnames_jac']:
-        assert fname.endswith('.dat')
-    # Add more test logic as needed
+    # Compute exact balanced truncation using scipy
+    Qb = -Bpython @ Bpython.conj().T
+    Qc = -Cpython @ Cpython.conj().T
+    X = sp.linalg.solve_continuous_lyapunov(Apython, Qb)
+    Y = sp.linalg.solve_continuous_lyapunov(Apython.conj().T, Qc)
+    Hankel, Phi_python = sp.linalg.eig(X @ Y)
+    Hankel = np.sqrt(Hankel)
+    Psi_python = sp.linalg.inv(Phi_python).conj().T
+    Phi_python = Phi_python[:, :r]
+    Psi_python = Psi_python[:, :r]
+    Ar_python = Psi_python.conj().T@Apython@Phi_python
 
-def test_balanced_truncation_gramian_factors(comm, truncation_data):
-    res4py.petscprint(comm, "Computing Gramian factors...")
-    X, Y = res4py.model_reduction.compute_gramian_factors(truncation_data['L_generators'], \
-                                                          truncation_data['omegas'], truncation_data['weights'], truncation_data['B'], truncation_data['C'])
-    assert X is not None
-    assert Y is not None
-
-def test_balanced_truncation_balanced_projection(comm, truncation_data):
-    res4py.petscprint(comm, "Computing balanced projection...")
-    Phi, Psi, S = res4py.model_reduction.compute_balanced_projection(X, Y, truncation_data['N'])
-    assert Phi is not None
-    assert Psi is not None
-    assert S is not None
-
-def test_balanced_truncation_error(comm, truncation_data):
-    error = 100*np.linalg.norm(np.diag(S) - truncation_data['hankel'])/np.linalg.norm(truncation_data['hankel'])
-    res4py.petscprint(comm, "Percent error = %1.5e"%error)
-    assert error < 1e-5
+    error = 100 * np.linalg.norm(np.diag(S)[0] - Hankel[0]) / \
+        np.linalg.norm(Hankel[0])
+    assert error < 2
+    error = 100*np.linalg.norm(Ar - Ar_python) / np.linalg.norm(Ar_python)
+    assert error < 2

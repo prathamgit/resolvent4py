@@ -1,10 +1,17 @@
-from . import np
-from . import sp
-from . import PETSc
-from . import MPI
-from . import typing
-from .comms_helpers import scatter_array_from_root_to_all
-from .mat_helpers import convert_coo_to_csr
+__all__ = [
+    "generate_random_petsc_sparse_matrix",
+    "generate_random_petsc_vector",
+]
+
+import typing
+
+import numpy as np
+import scipy as sp
+from mpi4py import MPI
+from petsc4py import PETSc
+
+from .comms import scatter_array_from_root_to_all
+from .matrix import convert_coo_to_csr
 
 
 def generate_random_petsc_sparse_matrix(
@@ -31,7 +38,7 @@ def generate_random_petsc_sparse_matrix(
     # Generate random matrix on root
     arrays = [None, None, None]
     if rank == 0:
-        dtype = np.complex128 if complex == True else np.float64
+        dtype = np.complex128 if complex else np.float64
         A = sp.sparse.random(
             nrows,
             ncols,
@@ -42,14 +49,14 @@ def generate_random_petsc_sparse_matrix(
         if nrows == ncols:  # add identity to make A invertible
             A += sp.sparse.identity(nrows, dtype=dtype, format="csr")
         A = A.tocoo()
-        arrays = [A.row, A.col, A.data]
+        arrays = [A.row, A.col, A.data + 1j*0] # need complex type for PETSc
     # Scatter to all other processors and assemble
     recv_bufs = [scatter_array_from_root_to_all(comm, a) for a in arrays]
     row_ptrs, cols, data = convert_coo_to_csr(comm, recv_bufs, sizes)
     A = PETSc.Mat().create(comm=comm)
     A.setSizes(sizes)
     A.setUp()
-    A.setPreallocationCSR((row_ptrs, cols, data))
+    A.setPreallocationCSR((row_ptrs, cols, data)) 
     A.setValuesCSR(row_ptrs, cols, data)
     A.assemble(None)
     return A

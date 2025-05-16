@@ -41,14 +41,16 @@ Rinv.scale(s)
 Rinv.axpy(-1.0, A)
 ksp = res4py.create_mumps_solver(comm, Rinv)
 res4py.check_lu_factorization(comm, Rinv, ksp)
-L = res4py.MatrixLinearOperator(comm, Rinv, ksp)
+L = res4py.linear_operators.MatrixLinearOperator(comm, Rinv, ksp)
 
 # Compute the svd
 res4py.petscprint(comm, "Running randomized SVD...")
 n_rand = 40
 n_loops = 3
 n_svals = 10
-U, S, V = res4py.linalg.randomized_svd(L, L.solve_mat, n_rand, n_loops, n_svals)
+U, S, V = res4py.linalg.randomized_svd(
+    L, L.solve_mat, n_rand, n_loops, n_svals
+)
 
 # Check convergence
 res4py.linalg.check_randomized_svd_convergence(L.solve, U, S, V)
@@ -68,8 +70,14 @@ mu2 = -0.01
 sigma = 0.4
 system = cgl.CGL(x, nu, gamma, mu0, mu2, sigma)
 
+<<<<<<< HEAD
 save_path = "results/"
 os.makedirs(save_path) if not os.path.exists(save_path) else None
+=======
+    save_path = "results/"
+    os.makedirs(save_path) if not os.path.exists(save_path) else None
+    print("Plotting (see output in %s)..." % save_path)
+>>>>>>> origin/main
 
 Id = sp.sparse.identity(N)
 R = sp.linalg.inv((s * Id - system.A).todense())

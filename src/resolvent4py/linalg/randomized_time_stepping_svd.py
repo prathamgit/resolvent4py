@@ -1,10 +1,16 @@
-from .. import np
-from .. import sp
-from .. import MPI
-from .. import PETSc
-from .. import SLEPc
-from math import ceil
+__all__ = ["construct_dft_mats", "randomized_time_stepping_svd"]
+
 import copy
+from math import ceil
+
+import numpy as np
+import scipy as sp
+from mpi4py import MPI
+from petsc4py import PETSc
+from slepc4py import SLEPc
+
+from ..utils.vector import enforce_complex_conjugacy
+from ..utils.matrix import create_dense_matrix
 
 from ..linear_operators import MatrixLinearOperator, ProductLinearOperator
 from ..linalg import enforce_complex_conjugacy

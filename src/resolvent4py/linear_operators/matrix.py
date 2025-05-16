@@ -1,9 +1,11 @@
+import typing
+
+from mpi4py import MPI
+from petsc4py import PETSc
+from slepc4py import SLEPc
+
+from ..utils.matrix import mat_solve_hermitian_transpose
 from .linear_operator import LinearOperator
-from ..mat_helpers import mat_solve_hermitian_transpose
-from .. import SLEPc
-from .. import PETSc
-from .. import MPI
-from .. import typing
 
 
 class MatrixLinearOperator(LinearOperator):
@@ -41,10 +43,8 @@ class MatrixLinearOperator(LinearOperator):
         y = self.create_left_vector() if y == None else y
         self.A.mult(x, y)
         return y
-    
-    def hermitian_transpose(self):
-        self.A.hermitianTranspose()
 
+<<<<<<< HEAD
     def axpy(self, alpha, X, Y=None):
         # Xm = X.A
         # if Y != None:
@@ -60,6 +60,24 @@ class MatrixLinearOperator(LinearOperator):
         # return Y
         self.A.axpy(alpha, X.A)
         return self
+=======
+    # def hermitian_transpose(self):
+    #     self.A.hermitianTranspose()
+
+    # def axpy(self, alpha, X, Y=None):
+    #     Xm = X.A
+    #     if Y != None:
+    #         Ym = Y.A
+    #         Ym.axpy(alpha, Xm)
+    #         Y.restoreMat(Ym)
+    #     else:
+    #         Ym = Xm.duplicate()
+    #         Ym.axpy(alpha, Xm)
+    #         Y = SLEPc.BV().createFromMat(Ym)
+    #         Y.setType("mat")
+    #         Ym.destroy()
+    #     return Y
+>>>>>>> origin/main
 
     def apply_mat(self, X, Y=None):
         Xm = X.getMat()

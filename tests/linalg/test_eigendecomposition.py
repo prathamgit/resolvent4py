@@ -1,68 +1,31 @@
-import pytest
+from petsc4py import PETSc
 import scipy as sp
 import numpy as np
-import matplotlib.pyplot as plt
 import resolvent4py as res4py
-from mpi4py import MPI
-from petsc4py import PETSc
-import os
 
-@pytest.fixture
-def comm():
-    return MPI.COMM_WORLD
 
-@pytest.fixture
-def rank_size(comm):
-    return comm.Get_rank(), comm.Get_size()
+def test_eigendecomposition(comm, square_random_matrix):
+    """Test eigendecomp with different matrix sizes based on test level."""
 
-@pytest.fixture(params=[
-    pytest.param((100, 100), marks=pytest.mark.local),      # local: small problem
-    pytest.param((500, 500), marks=pytest.mark.development),  # dev: medium problem
-    pytest.param((1000, 1000), marks=pytest.mark.main),     # main: large problem
-])
-def matrix_size(request):
-    """Matrix size for different test levels"""
-    return request.param
-
-@pytest.fixture
-def test_output_dir(tmp_path):
-    return tmp_path / "test_eigendecomposition"
-
-def test_eigendecomposition(comm, rank_size, matrix_size, test_output_dir):
-    """Test eigendecomposition with different matrix sizes based on test level."""
-    rank, size = rank_size
-    N, _ = matrix_size  # We use N x N for eigendecomposition
+    Apetsc, Apython = square_random_matrix
     omega = 20.0  # Angular frequency parameter
-    s = 10  # Number of eigenvectors to compute
-    
-    # Create path for temporary files
-    path = str(test_output_dir) + '/'
-    
-    fnames_jac, fnames = None, None
-    if rank == 0:
-        test_output_dir.mkdir(exist_ok=True)
-        A = sp.sparse.csr_matrix(np.random.randn(N, N) + 1j * np.random.randn(N, N))
-        A = A.tocoo()
-        rows, cols = A.nonzero()
-        data = A.data
-        arrays = [rows, cols, data]
-        fnames_jac = [path + 'rows.dat', path + 'cols.dat', path + 'vals.dat']
-        for (i, array) in enumerate(arrays):
-            vec = PETSc.Vec().createWithArray(array, len(array), None, MPI.COMM_SELF)
-            res4py.write_to_file(MPI.COMM_SELF, fnames_jac[i], vec)
-            vec.destroy()
-        A = A.todense()
-        evals, evecs = sp.linalg.eig(A)
-    
-    comm.Barrier()
-    
-    fnames_jac = comm.bcast(fnames_jac, root=0)
-    Nl = res4py.compute_local_size(N)
-    A_dist = res4py.read_coo_matrix(comm, fnames_jac, ((Nl, N), (Nl, N)))
-    oId = PETSc.Mat().createConstantDiagonal(A_dist.getSizes(), 1.0, comm=comm)
-    oId.scale(1j*omega)
-    oId.convert(PETSc.Mat.Type.MPIAIJ)
-    oId.axpy(-1.0, A_dist)
-    ksp = res4py.create_mumps_solver(comm, oId)
-    linop = res4py.MatrixLinearOperator(comm, oId, ksp)
-    
+    r = 10  # Number of eigenvalues to compute
+
+    Id = PETSc.Mat().createConstantDiagonal(Apetsc.getSizes(), 1.0, comm=comm)
+    Id.scale(1j * omega)
+    Id.convert(PETSc.Mat.Type.MPIAIJ)
+    Id.axpy(-1.0, Apetsc)
+    ksp = res4py.create_mumps_solver(comm, Id)
+    linop = res4py.linear_operators.MatrixLinearOperator(comm, Id, ksp)
+    krylov_dim = linop.get_dimensions()[0][-1] - 1
+    r = np.min([r, krylov_dim - 3])
+    lambda_fun = lambda x: 1j * omega - 1 / x
+    D, _ = res4py.linalg.eig(linop, linop.solve, krylov_dim, r, lambda_fun)
+    D = np.diag(D)
+
+    ev, _ = sp.linalg.eig(Apython)
+    ev_sorted = [ev[np.argmin(np.abs(ev - D[i]))] for i in range(len(D))]
+    ev_sorted = np.asarray(ev_sorted)
+    error = 100 * np.max(np.abs(ev_sorted - D) / np.abs(ev_sorted))
+
+    assert error < 1e-1  # Max percent error < 1e-1
