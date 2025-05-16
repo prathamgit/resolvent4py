@@ -15,6 +15,9 @@ def L_generator(omega, A):
     L = res4py.linear_operators.MatrixLinearOperator(comm, Rinv, ksp)
     return (L, L.solve_mat, (L.destroy,))
 
+@pytest.fixture(scope="module")
+def comm():
+    return MPI.COMM_WORLD
 
 def test_balanced_truncation_real(comm):
     r"""Test balanced trunction."""

@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 import resolvent4py as res4py
 from .. import pytest_utils
 
