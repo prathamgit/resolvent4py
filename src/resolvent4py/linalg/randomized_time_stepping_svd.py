@@ -9,13 +9,7 @@ from mpi4py import MPI
 from petsc4py import PETSc
 from slepc4py import SLEPc
 
-from ..utils.vector import enforce_complex_conjugacy
 from ..utils.matrix import create_dense_matrix
-
-from ..linear_operators import MatrixLinearOperator, ProductLinearOperator
-from ..linalg import enforce_complex_conjugacy
-from ..mat_helpers import create_dense_matrix, create_AIJ_identity
-from ..ksp_helpers import create_mumps_solver, create_gmres_bjacobi_solver
 
 np.seterr(all='raise')
 

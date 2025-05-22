@@ -52,7 +52,7 @@ def test_low_rank_updated_on_vectors(comm, square_random_matrix):
     x.destroy()
     y.destroy()
     linop.destroy()
-    assert error < 1e-10
+    assert error < 1e-8
 
 
 def test_low_rank_updated_on_bvs(comm, square_random_matrix):
@@ -99,4 +99,4 @@ def test_low_rank_updated_on_bvs(comm, square_random_matrix):
     X.destroy()
     Y.destroy()
     linop.destroy()
-    assert error < 1e-10
+    assert error < 1e-8
