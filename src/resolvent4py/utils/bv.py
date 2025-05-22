@@ -207,6 +207,7 @@ def bv_roll(
         Y.multInPlace(Q, 0, Y.getSizes()[-1])
         Q.destroy()
     else:
+        from ..linear_operators import MatrixLinearOperator
         Ym = Y.getMat()
         r0, r1 = Ym.getOwnershipRange()
         cols = np.arange(r1 - r0) + r0
