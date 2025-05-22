@@ -1,5 +1,7 @@
 # Resolvent4py
 
+[![Tests](https://github.com/albertopadovan/resolvent4py/actions/workflows/tests.yml/badge.svg)](https://github.com/albertopadovan/resolvent4py/actions/workflows/tests.yml)
+
 Resolvent4py is a petsc4py-based package for the analysis, model reduction
 and control of large-scale linear systems. 
 
