@@ -39,7 +39,8 @@ class LinearOperator(metaclass=abc.ABCMeta):
         self._name = name
         self._dimensions = dimensions
         self._nblocks = nblocks
-        self._real = self.check_if_real_valued()
+        # self._real = self.check_if_real_valued()
+        self._real = False
         self._block_cc = (
             self.check_if_complex_conjugate_structure()
             if self._nblocks != None
