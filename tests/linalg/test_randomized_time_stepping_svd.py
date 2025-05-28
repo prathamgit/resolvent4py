@@ -19,13 +19,13 @@ def rank_size(comm):
 @pytest.fixture(
     params=[
         pytest.param(
-            (10, 10, 2, 60, 7), marks=pytest.mark.local
+            (10, 10, 2, 600, 7), marks=pytest.mark.local
         ),  # local: small problem
         pytest.param(
-            (100, 100, 3, 300, 7), marks=pytest.mark.development
+            (100, 100, 3, 3000, 7), marks=pytest.mark.development
         ),  # dev: medium problem
         pytest.param(
-            (1000, 1000, 5, 600, 7), marks=pytest.mark.main
+            (1000, 1000, 5, 6000, 7), marks=pytest.mark.main
         ),  # main: large problem
     ]
 )
@@ -58,11 +58,8 @@ def test_randomized_time_stepping_svd(
     rank, size = rank_size
     N, Nc, n_periods, n_timesteps, n_rand = test_params
 
-    # Create path for temporary files
     path = str(test_output_dir) + "/"
-
-    # Set up frequencies array (omega)
-    omega = np.array([1.0, 2.0, 3.0, 4.0, 5.0, 6.0])  # Example frequencies
+    omega = np.array([-2.0, -1.0, 0.0, 1.0])
 
     fnames_jac, fnames = None, None
     if rank == 0:
@@ -106,12 +103,10 @@ def test_randomized_time_stepping_svd(
     mass_linop = res4py.linear_operators.MatrixLinearOperator(comm, mass)
 
     # Run randomized time-stepping SVD
-    n_loops = 3  # Power iterations
-    n_svals = min(3, min(N, Nc))  # Number of singular values to compute
+    n_loops = 0
+    n_svals = 3
     U, S, V = res4py.linalg.randomized_time_stepping_svd(
         linop,
-        mass_linop,
-        linop.apply_mat,
         omega,
         n_periods,
         n_timesteps,
