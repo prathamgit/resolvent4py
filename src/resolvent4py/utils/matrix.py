@@ -4,6 +4,7 @@ __all__ = [
     "mat_solve_hermitian_transpose",
     "hermitian_transpose",
     "convert_coo_to_csr",
+    "assemble_harmonic_resolvent_generator",
 ]
 
 import numpy as np
@@ -11,6 +12,7 @@ from mpi4py import MPI
 from petsc4py import PETSc
 
 from .miscellaneous import get_mpi_type
+from .comms import scatter_array_from_root_to_all
 
 
 def create_dense_matrix(comm, sizes):
@@ -192,3 +194,37 @@ def convert_coo_to_csr(comm, arrays, sizes):
         my_rows_ptr[i + 1] = ni
 
     return my_rows_ptr, my_cols, my_vals
+
+
+def assemble_harmonic_resolvent_generator(
+    comm: MPI.Comm, A: PETSc.Mat, freqs: np.array
+) -> PETSc.Mat:
+    r"""
+    Assemble :math:`T = -M + A`, where :math:`A` is the output of 
+    :func:`resolvent4py.utils.io.read_harmonic_balanced_matrix` 
+    and :math:`M` is a block
+    diagonal matrix with block :math:`k` given by :math:`M_k = i k \omega I`
+    and :math:`k\omega` is the :math:`k`th entry of :code:`freqs`.
+
+    :param comm: MPI Communicator
+    :type comm: MPI.Comm
+    :param A: assembled PETSc matrix
+    :type A: PETSc.Mat
+    :param freqs: frequncies :math:`\omega\left(\ldots, -1, 0, 1, \ldots\right)`
+    :type freqs: np.array
+
+    :rtype: PETSc.Mat
+    """
+    Nl, N = A.getSizes()[0]
+    Nblk = N // len(freqs)
+    array = np.zeros(N, dtype=np.complex128)
+    if comm.Get_rank() == 0:
+        ones = np.ones(Nblk)
+        array[:] = -np.concatenate([1j * f * ones for f in freqs])
+    arrayloc = scatter_array_from_root_to_all(comm, array, Nl)
+    diag = PETSc.Vec().createWithArray(arrayloc, (Nl, N), None, comm)
+    M = PETSc.Mat().createDiagonal(diag)
+    M.convert(PETSc.Mat.Type.MPIAIJ)
+    M.axpy(1.0, A)
+    diag.destroy()
+    return M

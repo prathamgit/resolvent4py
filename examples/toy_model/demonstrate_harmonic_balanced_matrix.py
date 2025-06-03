@@ -39,21 +39,44 @@ N = 3 * len(perts_freqs)
 Nl = res4py.compute_local_size(N)
 n = 3
 nl = res4py.compute_local_size(n)
-H = res4py.read_harmonic_balanced_matrix(
+A = res4py.read_harmonic_balanced_matrix(
     comm,
     fnames_lst,
     True,
     ((nl, n), (nl, n)),
     ((Nl, N), (Nl, N)),
 )
+H = res4py.assemble_harmonic_resolvent_generator(comm, A, perts_freqs)
+ksp = res4py.create_mumps_solver(comm, H)
+# ksp = res4py.create_gmres_bjacobi_solver(
+#     comm,
+#     H,
+#     len(perts_freqs),
+#     1e-10,
+#     1e-10,
+# )
+# res4py.check_gmres_bjacobi_solver(comm, H, ksp)
+res4py.check_lu_factorization(comm, H, ksp)
 
-ksp = res4py.create_gmres_bjacobi_solver(
-    comm, H, len(perts_freqs), 1e-10, 1e-10, True
+Linop = res4py.linear_operators.MatrixLinearOperator(
+    comm, H, ksp, (2 * nfp + 1)
 )
-res4py.check_gmres_bjacobi_solver(comm, H, ksp)
+print(Linop._block_cc)
+D, V = res4py.linalg.eig(Linop, Linop.solve, N - 3, 20, lambda x: 1/x)
+D = np.diag(D)
 
-Linop = res4py.linear_operators.MatrixLinearOperator(comm, H, ksp, (2*nfp + 1))
+if comm.Get_rank() == 0:
 
+    plt.figure()
+    plt.plot(D.real, D.imag, 'ko')
+    plt.plot(0, 0, 'rx')
+    ax = plt.gca()
+    ax.axhline(y = bflow_freqs[1]/2, color='r', alpha=0.5)
+    ax.axhline(y = -bflow_freqs[1]/2, color='r', alpha=0.5)
+    ax.set_xlabel(r'$\mathrm{Real}(\lambda)$')
+    ax.set_ylabel(r'$\mathrm{Imag}(\lambda)$')
+    plt.tight_layout()
+    plt.show()
 
 # x = PETSc.Vec().createWithArray(np.ones(Nl), (Nl, N), None, comm)
 # y = x.duplicate()
@@ -69,13 +92,12 @@ Linop = res4py.linear_operators.MatrixLinearOperator(comm, H, ksp, (2*nfp + 1))
 # res4py.petscprint(comm, x2.norm())
 
 # fnames_lst = [(save_path + "Aj_%02d.dat" % j) for j in range(len(bflow_freqs))]
-
 # bv = res4py.read_harmonic_balanced_bv(
 #     comm, fnames_lst, True, ((nl, n), 3), ((Nl, N), N)
 # )
 
-# bv.view()
+# # bv.view()
 # L = bv.getMat().getDenseArray()
-# H.convert(PETSc.Mat.Type.DENSE)
-# H_ = H.getDenseArray()
-# print(np.linalg.norm(H_ - L))
+# A.convert(PETSc.Mat.Type.DENSE)
+# A_ = A.getDenseArray()
+# print(np.linalg.norm(A_ - L))

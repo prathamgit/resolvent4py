@@ -84,7 +84,7 @@ As = [
     for i in range(len(time))
 ]
 As = np.concatenate(As, axis=-1)
-Ashat = (1 / len(time)) * np.fft.rfft(As, axis=-1)[:, :(nf + 1)]
+Ashat = (1 / len(time)) * np.fft.rfft(As, axis=-1)[:, : (nf + 1)]
 freqs = omega * np.arange(nf + 1)
 
 

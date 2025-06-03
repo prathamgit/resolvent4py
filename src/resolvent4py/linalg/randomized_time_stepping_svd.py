@@ -11,6 +11,7 @@ from slepc4py import SLEPc
 
 from ..utils.matrix import create_dense_matrix
 
+
 def estimate_dt_max(lin_op, scheme="CN"):
     A = lin_op.A
     comm = lin_op.get_comm()

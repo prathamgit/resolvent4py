@@ -189,10 +189,14 @@ def scatter_array_from_root_to_all(
             dtype = comm.recv(source=0, tag=1)
     recvbuf = np.empty(count, dtype=dtype)
     counts = (
-        np.asarray(counts, dtype=PETSc.IntType) if counts is not None else counts
+        np.asarray(counts, dtype=PETSc.IntType)
+        if counts is not None
+        else counts
     )
     displs = (
-        np.asarray(displs, dtype=PETSc.IntType) if displs is not None else displs
+        np.asarray(displs, dtype=PETSc.IntType)
+        if displs is not None
+        else displs
     )
     comm.Scatterv(
         [array, counts, displs, get_mpi_type(dtype)], recvbuf, root=0
