@@ -10,17 +10,20 @@ __all__ = [
 import numpy as np
 from mpi4py import MPI
 from petsc4py import PETSc
+from typing import Optional
 
 from .miscellaneous import get_mpi_type
 from .comms import scatter_array_from_root_to_all
 
 
-def create_dense_matrix(comm, sizes):
+def create_dense_matrix(
+    comm: MPI.Comm, sizes: tuple[tuple[int, int], tuple[int, int]]
+) -> PETSc.Mat:
     r"""
     Create dense matrix
 
     :param comm: MPI communicator
-    :param sizes: `MatSizeSpec`_
+    :param sizes: tuple[tuple[int, int], tuple[int, int]]
 
     :rtype: PETSc.Mat.Type.DENSE
     """
@@ -29,12 +32,16 @@ def create_dense_matrix(comm, sizes):
     return M
 
 
-def create_AIJ_identity(comm, sizes):
+def create_AIJ_identity(
+    comm: MPI.Comm, sizes: tuple[tuple[int, int], tuple[int, int]]
+) -> PETSc.Mat:
     r"""
     Create identity matrix of sparse AIJ type
 
     :param comm: MPI Communicator
-    :param sizes: `MatSizeSpec`_
+    :type comm: MPI.Comm
+    :param sizes: see `MatSizeSpec <MatSizeSpec_>`_
+    :type sizes: tuple[tuple[int, int], tuple[int, int]]
 
     :return: identity matrix
     :rtype: PETSc.Mat.Type.AIJ
@@ -44,17 +51,21 @@ def create_AIJ_identity(comm, sizes):
     return Id
 
 
-def mat_solve_hermitian_transpose(ksp, X, Y=None):
+def mat_solve_hermitian_transpose(
+    ksp: PETSc.KSP, X: PETSc.Mat, Y: Optional[PETSc.Mat] = None
+) -> PETSc.Mat:
     r"""
-    Solve :math:`A^{-1}X = Z`, where :math:`X` is a PETSc matrix of type
+    Solve :math:`A^{-*}X = Y`, where :math:`X` is a PETSc matrix of type
     :code:`PETSc.Mat.Type.DENSE`
 
     :param ksp: a KPS solver structure
     :type ksp: PETSc.KSP
     :param X: a dense PETSc matrix
     :type X: PETSc.Mat.Type.DENSE
+    :param Y: a dense PETSc matrix
+    :type Y: Optional[PETSc.Mat.Type.DENSE] defaults to :code:`None`
 
-    :return: a matrix of the same type and size as :math:`X`
+    :return: matrix to store the result
     :rtype: PETSc.Mat.Type.DENSE
     """
     sizes = X.getSizes()
@@ -78,18 +89,22 @@ def mat_solve_hermitian_transpose(ksp, X, Y=None):
     return Y
 
 
-def hermitian_transpose(comm, Mat, in_place=False, MatHT=None):
+def hermitian_transpose(
+    comm: MPI.Comm, Mat: PETSc.Mat, in_place=False, MatHT=None
+) -> PETSc.Mat:
     r"""
     Return the hermitian transpose of the matrix :code:`Mat`.
 
     :param comm: MPI communicator
-    :param Mat: PETSc matrix of any kind
-    :param in_place: [optional] in place transposition if :code:`True` and
+    :type comm: MPI.Comm
+    :param Mat: PETSc matrix
+    :type Mat: PETSc.Mat
+    :param in_place: in-place transposition if :code:`True` and
         out of place otherwise
-    :type in_place: bool
+    :type in_place: Optional[bool] defaults to :code:`False`
     :param MatHT: [optional] matrix with the correct layout to hold the
         hermitian transpose of :code:`Mat`
-    :param Mat: PETSc matrix of any kind
+    :param MatHT: Optional[PETSc.Mat] defaults to :code:`None`
     """
     if in_place == False:
         if MatHT == None:
@@ -106,7 +121,11 @@ def hermitian_transpose(comm, Mat, in_place=False, MatHT=None):
         return MatHT_
 
 
-def convert_coo_to_csr(comm, arrays, sizes):
+def convert_coo_to_csr(
+    comm: MPI.Comm,
+    arrays: tuple[np.array, np.array, np.array],
+    sizes: tuple[tuple[int, int], tuple[int, int]],
+) -> tuple[np.array, np.array, np.array]:
     r"""
     Convert arrays = [row indices, col indices, values] for COO matrix
     assembly to [row pointers, col indices, values] for CSR matrix assembly.
@@ -114,15 +133,16 @@ def convert_coo_to_csr(comm, arrays, sizes):
     to convert.)
 
     :param comm: MPI communicator (only MPI.COMM_WORLD is supported for now)
+    :type comm: MPI.Comm
     :param arrays: a list of numpy arrays (e.g., arrays = [rows,cols,vals])
-    :param sizes: matrix size
-    :type sizes: `MatSizeSpec <MatSizeSpec_>`_
+    :type array: tuple[np.array, np.array, np.array]
+    :param sizes: see `MatSizeSpec <MatSizeSpec_>`_
+    :type sizes: tuple[np.array, np.array, np.array]
 
     :return: csr row pointers, column indices and matrix values for CSR
         matrix assembly
-    :rtype: list
+    :rtype: tuple[np.array, np.array, np.array]
     """
-
     rank = comm.Get_rank()
     pool = np.arange(comm.Get_size())
     rows, cols, vals = arrays
@@ -195,13 +215,12 @@ def convert_coo_to_csr(comm, arrays, sizes):
 
     return my_rows_ptr, my_cols, my_vals
 
-
 def assemble_harmonic_resolvent_generator(
     comm: MPI.Comm, A: PETSc.Mat, freqs: np.array
 ) -> PETSc.Mat:
     r"""
-    Assemble :math:`T = -M + A`, where :math:`A` is the output of 
-    :func:`resolvent4py.utils.io.read_harmonic_balanced_matrix` 
+    Assemble :math:`T = -M + A`, where :math:`A` is the output of
+    :func:`resolvent4py.utils.io.read_harmonic_balanced_matrix`
     and :math:`M` is a block
     diagonal matrix with block :math:`k` given by :math:`M_k = i k \omega I`
     and :math:`k\omega` is the :math:`k`th entry of :code:`freqs`.

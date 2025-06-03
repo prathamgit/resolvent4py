@@ -62,19 +62,18 @@ Linop = res4py.linear_operators.MatrixLinearOperator(
     comm, H, ksp, (2 * nfp + 1)
 )
 print(Linop._block_cc)
-D, V = res4py.linalg.eig(Linop, Linop.solve, N - 3, 20, lambda x: 1/x)
+D, V = res4py.linalg.eig(Linop, Linop.solve, N - 3, 20, lambda x: 1 / x)
 D = np.diag(D)
 
 if comm.Get_rank() == 0:
-
     plt.figure()
-    plt.plot(D.real, D.imag, 'ko')
-    plt.plot(0, 0, 'rx')
+    plt.plot(D.real, D.imag, "ko")
+    plt.plot(0, 0, "rx")
     ax = plt.gca()
-    ax.axhline(y = bflow_freqs[1]/2, color='r', alpha=0.5)
-    ax.axhline(y = -bflow_freqs[1]/2, color='r', alpha=0.5)
-    ax.set_xlabel(r'$\mathrm{Real}(\lambda)$')
-    ax.set_ylabel(r'$\mathrm{Imag}(\lambda)$')
+    ax.axhline(y=bflow_freqs[1] / 2, color="r", alpha=0.5)
+    ax.axhline(y=-bflow_freqs[1] / 2, color="r", alpha=0.5)
+    ax.set_xlabel(r"$\mathrm{Real}(\lambda)$")
+    ax.set_ylabel(r"$\mathrm{Imag}(\lambda)$")
     plt.tight_layout()
     plt.show()
 
