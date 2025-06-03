@@ -1,13 +1,7 @@
-import os
-import sys
-import pytest
 import numpy as np
 import scipy as sp
 import resolvent4py as res4py
-from mpi4py import MPI
-from petsc4py import PETSc
 from .. import pytest_utils
-
 
 def test_low_rank_updated_on_vectors(comm, square_random_matrix):
     r"""Test LowRankUpdatedLinearOperator on vectors"""

@@ -45,6 +45,7 @@ def read_vector(
     viewer.destroy()
     return vec
 
+
 def read_coo_matrix(
     comm: MPI.Comm,
     filenames: typing.Tuple[str, str, str],
@@ -369,13 +370,13 @@ def read_harmonic_balanced_vector(
 
     :param comm: MPI Communicator
     :type comm: MPI.Comm
-    :param filenames_lst: list of names of files where the Fourier modes 
+    :param filenames_lst: list of names of files where the Fourier modes
         :math:`v_j` are stored as PETSc Vec
     :type filenames_lst: List[str]
-    :param real_bflow: set to :code:`True` if :code:`filenames_lst` 
-        contains the names of the COO arrays of the positive Fourier 
-        coefficients of :math:`v(t)` (i.e., :math:`\{v_0, v_1, v_2, \ldots\}`). 
-        The negative frequencies are assumed the complex-conjugates of the 
+    :param real_bflow: set to :code:`True` if :code:`filenames_lst`
+        contains the names of the COO arrays of the positive Fourier
+        coefficients of :math:`v(t)` (i.e., :math:`\{v_0, v_1, v_2, \ldots\}`).
+        The negative frequencies are assumed the complex-conjugates of the
         positive ones. Set to :code:`False` otherwise
         (i.e., :math:`\{\ldots, v_{-2}, v_{-1}, v_0, v_1, v_2, \ldots\}`).
     :type real_bflow: bool

@@ -25,3 +25,8 @@ Product Linear Operator
 --------------------------------
 .. automodule:: src.resolvent4py.linear_operators.product
    :members:
+
+Projection Linear Operator
+--------------------------------
+.. automodule:: src.resolvent4py.linear_operators.projection
+   :members:

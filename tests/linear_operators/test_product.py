@@ -1,4 +1,3 @@
-import pytest
 import scipy as sp
 import numpy as np
 import resolvent4py as res4py
