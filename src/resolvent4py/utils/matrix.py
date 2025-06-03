@@ -174,7 +174,9 @@ def convert_coo_to_csr(comm, arrays, sizes):
         my_cols.extend(my_arrays[1][i])
         my_vals.extend(my_arrays[2][i])
 
-    my_rows = np.asarray(my_rows, dtype=PETSc.IntType) - ownership_ranges[rank, 0]
+    my_rows = (
+        np.asarray(my_rows, dtype=PETSc.IntType) - ownership_ranges[rank, 0]
+    )
     my_cols = np.asarray(my_cols, dtype=PETSc.IntType)
     my_vals = np.asarray(my_vals, dtype=np.complex128)
 

@@ -45,7 +45,7 @@ def enforce_complex_conjugacy(
         i = nblocks // 2
         i0, i1 = i * block_size, (i + 1) * block_size
         array[i0:i1] = array[i0:i1].real
-        vec_seq.setValues(np.arange(len(array)), array)
+        vec_seq.setValues(np.arange(len(array), dtype=PETSc.IntType), array)
         vec_seq.assemble()
     scatter.begin(
         vec_seq,

@@ -43,7 +43,7 @@ class MatrixLinearOperator(LinearOperator):
         y = self.create_left_vector() if y == None else y
         self.A.mult(x, y)
         return y
-    
+
     def apply_mat(self, X, Y=None):
         Xm = X.getMat()
         if Y != None:
@@ -58,7 +58,7 @@ class MatrixLinearOperator(LinearOperator):
             Ym.destroy()
         X.restoreMat(Xm)
         return Y
-    
+
     def apply_hermitian_transpose(self, x, y=None):
         y = self.create_right_vector() if y == None else y
         self.A.multHermitian(x, y)

@@ -22,15 +22,18 @@ comm = MPI.COMM_WORLD
 
 save_path = "data/"
 bflow_freqs = np.load(save_path + "bflow_freqs.npy")
-perts_freqs = np.load(save_path + "perts_freqs.npy")
+nfb = len(bflow_freqs) - 1
 fnames_lst = [
     (
         save_path + "rows_%02d.dat" % j,
         save_path + "cols_%02d.dat" % j,
         save_path + "vals_%02d.dat" % j,
     )
-    for j in range(len(bflow_freqs))
+    for j in range(nfb + 1)
 ]
+
+nfp = nfb
+perts_freqs = np.arange(-nfp, nfp + 1) * bflow_freqs[1]
 
 N = 3 * len(perts_freqs)
 Nl = res4py.compute_local_size(N)
@@ -44,32 +47,35 @@ H = res4py.read_harmonic_balanced_matrix(
     ((Nl, N), (Nl, N)),
 )
 
-x = PETSc.Vec().createWithArray(np.ones(Nl), (Nl, N), None, comm)
-y = x.duplicate()
-H.mult(x, y)
-
 ksp = res4py.create_gmres_bjacobi_solver(
     comm, H, len(perts_freqs), 1e-10, 1e-10, True
 )
 res4py.check_gmres_bjacobi_solver(comm, H, ksp)
 
-x = res4py.generate_random_petsc_vector(comm, (Nl, N), True)
-y = x.duplicate()
-ksp.solve(x, y)
+Linop = res4py.linear_operators.MatrixLinearOperator(comm, H, ksp, (2*nfp + 1))
 
-x2 = x.duplicate()
-H.mult(y, x2)
-x2.axpy(-1.0, x)
-res4py.petscprint(comm, x2.norm())
 
-fnames_lst = [(save_path + "Aj_%02d.dat" % j) for j in range(len(bflow_freqs))]
+# x = PETSc.Vec().createWithArray(np.ones(Nl), (Nl, N), None, comm)
+# y = x.duplicate()
+# H.mult(x, y)
 
-bv = res4py.read_harmonic_balanced_bv(
-    comm, fnames_lst, True, ((nl, n), 3), ((Nl, N), N)
-)
+# x = res4py.generate_random_petsc_vector(comm, (Nl, N), True)
+# y = x.duplicate()
+# ksp.solve(x, y)
+
+# x2 = x.duplicate()
+# H.mult(y, x2)
+# x2.axpy(-1.0, x)
+# res4py.petscprint(comm, x2.norm())
+
+# fnames_lst = [(save_path + "Aj_%02d.dat" % j) for j in range(len(bflow_freqs))]
+
+# bv = res4py.read_harmonic_balanced_bv(
+#     comm, fnames_lst, True, ((nl, n), 3), ((Nl, N), N)
+# )
 
 # bv.view()
-L = bv.getMat().getDenseArray()
-H.convert(PETSc.Mat.Type.DENSE)
-H_ = H.getDenseArray()
-print(np.linalg.norm(H_ - L))
+# L = bv.getMat().getDenseArray()
+# H.convert(PETSc.Mat.Type.DENSE)
+# H_ = H.getDenseArray()
+# print(np.linalg.norm(H_ - L))

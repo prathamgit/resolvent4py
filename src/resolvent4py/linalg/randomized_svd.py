@@ -69,7 +69,7 @@ def randomized_svd(
         xj = X.getColumn(j)
         if L._real:
             row_offset = xj.getOwnershipRange()[0]
-            rows = np.arange(rowsizes[0], dtype=np.int64) + row_offset
+            rows = np.arange(rowsizes[0], dtype=PETSc.IntType) + row_offset
             xj.setValues(rows, xj.getArray().real)
             xj.assemble()
         if L._block_cc:

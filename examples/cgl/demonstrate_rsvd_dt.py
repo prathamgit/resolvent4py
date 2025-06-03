@@ -10,6 +10,7 @@ from petsc4py import PETSc
 import pathlib
 import cgl
 
+
 def save_bv_list(bv_list, prefix, save_path):
     save_dir = pathlib.Path(save_path)
     save_dir.mkdir(parents=True, exist_ok=True)
@@ -18,31 +19,40 @@ def save_bv_list(bv_list, prefix, save_path):
         for j in range(nv):
             vec = bv.getColumn(j)
             fname = save_dir / f"{prefix}_freq{i:02d}_mode{j:02d}.petsc"
-            viewer = PETSc.Viewer().createBinary(str(fname), "w", comm=vec.comm)
+            viewer = PETSc.Viewer().createBinary(
+                str(fname), "w", comm=vec.comm
+            )
             vec.view(viewer)
             viewer.destroy()
             bv.restoreColumn(j, vec)
 
+
 def ensure_structural_diagonal(mat, value_if_empty=0.0):
     r0, _ = mat.getOwnershipRange()
-    diag  = mat.getDiagonal()
-    holes = (diag.getArray() == 0)
+    diag = mat.getDiagonal()
+    holes = diag.getArray() == 0
     diag.destroy()
 
     mat.setOption(PETSc.Mat.Option.NEW_NONZERO_LOCATION_ERR, False)
     for local_i, hole in enumerate(holes):
         if hole:
             global_i = r0 + local_i
-            mat.setValue(global_i, global_i, value_if_empty,
-                         addv=PETSc.InsertMode.INSERT_VALUES)
+            mat.setValue(
+                global_i,
+                global_i,
+                value_if_empty,
+                addv=PETSc.InsertMode.INSERT_VALUES,
+            )
 
     mat.assemblyBegin(PETSc.Mat.AssemblyType.FINAL)
-    mat.assemblyEnd  (PETSc.Mat.AssemblyType.FINAL)
+    mat.assemblyEnd(PETSc.Mat.AssemblyType.FINAL)
+
 
 def shift_matrix_by_matrix(A, G, alpha):
     A.axpy(-alpha, G)
     A.assemblyBegin(PETSc.Mat.AssemblyType.FINAL)
     A.assemblyEnd(PETSc.Mat.AssemblyType.FINAL)
+
 
 plt.rcParams.update(
     {
@@ -55,7 +65,7 @@ plt.rcParams.update(
 
 comm = MPI.COMM_WORLD
 rank = comm.Get_rank()
-save_path = "results/" 
+save_path = "results/"
 
 # Read the A matrix from file
 res4py.petscprint(comm, "Reading matrix from file...")
@@ -107,7 +117,16 @@ n_rand = 8
 n_loops = 3
 n_svals = 3
 
-U, S, V = res4py.linalg.randomized_time_stepping_svd(L, L_mass, np.array([-2*s, -s, 0, s]), n_periods, n_timesteps, n_rand, n_loops, n_svals)
+U, S, V = res4py.linalg.randomized_time_stepping_svd(
+    L,
+    L_mass,
+    np.array([-2 * s, -s, 0, s]),
+    n_periods,
+    n_timesteps,
+    n_rand,
+    n_loops,
+    n_svals,
+)
 
 if rank == 0:
     save_bv_list(U, "U", save_path)

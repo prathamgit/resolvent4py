@@ -4,6 +4,7 @@ import numpy as np
 import resolvent4py as res4py
 from .. import pytest_utils
 
+
 def test_product_on_vectors(comm, square_matrix_size):
     r"""Test ProductLinearOperator on vectors"""
 
@@ -72,6 +73,7 @@ def test_product_on_vectors(comm, square_matrix_size):
     y.destroy()
     linop.destroy()
     assert error < 1e-10
+
 
 def test_product_on_bvs(comm, square_matrix_size):
     r"""Test ProductLinearOperator on BVs"""

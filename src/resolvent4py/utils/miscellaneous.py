@@ -7,7 +7,7 @@ from mpi4py import MPI
 from petsc4py import PETSc
 
 numpy_to_mpi_dtype = {
-    np.dtype(PETSc.IntType): MPI.INT,
+    np.dtype(np.int32): MPI.INT,
     np.dtype(np.int64): MPI.INT64_T,
     np.dtype(np.float64): MPI.DOUBLE,
     np.dtype(np.complex64): MPI.COMPLEX,
