@@ -119,8 +119,8 @@ def assemble_harmonic_balanced_bv(
     r0, _ = m.getOwnershipRange()
     bvs_lst[0].restoreMat(m)
 
-    nfb = (len(bflow_freqs) - 1) // 2  # Number of perturbation frequencies
-    nfp = (len(pertb_freqs) - 1) // 2  # Number of baseflow frequencies
+    nfb = (len(bflow_freqs) - 1) // 2  # Number of baseflow frequencies
+    nfp = (len(pertb_freqs) - 1) // 2  # Number of perturbation frequencies
     bv_sizes = bvs_lst[0].getSizes()
     nrows_loc, nrows = bv_sizes[0]
     ncols = bv_sizes[-1]

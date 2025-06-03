@@ -1,6 +1,7 @@
 __all__ = ["enforce_complex_conjugacy", "check_complex_conjugacy"]
 
 import numpy as np
+import typing
 from mpi4py import MPI
 from petsc4py import PETSc
 
@@ -105,3 +106,51 @@ def check_complex_conjugacy(
     vec_seq.destroy()
     cc = comm.bcast(cc, root=0)
     return cc
+
+
+def assemble_harmonic_balanced_vector(
+    vec_lst: typing.List[PETSc.Vec],
+    bflow_freqs: np.array,
+    pertb_freqs: np.array,
+    sizes: typing.Tuple[int, int],
+) -> PETSc.Vec:
+    if len(bflow_freqs) != len(vec_lst):
+        raise ValueError(
+            f"Error in assemble_harmonic_balanced_vector(). vec_lst "
+            f"should have the same length as bflow_freqs."
+        )
+
+    put_back = False
+    if np.min(bflow_freqs) == 0.0:
+        put_back = True
+        for i in range(1, len(bflow_freqs)):
+            idx_lst = i - 1 - nfp
+            vecconj = vec_lst[idx_lst].copy()
+            vecconj.conjugate()
+            vec_lst.insert(0, vecconj)
+        bflow_freqs = np.concatenate(
+            (-np.flipud(bflow_freqs[1:]), bflow_freqs)
+        )
+
+    # Create the harmonic-balanced BV
+    Vec = PETSc.Vec().create(comm=MPI.COMM_WORLD)
+    Vec.setSizes(sizes)
+    Vec.setUp()
+    r0, _ = Vec.getOwnershipRange()
+    nfb = (len(bflow_freqs) - 1) // 2  # Number of baseflow frequencies
+    nfp = (len(pertb_freqs) - 1) // 2  # Number of perturbation frequencies
+    vec_sizes = vec_lst[0].getSizes()
+    nrows_loc, nrows = vec_sizes[0]
+    for i in range(2 * nfb + 1):
+        j = i + (nfp - nfb)
+        rows = j * nrows + np.arange(nrows_loc, dtype=PETSc.IntType) + r0
+        Vec.setValues(rows, vec_lst[j].getArray(), False)
+    Vec.assemble()
+
+    if put_back:
+        bflow_freqs = bflow_freqs[nfb:]
+        for i in range(nfb):
+            vec_lst[i].destroy()
+        vec_lst[nfb:]
+
+    return Vec

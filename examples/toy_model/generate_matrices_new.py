@@ -78,7 +78,8 @@ Q = Q[:, idx0:idxf]
 # -------------------------------------------------------------------
 # --------- Compute A(t) = A(t + T) ---------------------------------
 # -------------------------------------------------------------------
-nf = 10
+nf = 2
+Qhat = (1 / len(time)) * np.fft.rfft(Q, axis=-1)[:, : (nf + 1)]
 As = [
     evaluate_jacobian(time[i], Q[:, i], params).reshape(-1, 1)
     for i in range(len(time))
@@ -114,9 +115,21 @@ for j in range(Ashat.shape[-1]):
             array, len(array), None, MPI.COMM_SELF
         )
         res4py.write_to_file(MPI.COMM_WORLD, fname, vec)
+        vec.destroy()
+
+    qj = Qhat[:, j]
+    vec = PETSc.Vec().createWithArray(qj, 3, None, MPI.COMM_SELF)
+    res4py.write_to_file(MPI.COMM_WORLD, save_path + "Q_%02d.dat" % j, vec)
+    vec.destroy()
+
+    jom = j * omega
+    vec = PETSc.Vec().createWithArray(jom * qj, 3, None, MPI.COMM_SELF)
+    res4py.write_to_file(MPI.COMM_WORLD, save_path + "dQ_%02d.dat" % j, vec)
+    vec.destroy()
 
     Aj = Aj.todense()
     Aj_mat = PETSc.Mat().createDense((3, 3), None, Aj, MPI.COMM_SELF)
     res4py.write_to_file(MPI.COMM_WORLD, save_path + "Aj_%02d.dat" % j, Aj_mat)
+
 
 np.save(save_path + "bflow_freqs.npy", freqs)

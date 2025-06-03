@@ -32,7 +32,7 @@ fnames_lst = [
     for j in range(nfb + 1)
 ]
 
-nfp = nfb
+nfp = nfb + 1
 perts_freqs = np.arange(-nfp, nfp + 1) * bflow_freqs[1]
 
 N = 3 * len(perts_freqs)
@@ -47,6 +47,8 @@ A = res4py.read_harmonic_balanced_matrix(
     ((Nl, N), (Nl, N)),
 )
 H = res4py.assemble_harmonic_resolvent_generator(comm, A, perts_freqs)
+# H.destroy()
+# H = A.copy()
 ksp = res4py.create_mumps_solver(comm, H)
 # ksp = res4py.create_gmres_bjacobi_solver(
 #     comm,
@@ -61,8 +63,10 @@ res4py.check_lu_factorization(comm, H, ksp)
 Linop = res4py.linear_operators.MatrixLinearOperator(
     comm, H, ksp, (2 * nfp + 1)
 )
-print(Linop._block_cc)
-D, V = res4py.linalg.eig(Linop, Linop.solve, N - 3, 20, lambda x: 1 / x)
+
+flag = Linop._block_cc
+res4py.petscprint(comm, flag)
+D, V = res4py.linalg.eig(Linop, Linop.solve, N - 1, 10, lambda x: 1 / x)
 D = np.diag(D)
 
 if comm.Get_rank() == 0:
@@ -77,6 +81,18 @@ if comm.Get_rank() == 0:
     plt.tight_layout()
     plt.show()
 
+
+fnames_lst = [(save_path + "Q_%02d.dat" % j) for j in range(len(bflow_freqs))]
+vec = res4py.read_harmonic_balanced_vector(
+    comm, fnames_lst, True, (nl, n), (Nl, N)
+)
+# print(vec.getArray())
+flag = res4py.check_complex_conjugacy(comm, vec, 2 * nfp + 1)
+res4py.petscprint(comm, flag)
+
+# vec2 = Linop.apply(vec)
+# print(vec2.getArray())
+
 # x = PETSc.Vec().createWithArray(np.ones(Nl), (Nl, N), None, comm)
 # y = x.duplicate()
 # H.mult(x, y)
@@ -90,13 +106,13 @@ if comm.Get_rank() == 0:
 # x2.axpy(-1.0, x)
 # res4py.petscprint(comm, x2.norm())
 
-# fnames_lst = [(save_path + "Aj_%02d.dat" % j) for j in range(len(bflow_freqs))]
-# bv = res4py.read_harmonic_balanced_bv(
-#     comm, fnames_lst, True, ((nl, n), 3), ((Nl, N), N)
-# )
+fnames_lst = [(save_path + "Aj_%02d.dat" % j) for j in range(len(bflow_freqs))]
+bv = res4py.read_harmonic_balanced_bv(
+    comm, fnames_lst, True, ((nl, n), 3), ((Nl, N), N)
+)
 
 # # bv.view()
-# L = bv.getMat().getDenseArray()
-# A.convert(PETSc.Mat.Type.DENSE)
-# A_ = A.getDenseArray()
-# print(np.linalg.norm(A_ - L))
+L = bv.getMat().getDenseArray()
+A.convert(PETSc.Mat.Type.DENSE)
+A_ = A.getDenseArray()
+print(np.linalg.norm(A_ - L))

@@ -215,6 +215,7 @@ def convert_coo_to_csr(
 
     return my_rows_ptr, my_cols, my_vals
 
+
 def assemble_harmonic_resolvent_generator(
     comm: MPI.Comm, A: PETSc.Mat, freqs: np.array
 ) -> PETSc.Mat:
@@ -223,27 +224,39 @@ def assemble_harmonic_resolvent_generator(
     :func:`resolvent4py.utils.io.read_harmonic_balanced_matrix`
     and :math:`M` is a block
     diagonal matrix with block :math:`k` given by :math:`M_k = i k \omega I`
-    and :math:`k\omega` is the :math:`k`th entry of :code:`freqs`.
+    and :math:`k\omega` is the :math:`k` th entry of :code:`freqs`.
 
     :param comm: MPI Communicator
     :type comm: MPI.Comm
     :param A: assembled PETSc matrix
     :type A: PETSc.Mat
-    :param freqs: frequncies :math:`\omega\left(\ldots, -1, 0, 1, \ldots\right)`
+    :param freqs: array :math:`\omega\left(\ldots, -1, 0, 1, \ldots\right)`
     :type freqs: np.array
 
     :rtype: PETSc.Mat
     """
-    Nl, N = A.getSizes()[0]
-    Nblk = N // len(freqs)
-    array = np.zeros(N, dtype=np.complex128)
-    if comm.Get_rank() == 0:
-        ones = np.ones(Nblk)
-        array[:] = -np.concatenate([1j * f * ones for f in freqs])
-    arrayloc = scatter_array_from_root_to_all(comm, array, Nl)
-    diag = PETSc.Vec().createWithArray(arrayloc, (Nl, N), None, comm)
-    M = PETSc.Mat().createDiagonal(diag)
-    M.convert(PETSc.Mat.Type.MPIAIJ)
+    rows_lst = []
+    vals_lst = []
+
+    rows = np.arange(*A.getOwnershipRange())
+    N = A.getSizes()[0][-1] // len(freqs)
+    for i in range(len(freqs)):
+        idces = np.intersect1d(rows, np.arange(N * i, N * (i + 1)))
+        if len(idces) > 0:
+            rows_lst.extend(idces)
+            vals_lst.extend(-1j * freqs[i] * np.ones(len(idces)))
+
+    rows = np.asarray(rows_lst, dtype=PETSc.IntType)
+    vals = np.asarray(vals_lst, dtype=np.complex128)
+
+    rows_ptr, cols, vals = convert_coo_to_csr(
+        comm, [rows, rows, vals], A.getSizes()
+    )
+    M = PETSc.Mat().create(comm)
+    M.setSizes(A.getSizes())
+    M.setPreallocationCSR((rows_ptr, cols))
+    M.setValuesCSR(rows_ptr, cols, vals, True)
+    M.assemble(False)
+    M.view()
     M.axpy(1.0, A)
-    diag.destroy()
     return M
