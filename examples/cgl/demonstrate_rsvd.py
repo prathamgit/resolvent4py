@@ -70,14 +70,8 @@ mu2 = -0.01
 sigma = 0.4
 system = cgl.CGL(x, nu, gamma, mu0, mu2, sigma)
 
-<<<<<<< HEAD
 save_path = "results/"
 os.makedirs(save_path) if not os.path.exists(save_path) else None
-=======
-    save_path = "results/"
-    os.makedirs(save_path) if not os.path.exists(save_path) else None
-    print("Plotting (see output in %s)..." % save_path)
->>>>>>> origin/main
 
 Id = sp.sparse.identity(N)
 R = sp.linalg.inv((s * Id - system.A).todense())

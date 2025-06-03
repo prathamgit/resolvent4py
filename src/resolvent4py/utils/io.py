@@ -68,8 +68,8 @@ def read_coo_matrix(
     rowsvec = read_vector(comm, fname_rows)
     colsvec = read_vector(comm, fname_cols)
     valsvec = read_vector(comm, fname_vals)
-    rows = np.asarray(rowsvec.getArray().real, dtype=np.int32)
-    cols = np.asarray(colsvec.getArray().real, dtype=np.int32)
+    rows = np.asarray(rowsvec.getArray().real, dtype=PETSc.IntType)
+    cols = np.asarray(colsvec.getArray().real, dtype=PETSc.IntType)
     vals = valsvec.getArray()
     # Delete zeros for efficiency
     idces = np.argwhere(np.abs(vals) <= 1e-16)
@@ -143,10 +143,10 @@ def read_harmonic_balanced_matrix(
         colsvec = read_vector(comm, fname_cols)
         valsvec = read_vector(comm, fname_vals)
         rowsvec_arr = np.asarray(
-            rowsvec.getArray().real, dtype=np.int32
+            rowsvec.getArray().real, dtype=PETSc.IntType
         ).copy()
         colsvec_arr = np.asarray(
-            colsvec.getArray().real, dtype=np.int32
+            colsvec.getArray().real, dtype=PETSc.IntType
         ).copy()
         valsvec_arr = valsvec.getArray().copy()
         rows_lst.append(rowsvec_arr)
@@ -182,8 +182,8 @@ def read_harmonic_balanced_matrix(
                 rows.extend(rows_lst[k] + i * Nrb)
                 cols.extend(cols_lst[k] + j * Ncb)
                 vals.extend(vals_lst[k])
-    rows = np.asarray(rows, dtype=np.int32)
-    cols = np.asarray(cols, dtype=np.int32)
+    rows = np.asarray(rows, dtype=PETSc.IntType)
+    cols = np.asarray(cols, dtype=PETSc.IntType)
     vals = np.asarray(vals)
 
     # Delete zeros for efficiency
@@ -326,8 +326,8 @@ def read_harmonic_balanced_bv(
     bv_mat = bvs_lst[0].getMat()
     r0, r1 = bv_mat.getOwnershipRange()
     bvs_lst[0].restoreMat(bv_mat)
-    rows = np.arange(r0, r1, dtype=np.int32)
-    cols = np.arange(Ncb, dtype=np.int32)
+    rows = np.arange(r0, r1, dtype=PETSc.IntType)
+    cols = np.arange(Ncb, dtype=PETSc.IntType)
     M = SLEPc.BV().create(comm)
     M.setSizes(full_sizes[0], full_sizes[-1])
     M.setType("mat")

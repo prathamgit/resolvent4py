@@ -128,15 +128,15 @@ def assemble_harmonic_balanced_bv(
 
     for i in range(2 * nfp + 1):
         cols = []
-        rows = i * nrows + np.arange(nrows_loc, dtype=np.int32) + r0
+        rows = i * nrows + np.arange(nrows_loc, dtype=PETSc.IntType) + r0
         for j in range(2 * nfb + 1):
             k = i - j + nfb
             if k >= 0:
                 m = bvs_lst[k].getMat()
                 bvdata[:, j * ncols : (j + 1) * ncols] = m.getDenseArray()
                 bvs_lst[k].restoreMat(m)
-                cols.extend(np.arange(ncols, dtype=np.int32) + j * ncols)
-        cols = np.asarray(cols, dtype=np.int32)
+                cols.extend(np.arange(ncols, dtype=PETSc.IntType) + j * ncols)
+        cols = np.asarray(cols, dtype=PETSc.IntType)
         BV_mat.setValues(rows, cols, bvdata, None)
     BV_mat.assemble(None)
     BV.restoreMat(BV_mat)

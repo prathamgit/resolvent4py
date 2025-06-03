@@ -133,7 +133,7 @@ def distributed_to_sequential_vector(
     """
     array = vec_dist.getArray().copy()
     counts = comm.allgather(len(array))
-    disps = np.concatenate(([0], np.cumsum(counts[:-1]))).astype(np.int32)
+    disps = np.concatenate(([0], np.cumsum(counts[:-1]))).astype(PETSc.IntType)
     recvbuf = np.zeros(np.sum(counts), dtype=array.dtype)
     comm.Allgatherv(array, (recvbuf, counts, disps, get_mpi_type(array.dtype)))
     vec_seq = PETSc.Vec().createWithArray(recvbuf, comm=MPI.COMM_SELF)
