@@ -187,7 +187,7 @@ def compute_balanced_projection(
     svd = SLEPc.SVD().create(MPI.COMM_WORLD)
     svd.setOperators(Z)
     svd.setProblemType(SLEPc.SVD.ProblemType.STANDARD)
-    svd.setType(SLEPc.SVD.Type.CROSS)
+    svd.setType(SLEPc.SVD.Type.RANDOMIZED)
     svd.setWhichSingularTriplets(SLEPc.SVD.Which.LARGEST)
     svd.setUp()
     svd.solve()

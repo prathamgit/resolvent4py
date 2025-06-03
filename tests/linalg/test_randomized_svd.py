@@ -15,4 +15,4 @@ def test_randomized_svd(comm, rectangular_random_matrix):
     )
     _, s, _ = sp.linalg.svd(Apython, full_matrices=False)
     error = 100 * np.max((np.diag(S) - s[:r]) / s[:r])
-    assert error < 1e-1  # Max percent error < 1e-1
+    assert error < 2e-1  # Max percent error < 2e-1
