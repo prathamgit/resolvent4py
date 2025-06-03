@@ -1,12 +1,9 @@
 import typing
 
-import numpy as np
 import scipy as sp
 from mpi4py import MPI
-from petsc4py import PETSc
 from slepc4py import SLEPc
 
-from ..utils.bv import bv_add
 from ..utils.matrix import create_AIJ_identity
 from .linear_operator import LinearOperator
 from .low_rank import LowRankLinearOperator

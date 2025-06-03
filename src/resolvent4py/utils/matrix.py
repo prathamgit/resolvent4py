@@ -129,7 +129,7 @@ def convert_coo_to_csr(
     r"""
     Convert arrays = [row indices, col indices, values] for COO matrix
     assembly to [row pointers, col indices, values] for CSR matrix assembly.
-    (petsc4py currently does not support coo matrix assembly, hence the need
+    (Petsc4py currently does not support COO matrix assembly, hence the need
     to convert.)
 
     :param comm: MPI communicator (only MPI.COMM_WORLD is supported for now)
@@ -221,7 +221,7 @@ def assemble_harmonic_resolvent_generator(
 ) -> PETSc.Mat:
     r"""
     Assemble :math:`T = -M + A`, where :math:`A` is the output of
-    :func:`resolvent4py.utils.io.read_harmonic_balanced_matrix`
+    :func:`src.resolvent4py.utils.io.read_harmonic_balanced_matrix`
     and :math:`M` is a block
     diagonal matrix with block :math:`k` given by :math:`M_k = i k \omega I`
     and :math:`k\omega` is the :math:`k` th entry of :code:`freqs`.
@@ -257,6 +257,5 @@ def assemble_harmonic_resolvent_generator(
     M.setPreallocationCSR((rows_ptr, cols))
     M.setValuesCSR(rows_ptr, cols, vals, True)
     M.assemble(False)
-    M.view()
     M.axpy(1.0, A)
     return M

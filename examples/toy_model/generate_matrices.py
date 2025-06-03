@@ -1,11 +1,48 @@
 import numpy as np
-import scipy
+import scipy as sp
 import os
 
-import toy_model as toy
-import resolvent4py as res4py
+import matplotlib.pyplot as plt
+
+plt.rcParams.update(
+    {
+        "font.family": "serif",
+        "font.sans-serif": ["Computer Modern"],
+        "font.size": 18,
+        "text.usetex": True,
+    }
+)
+
 from petsc4py import PETSc
 from mpi4py import MPI
+import resolvent4py as res4py
+
+comm = MPI.COMM_WORLD
+
+if comm.Get_size() > 1:
+    raise ValueError ("This script must be run in series.")
+
+def evaluate_dynamics(t, q, params):
+    mu, alpha, beta = params
+    x, y, z = q
+    rhs = np.zeros(3)
+    rhs[0] = mu * x - y - alpha * x * z - beta * x * y
+    rhs[1] = x + mu * y - alpha * y * z + beta * x**2
+    rhs[2] = -alpha * z + alpha * (x**2 + y**2)
+    return rhs
+
+
+def evaluate_jacobian(t, Q, params):
+    eps = 1e-5
+    A = np.zeros((3, 3))
+    for i in range(3):
+        veci = np.zeros(3)
+        veci[i] = 1.0
+        A[:, i] = (
+            evaluate_dynamics(t, Q + eps * veci, params)
+            - evaluate_dynamics(t, Q - eps * veci, params)
+        ) / (2 * eps)
+    return A
 
 
 # -------------------------------------------------------------------
@@ -18,63 +55,53 @@ alpha = 1 / 5
 beta = 1 / 5
 params = [mu, alpha, beta]
 
-omega = np.sqrt(
-    1 - beta**2 * mu / alpha
-)  # natural frequency of the unforced limit cycle
-A = np.asarray([[mu, -1, 0], [1, mu, 0], [0, 0, -alpha]])
-H = toy.compute_third_order_tensor(params, n)
-B = 1e-1 * np.asarray([1, 1, 0]).reshape(-1, 1)
-C = np.ones(n).reshape(1, -1)
-tensors = [A, H, B, C]
+omega = np.sqrt(1 - beta**2 * mu / alpha)
+T = 2 * np.pi / omega
 
 # -------------------------------------------------------------------
 # --------- Compute base flow ---------------------------------------
 # -------------------------------------------------------------------
-
-wf = 2 * omega  # Forcing frequency (twice the natural frequency)
-Tw = 2 * np.pi / omega
-dt = Tw / 300
-time = np.arange(0, 100 * Tw, dt)
-sol = scipy.integrate.solve_ivp(
-    toy.evaluate_rhs,
+dt = T / 300
+time = np.arange(0, 200 * T, dt)
+Q = sp.integrate.solve_ivp(
+    evaluate_dynamics,
     [0, time[-1]],
-    np.zeros(n),
+    0.1 * np.ones(3),
     "RK45",
     t_eval=time,
-    args=(A, H, B, wf),
-)
-Q = sol.y
+    args=(params,),
+    rtol=1e-12,
+    atol=1e-12,
+).y
 
-# Generate initial condition for Newton's method
-idx0 = np.argmin(np.abs(time - 98 * Tw))
-idxf = np.argmin(np.abs(time - 99 * Tw))
+idx0 = np.argmin(np.abs(time - 198 * T))
+idxf = np.argmin(np.abs(time - 199 * T))
 time = time[idx0:idxf] - time[idx0]
 Q = Q[:, idx0:idxf]
-nf = 3
-freqs, QHat = toy.fft(time, Q, nf)
 
-QHat = toy.newton_harmonic_balance(time, tensors, freqs, QHat, wf, 1e-9)
-T, _, _ = toy.compute_lifted_frequency_domain_matrices(tensors, freqs, QHat)
+# -------------------------------------------------------------------
+# --------- Compute A(t) = A(t + T) ---------------------------------
+# -------------------------------------------------------------------
+nf = 10
+Qhat = (1 / len(time)) * np.fft.rfft(Q, axis=-1)[:, : (nf + 1)]
+As = [
+    evaluate_jacobian(time[i], Q[:, i], params).reshape(-1, 1)
+    for i in range(len(time))
+]
+As = np.concatenate(As, axis=-1)
+Ashat = (1 / len(time)) * np.fft.rfft(As, axis=-1)[:, : (nf + 1)]
+freqs = omega * np.arange(nf + 1)
 
-Q = toy.ifft(freqs, QHat, time, 0)
-fQ = scipy.interpolate.interp1d(
-    time, Q, kind="linear", fill_value="extrapolate"
-)
-As = np.zeros((9, len(time)), dtype=np.float64)
-for j in range(len(time)):
-    tj = time[j]
-    Aj = A + np.einsum("ijk,j", H, fQ(tj)) + np.einsum("ijk,k", H, fQ(tj))
-    As[:, j] = Aj.reshape(-1)
 
-Ahat = (1 / len(time)) * np.fft.rfft(As, axis=-1)[:, : len(freqs) // 2 + 1]
-
+# -------------------------------------------------------------------
+# --------- Save the Fourier coefficients of A(t) -------------------
+# -------------------------------------------------------------------
 save_path = "data/"
 os.makedirs(save_path) if not os.path.exists(save_path) else None
 
-
-for j in range(Ahat.shape[-1]):
-    Aj = Ahat[:, j].reshape((3, 3))
-    Aj = scipy.sparse.coo_matrix(Aj)
+for j in range(Ashat.shape[-1]):
+    Aj = Ashat[:, j].reshape((3, 3))
+    Aj = sp.sparse.coo_matrix(Aj)
     rows = Aj.row
     cols = Aj.col
     data = Aj.data
@@ -92,13 +119,20 @@ for j in range(Ahat.shape[-1]):
             array, len(array), None, MPI.COMM_SELF
         )
         res4py.write_to_file(MPI.COMM_WORLD, fname, vec)
+        vec.destroy()
+
+    qj = Qhat[:, j]
+    vec = PETSc.Vec().createWithArray(qj, 3, None, MPI.COMM_SELF)
+    res4py.write_to_file(MPI.COMM_WORLD, save_path + "Q_%02d.dat" % j, vec)
+    vec.destroy()
+
+    jom = j * omega * 1j
+    vec = PETSc.Vec().createWithArray(jom * qj, 3, None, MPI.COMM_SELF)
+    res4py.write_to_file(MPI.COMM_WORLD, save_path + "dQ_%02d.dat" % j, vec)
+    vec.destroy()
 
     Aj = Aj.todense()
     Aj_mat = PETSc.Mat().createDense((3, 3), None, Aj, MPI.COMM_SELF)
     res4py.write_to_file(MPI.COMM_WORLD, save_path + "Aj_%02d.dat" % j, Aj_mat)
 
-perts_freqs = freqs.copy()
-bflow_freqs = freqs[len(freqs) // 2 :]
-
-np.save(save_path + "bflow_freqs.npy", bflow_freqs)
-np.save(save_path + "perts_freqs.npy", perts_freqs)
+np.save(save_path + "bflow_freqs.npy", freqs)
