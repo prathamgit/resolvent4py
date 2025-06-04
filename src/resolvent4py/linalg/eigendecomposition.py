@@ -88,6 +88,7 @@ def arnoldi_iteration(
     v.destroy()
     return (Q, H)
 
+
 def eig(
     L: LinearOperator,
     action: typing.Callable[[PETSc.Vec, PETSc.Vec], PETSc.Vec],

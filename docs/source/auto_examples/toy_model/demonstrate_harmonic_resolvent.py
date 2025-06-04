@@ -8,7 +8,7 @@ harmonic resolvent analysis on the toy model in section 3.1 of
 In particular, we demonstrate the following:
 
 - Assembling the harmonic-balanced linear operator :math:`T` from file using the
-  function :func:`~src.resolvent4py.utils.io.read_harmonic_balanced_matrix`.
+  function :func:`~src.resolvent4py.utils.io.read_harmonic_balanced_matrix`
 
 - Using the class
   :class:`~src.resolvent4py.linear_operators.projection.ProjectionLinearOperator`

@@ -12,6 +12,6 @@ from .low_rank import LowRankLinearOperator
 from .low_rank_updated import LowRankUpdatedLinearOperator
 from .matrix import MatrixLinearOperator
 from .product import ProductLinearOperator
-from .projection import ProjectionOperator
+from .projection import ProjectionLinearOperator
 
 del linear_operator, low_rank, low_rank_updated, matrix, product

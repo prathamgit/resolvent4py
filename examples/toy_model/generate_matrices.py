@@ -20,7 +20,8 @@ import resolvent4py as res4py
 comm = MPI.COMM_WORLD
 
 if comm.Get_size() > 1:
-    raise ValueError ("This script must be run in series.")
+    raise ValueError("This script must be run in series.")
+
 
 def evaluate_dynamics(t, q, params):
     mu, alpha, beta = params

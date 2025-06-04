@@ -11,7 +11,7 @@ from .low_rank_updated import LowRankUpdatedLinearOperator
 from .matrix import MatrixLinearOperator
 
 
-class ProjectionOperator(LinearOperator):
+class ProjectionLinearOperator(LinearOperator):
     r"""
     Class for a linear operator of the form
 
@@ -46,7 +46,6 @@ class ProjectionOperator(LinearOperator):
         complement: typing.Optional[bool] = False,
         nblocks: typing.Optional[int] = None,
     ) -> None:
-        
         ncolsPhi = Phi.getSizes()[-1]
         ncolsPsi = Psi.getSizes()[-1]
         if ncolsPhi != ncolsPsi:

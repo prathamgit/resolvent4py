@@ -27,5 +27,11 @@ Current functionalities include:
    quickstart.rst
    api-reference.rst
 
+.. toctree::
+   :maxdepth: 1
+   :caption: Examples
+   
+   auto_examples/toy_model/index
+
 
 

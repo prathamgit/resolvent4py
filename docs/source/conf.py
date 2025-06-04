@@ -11,6 +11,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.abspath("../.."))
+sys.path.insert(0, os.path.abspath("../../src"))
 
 project = "resolvent4py"
 copyright = "2024, Alberto Padovan"
@@ -28,7 +29,18 @@ extensions = [
     "sphinx.ext.mathjax",
     "sphinx.ext.napoleon",
     "sphinx.ext.viewcode",
+    "sphinx_gallery.gen_gallery",
+    "sphinxcontrib.bibtex",
 ]
+
+bibtex_bibfiles = ["refs.bib"]
+
+sphinx_gallery_conf = {
+    "examples_dirs": ["../../examples/toy_model"],  # Paths to your scripts
+    "gallery_dirs": ["auto_examples/toy_model"],  # Where to output the HTML
+    "filename_pattern": r"^.*\.py$",  # Include all .py files
+    "ignore_pattern": r"generate_matrices\.py|toy_model\.py",
+}
 
 html_logo = "logo.png"
 html_show_sphinx = False

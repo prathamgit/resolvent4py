@@ -3,6 +3,7 @@ import scipy as sp
 import resolvent4py as res4py
 from .. import pytest_utils
 
+
 def test_low_rank_updated_on_vectors(comm, square_random_matrix):
     r"""Test LowRankUpdatedLinearOperator on vectors"""
 
