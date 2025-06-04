@@ -4,6 +4,7 @@ import tracemalloc
 
 import numpy as np
 from mpi4py import MPI
+from petsc4py import PETSc
 
 numpy_to_mpi_dtype = {
     np.dtype(np.int32): MPI.INT,
@@ -18,7 +19,7 @@ def get_mpi_type(dtype: np.dtypes) -> MPI.Datatype:
     r"""
     Get the corresponding MPI type for a given numpy data type.
 
-    :param dtype: (e.g., :code:`np.dtype(np.int32)`)
+    :param dtype: (e.g., :code:`np.dtype(PETSc.IntType)`)
     :type dtype: np.dtypes
     :rtype: MPI.Datatype
     """

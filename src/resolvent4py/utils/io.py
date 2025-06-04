@@ -5,6 +5,7 @@ __all__ = [
     "read_dense_matrix",
     "read_bv",
     "read_harmonic_balanced_bv",
+    "read_harmonic_balanced_vector",
     "write_to_file",
 ]
 
@@ -68,8 +69,8 @@ def read_coo_matrix(
     rowsvec = read_vector(comm, fname_rows)
     colsvec = read_vector(comm, fname_cols)
     valsvec = read_vector(comm, fname_vals)
-    rows = np.asarray(rowsvec.getArray().real, dtype=np.int32)
-    cols = np.asarray(colsvec.getArray().real, dtype=np.int32)
+    rows = np.asarray(rowsvec.getArray().real, dtype=PETSc.IntType)
+    cols = np.asarray(colsvec.getArray().real, dtype=PETSc.IntType)
     vals = valsvec.getArray()
     # Delete zeros for efficiency
     idces = np.argwhere(np.abs(vals) <= 1e-16)
@@ -143,10 +144,10 @@ def read_harmonic_balanced_matrix(
         colsvec = read_vector(comm, fname_cols)
         valsvec = read_vector(comm, fname_vals)
         rowsvec_arr = np.asarray(
-            rowsvec.getArray().real, dtype=np.int32
+            rowsvec.getArray().real, dtype=PETSc.IntType
         ).copy()
         colsvec_arr = np.asarray(
-            colsvec.getArray().real, dtype=np.int32
+            colsvec.getArray().real, dtype=PETSc.IntType
         ).copy()
         valsvec_arr = valsvec.getArray().copy()
         rows_lst.append(rowsvec_arr)
@@ -178,12 +179,12 @@ def read_harmonic_balanced_matrix(
     for i in range(2 * nfp + 1):
         for j in range(2 * nfp + 1):
             k = i - j + nfb
-            if k >= 0 and k < (2 * nfp + 1):
+            if k >= 0 and k < (2 * nfb + 1):
                 rows.extend(rows_lst[k] + i * Nrb)
                 cols.extend(cols_lst[k] + j * Ncb)
                 vals.extend(vals_lst[k])
-    rows = np.asarray(rows, dtype=np.int32)
-    cols = np.asarray(cols, dtype=np.int32)
+    rows = np.asarray(rows, dtype=PETSc.IntType)
+    cols = np.asarray(cols, dtype=PETSc.IntType)
     vals = np.asarray(vals)
 
     # Delete zeros for efficiency
@@ -299,7 +300,7 @@ def read_harmonic_balanced_bv(
     :return: SLEPc BV :math:`M`
     :rtype: SLEPc.BV
     """
-    # Read list of COO vectors
+    # Read list of BVs
     bvs_lst = []
     for filename in filenames_lst:
         bv = read_bv(comm, filename, block_sizes)
@@ -326,8 +327,8 @@ def read_harmonic_balanced_bv(
     bv_mat = bvs_lst[0].getMat()
     r0, r1 = bv_mat.getOwnershipRange()
     bvs_lst[0].restoreMat(bv_mat)
-    rows = np.arange(r0, r1, dtype=np.int32)
-    cols = np.arange(Ncb, dtype=np.int32)
+    rows = np.arange(r0, r1, dtype=PETSc.IntType)
+    cols = np.arange(Ncb, dtype=PETSc.IntType)
     M = SLEPc.BV().create(comm)
     M.setSizes(full_sizes[0], full_sizes[-1])
     M.setType("mat")
@@ -335,7 +336,7 @@ def read_harmonic_balanced_bv(
     for i in range(2 * nfp + 1):
         for j in range(2 * nfp + 1):
             k = i - j + nfb
-            if k >= 0 and k < (2 * nfp + 1):
+            if k >= 0 and k < (2 * nfb + 1):
                 rows_k = rows + i * Nrb
                 cols_k = cols + j * Ncb
                 bv_k_mat = bvs_lst[k].getMat()
@@ -349,19 +350,96 @@ def read_harmonic_balanced_bv(
     return M
 
 
+def read_harmonic_balanced_vector(
+    comm: MPI.Comm,
+    filenames_lst: typing.List[str],
+    real_bflow: bool,
+    block_sizes: typing.Tuple[int, int],
+    full_sizes: typing.Tuple[int, int],
+) -> PETSc.Vec:
+    r"""
+    Given :math:`\{\ldots, v_{-1}, v_{0}, v_{1},\ldots\}`, where :math:`v_j` is
+    the :math:`j` th Fourier coefficient of a time-periodic vector :math:`v(t)`,
+    assemble
+
+    .. math::
+
+        \hat{v} = \begin{bmatrix}
+            \vdots \\ v_{-1} \\ v_0 \\ v_{1} \\ \vdots
+        \end{bmatrix}.
+
+    :param comm: MPI Communicator
+    :type comm: MPI.Comm
+    :param filenames_lst: list of names of files where the Fourier modes
+        :math:`v_j` are stored as PETSc Vec
+    :type filenames_lst: List[str]
+    :param real_bflow: set to :code:`True` if :code:`filenames_lst`
+        contains the names of the COO arrays of the positive Fourier
+        coefficients of :math:`v(t)` (i.e., :math:`\{v_0, v_1, v_2, \ldots\}`).
+        The negative frequencies are assumed the complex-conjugates of the
+        positive ones. Set to :code:`False` otherwise
+        (i.e., :math:`\{\ldots, v_{-2}, v_{-1}, v_0, v_1, v_2, \ldots\}`).
+    :type real_bflow: bool
+    :param block_sizes: sizes :code:`(local rows, global rows)` of :math:`v_j`
+    :type block_sizes: Tuple[int, int]
+    :param full_sizes: sizes :code:`(local rows, global rows)` of :math:`\hat{v}`
+    :type full_sizes: Tuple[int, int]
+
+    :return: vector :math:`\hat{v}`
+    :rtype: PETSc.Vec
+    """
+    vec_lst = []
+    for filename in filenames_lst:
+        vec = read_vector(comm, filename, block_sizes)
+        vec_lst.append(vec.copy())
+        vec.destroy()
+
+    if real_bflow:
+        l = len(vec_lst)
+        for i in range(1, l):
+            idx_lst = i - l
+            vecconj = vec_lst[idx_lst].copy()
+            vecconj.conjugate()
+            vec_lst.insert(0, vecconj.copy())
+            vecconj.destroy()
+
+    Vec = PETSc.Vec().create(comm=MPI.COMM_WORLD)
+    Vec.setSizes(full_sizes)
+    Vec.setUp()
+    r0, _ = vec_lst[0].getOwnershipRange()
+    nfb = (len(vec_lst) - 1) // 2  # Number of baseflow frequencies
+    nfp = (
+        full_sizes[-1] // block_sizes[-1] - 1
+    ) // 2  # Number of perturbation frequencies
+    for i in range(2 * nfb + 1):
+        j = i + (nfp - nfb)
+        rows = (
+            j * block_sizes[-1]
+            + np.arange(block_sizes[0], dtype=PETSc.IntType)
+            + r0
+        )
+        Vec.setValues(rows, vec_lst[i].getArray(), False)
+    Vec.assemble()
+
+    for vec in vec_lst:
+        vec.destroy()
+
+    return Vec
+
+
 def write_to_file(
     comm: MPI.Comm,
     filename: str,
     object: typing.Union[PETSc.Mat, PETSc.Vec, SLEPc.BV],
 ) -> None:
     r"""
-    Write PETSc object to file.
+    Write PETSc/SLEPc object (PETSc.Mat, PETSc.Vec or SLEPc.BV) to file.
 
     :param comm: MPI communicator (MPI.COMM_WORLD or MPI.COMM_SELF)
     :type comm: MPI.Comm
     :param filename: name of the file to store the object
     :type filename: str
-    :param object: any PETSc matrix or vector
+    :param object: any PETSc matrix or vector, or SLEPc BV
     :type object: Union[PETSc.Mat, PETSc.Vec, SLEPc.BV]
     """
     viewer = PETSc.Viewer().createBinary(filename, "w", comm=comm)

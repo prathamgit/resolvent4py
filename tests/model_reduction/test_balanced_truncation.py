@@ -3,8 +3,10 @@ import numpy as np
 import scipy as sp
 import resolvent4py as res4py
 from mpi4py import MPI
+from petsc4py import PETSc
 
 from .. import pytest_utils
+
 
 def L_generator(omega, A):
     comm = MPI.COMM_WORLD
@@ -20,7 +22,9 @@ def test_balanced_truncation_real(comm):
     r"""Test balanced trunction."""
     complex = False
     N, rb, rc = 5, 3, 2
-    Apetsc, Apython = pytest_utils.generate_random_matrix(comm, (N, N), complex)
+    Apetsc, Apython = pytest_utils.generate_random_matrix(
+        comm, (N, N), complex
+    )
     Bpetsc, Bpython = pytest_utils.generate_random_bv(comm, (N, rb), complex)
     Cpetsc, Cpython = pytest_utils.generate_random_bv(comm, (N, rc), complex)
 
@@ -38,7 +42,7 @@ def test_balanced_truncation_real(comm):
             ),
         )
     )
-    poly_ords = 5 * np.ones(len(intervals) - 1, dtype=np.int32)
+    poly_ords = 5 * np.ones(len(intervals) - 1, dtype=PETSc.IntType)
     poly_ords[:idx] = 10
 
     for j in range(len(poly_ords)):
@@ -80,10 +84,13 @@ def test_balanced_truncation_real(comm):
     Psi_python = sp.linalg.inv(Phi_python).conj().T
     Phi_python = Phi_python[:, :r]
     Psi_python = Psi_python[:, :r]
-    Ar_python = Psi_python.conj().T@Apython@Phi_python
+    Ar_python = Psi_python.conj().T @ Apython @ Phi_python
 
-    error = 100 * np.linalg.norm(np.diag(S)[0] - Hankel[0]) / \
-        np.linalg.norm(Hankel[0])
+    error = (
+        100
+        * np.linalg.norm(np.diag(S)[0] - Hankel[0])
+        / np.linalg.norm(Hankel[0])
+    )
     assert error < 2
-    error = 100*np.linalg.norm(Ar - Ar_python) / np.linalg.norm(Ar_python)
+    error = 100 * np.linalg.norm(Ar - Ar_python) / np.linalg.norm(Ar_python)
     assert error < 2

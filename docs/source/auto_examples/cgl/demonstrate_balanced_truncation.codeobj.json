@@ -1,0 +1,155 @@
+{
+ "MPI.COMM_WORLD": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "mpi4py.MPI",
+   "module_short": "mpi4py.MPI",
+   "name": "COMM_WORLD"
+  }
+ ],
+ "np.arange": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "numpy",
+   "module_short": "numpy",
+   "name": "arange"
+  }
+ ],
+ "np.ones": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "numpy",
+   "module_short": "numpy",
+   "name": "ones"
+  }
+ ],
+ "np.pi": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "numpy",
+   "module_short": "numpy",
+   "name": "pi"
+  }
+ ],
+ "partial": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "functools",
+   "module_short": "functools",
+   "name": "partial"
+  }
+ ],
+ "plt.rcParams.update": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "matplotlib.pyplot.rcParams",
+   "module_short": "matplotlib.pyplot.rcParams",
+   "name": "update"
+  }
+ ],
+ "res4py.compute_local_size": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "resolvent4py",
+   "module_short": "resolvent4py",
+   "name": "compute_local_size"
+  }
+ ],
+ "res4py.create_AIJ_identity": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "resolvent4py",
+   "module_short": "resolvent4py",
+   "name": "create_AIJ_identity"
+  }
+ ],
+ "res4py.create_mumps_solver": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "resolvent4py",
+   "module_short": "resolvent4py",
+   "name": "create_mumps_solver"
+  }
+ ],
+ "res4py.linear_operators.MatrixLinearOperator": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "resolvent4py.linear_operators",
+   "module_short": "resolvent4py.linear_operators",
+   "name": "MatrixLinearOperator"
+  }
+ ],
+ "res4py.model_reduction.compute_balanced_projection": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "resolvent4py.model_reduction",
+   "module_short": "resolvent4py.model_reduction",
+   "name": "compute_balanced_projection"
+  }
+ ],
+ "res4py.model_reduction.compute_gramian_factors": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "resolvent4py.model_reduction",
+   "module_short": "resolvent4py.model_reduction",
+   "name": "compute_gramian_factors"
+  }
+ ],
+ "res4py.petscprint": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "resolvent4py",
+   "module_short": "resolvent4py",
+   "name": "petscprint"
+  }
+ ],
+ "res4py.read_bv": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "resolvent4py",
+   "module_short": "resolvent4py",
+   "name": "read_bv"
+  }
+ ],
+ "res4py.read_coo_matrix": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "resolvent4py",
+   "module_short": "resolvent4py",
+   "name": "read_coo_matrix"
+  }
+ ],
+ "resolvent4py.model_reduction.balanced_truncation": [
+  {
+   "is_class": false,
+   "is_explicit": true,
+   "module": "resolvent4py.model_reduction",
+   "module_short": "resolvent4py.model_reduction",
+   "name": "balanced_truncation"
+  }
+ ],
+ "resolvent4py.utils.ksp.create_mumps_solver": [
+  {
+   "is_class": false,
+   "is_explicit": true,
+   "module": "resolvent4py.utils.ksp",
+   "module_short": "resolvent4py",
+   "name": "create_mumps_solver"
+  }
+ ]
+}
