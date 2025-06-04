@@ -22,6 +22,32 @@ We linearize the equations about this time-periodic solution and perform
 the harmonic resolvent analysis as in :cite:`Padovan2020jfm`.
 
 
+Instructions
+------------
+
+1. Generate the blocks of the harmonic balanced matrix using
+
+   .. code-block:: bash
+
+      mpiexec -n 1 python -u generate_matrices.py
+
+   This script must be run in series, and its outputs will be written in
+   :file:`data/`.
+
+2. Run harmonic resolvent analysis with
+
+   .. code-block:: bash
+
+      mpiexec -n 2 python -u demonstrate_harmonic_resolvent.py
+
+   This script can be run with any number of processors (although the
+   dimension of the system is rather small, so there might not be any
+   benefit in running it in parallel).
+
+3. Navigate to the :file:`results/` directory to check out the results.
+
+Scripts
+-------
 
 
 .. raw:: html

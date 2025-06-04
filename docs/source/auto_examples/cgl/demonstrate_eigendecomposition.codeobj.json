@@ -1,0 +1,218 @@
+{
+ "MPI.COMM_WORLD": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "mpi4py.MPI",
+   "module_short": "mpi4py.MPI",
+   "name": "COMM_WORLD"
+  }
+ ],
+ "cgl.CGL": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "cgl",
+   "module_short": "cgl",
+   "name": "CGL"
+  }
+ ],
+ "np.diag": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "numpy",
+   "module_short": "numpy",
+   "name": "diag"
+  }
+ ],
+ "np.linspace": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "numpy",
+   "module_short": "numpy",
+   "name": "linspace"
+  }
+ ],
+ "os.makedirs": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "os",
+   "module_short": "os",
+   "name": "makedirs"
+  }
+ ],
+ "os.path.exists": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "os.path",
+   "module_short": "os.path",
+   "name": "exists"
+  }
+ ],
+ "plt.figure": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "matplotlib.pyplot",
+   "module_short": "matplotlib.pyplot",
+   "name": "figure"
+  }
+ ],
+ "plt.gca": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "matplotlib.pyplot",
+   "module_short": "matplotlib.pyplot",
+   "name": "gca"
+  }
+ ],
+ "plt.legend": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "matplotlib.pyplot",
+   "module_short": "matplotlib.pyplot",
+   "name": "legend"
+  }
+ ],
+ "plt.plot": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "matplotlib.pyplot",
+   "module_short": "matplotlib.pyplot",
+   "name": "plot"
+  }
+ ],
+ "plt.rcParams.update": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "matplotlib.pyplot.rcParams",
+   "module_short": "matplotlib.pyplot.rcParams",
+   "name": "update"
+  }
+ ],
+ "plt.savefig": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "matplotlib.pyplot",
+   "module_short": "matplotlib.pyplot",
+   "name": "savefig"
+  }
+ ],
+ "plt.tight_layout": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "matplotlib.pyplot",
+   "module_short": "matplotlib.pyplot",
+   "name": "tight_layout"
+  }
+ ],
+ "res4py.check_lu_factorization": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "resolvent4py",
+   "module_short": "resolvent4py",
+   "name": "check_lu_factorization"
+  }
+ ],
+ "res4py.compute_local_size": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "resolvent4py",
+   "module_short": "resolvent4py",
+   "name": "compute_local_size"
+  }
+ ],
+ "res4py.create_AIJ_identity": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "resolvent4py",
+   "module_short": "resolvent4py",
+   "name": "create_AIJ_identity"
+  }
+ ],
+ "res4py.create_mumps_solver": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "resolvent4py",
+   "module_short": "resolvent4py",
+   "name": "create_mumps_solver"
+  }
+ ],
+ "res4py.linalg.check_eig_convergence": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "resolvent4py.linalg",
+   "module_short": "resolvent4py.linalg",
+   "name": "check_eig_convergence"
+  }
+ ],
+ "res4py.linalg.eig": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "resolvent4py.linalg",
+   "module_short": "resolvent4py.linalg",
+   "name": "eig"
+  }
+ ],
+ "res4py.linear_operators.MatrixLinearOperator": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "resolvent4py.linear_operators",
+   "module_short": "resolvent4py.linear_operators",
+   "name": "MatrixLinearOperator"
+  }
+ ],
+ "res4py.petscprint": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "resolvent4py",
+   "module_short": "resolvent4py",
+   "name": "petscprint"
+  }
+ ],
+ "res4py.read_coo_matrix": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "resolvent4py",
+   "module_short": "resolvent4py",
+   "name": "read_coo_matrix"
+  }
+ ],
+ "resolvent4py.linalg.eigendecomposition.eig": [
+  {
+   "is_class": false,
+   "is_explicit": true,
+   "module": "resolvent4py.linalg.eigendecomposition",
+   "module_short": "resolvent4py.linalg",
+   "name": "eig"
+  }
+ ],
+ "resolvent4py.utils.ksp.create_mumps_solver": [
+  {
+   "is_class": false,
+   "is_explicit": true,
+   "module": "resolvent4py.utils.ksp",
+   "module_short": "resolvent4py",
+   "name": "create_mumps_solver"
+  }
+ ]
+}

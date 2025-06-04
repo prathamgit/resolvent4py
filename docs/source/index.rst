@@ -6,32 +6,36 @@
 Resolvent4py
 ===========================
 
-Resolvent4py is a petsc4py-based toolbox to perform linear analyses of 
-high-dimensional dynamical systems. 
+Resolvent4py is a petsc4py- and slepc4py-based toolbox to perform 
+analysis, model reduction and control of high-dimensional linear 
+dynamical systems. 
 The goal of this project is to provide users with a friendly python-like
 experience, while also leveraging the high-performance and parallel-computing
-capabilities of the PETSc library.
+capabilities of the PETSc and SLEPc library.
 Current functionalities include:
 
 - Right and left eigendecomposition 
 - Resolvent analysis (algebraic and using time-stepping techniques)
 - Harmonic resolvent analysis
-- Balanced truncation (time-invariant and time-periodic)
-- One-Way Navier-Stokes (OWNS)
+- Balanced truncation (time-invariant)
+
 
 
 .. toctree::
    :maxdepth: 1
    :caption: Getting Started
    
-   quickstart.rst
    api-reference.rst
+   refs.rst
 
 .. toctree::
    :maxdepth: 1
    :caption: Examples
-   
+
+   auto_examples/cgl/index
    auto_examples/toy_model/index
+
+
 
 
 

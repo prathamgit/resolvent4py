@@ -27,10 +27,10 @@ harmonic resolvent analysis on the toy model in section 3.1 of
 In particular, we demonstrate the following:
 
 - Assembling the harmonic-balanced linear operator :math:`T` from file using the
-  function :func:`~src.resolvent4py.utils.io.read_harmonic_balanced_matrix`
+  function :func:`~resolvent4py.utils.io.read_harmonic_balanced_matrix`.
 
 - Using the class
-  :class:`~src.resolvent4py.linear_operators.projection.ProjectionLinearOperator`
+  :class:`~resolvent4py.linear_operators.projection.ProjectionLinearOperator`
   to define the projection operators
 
   .. math::
@@ -42,7 +42,7 @@ In particular, we demonstrate the following:
   of these projectors.)
 
 - Using the class
-  :class:`~src.resolvent4py.linear_operators.projection.ProductLinearOperator`
+  :class:`~resolvent4py.linear_operators.product.ProductLinearOperator`
   to define the harmonic resolvent :math:`H_1 = P_r T^{-1} P_d`.
   We also define :math:`H_2 = P T^{-1} P`, where
 
@@ -54,69 +54,20 @@ In particular, we demonstrate the following:
   (This projector is, in general, more appropriate because its range is an
   invariant subspace of :math:`T`.)
 
-- Using :func:`~src.resolvent4py.linalg.randomized_svd` to compute the
+- Using :func:`~resolvent4py.linalg.randomized_svd.randomized_svd` 
+  to compute the
   singular value decomposition of :math:`H_1` and :math:`H_2`.
   These agree with each other, except that :math:`\sigma_1(H_2) \to \infty`
   due to the fact that :math:`T` is almost exactly singular (hence the use
   of :math:`P_r` and :math:`P_d` for a meaningful definition of the harmonic
   resolvent operator).
 
-- Using :func:`~src.resolvent4py.linalg.eig` to compute the
+- Using :func:`~resolvent4py.linalg.eigendecomposition.eig` to compute the
   eigendecomposition of :math:`-PTP`. The eigenvalues of this matrix are the
   Floquet exponents associated with the underlying time-periodic linear system
   (see :cite:`Wereley91`).
 
-
-Instructions
-------------
-
-1. Generate the blocks of the harmonic balanced matrix using
-
-   .. code-block:: bash
-
-      mpiexec -n 1 python -u generate_matrices.py
-
-   This script must be run in series, and its outputs will be written in
-   :file:`data/`.
-
-2. Run harmonic resolvent analysis with
-
-   .. code-block:: bash
-
-      mpiexec -n 2 python -u demonstrate_harmonic_resolvent.py
-
-   This script can be run with any number of processors (although the
-   dimension of the system is rather small, so there might not be any
-   benefit in running it in parallel).
-
-3. Navigate to the :file:`results/` directory to check out the results.
-
-.. bibliography::
-
-.. GENERATED FROM PYTHON SOURCE LINES 77-228
-
-
-
-.. rst-class:: sphx-glr-horizontal
-
-
-    *
-
-      .. image-sg:: /auto_examples/toy_model/images/sphx_glr_demonstrate_harmonic_resolvent_001.png
-         :alt: demonstrate harmonic resolvent
-         :srcset: /auto_examples/toy_model/images/sphx_glr_demonstrate_harmonic_resolvent_001.png
-         :class: sphx-glr-multi-img
-
-    *
-
-      .. image-sg:: /auto_examples/toy_model/images/sphx_glr_demonstrate_harmonic_resolvent_002.png
-         :alt: demonstrate harmonic resolvent
-         :srcset: /auto_examples/toy_model/images/sphx_glr_demonstrate_harmonic_resolvent_002.png
-         :class: sphx-glr-multi-img
-
-
-
-
+.. GENERATED FROM PYTHON SOURCE LINES 52-205
 
 .. code-block:: Python
 
@@ -128,6 +79,8 @@ Instructions
     import resolvent4py as res4py
     from mpi4py import MPI
     from slepc4py import SLEPc
+
+    from resolvent4py.linear_operators import matrix
 
     plt.rcParams.update(
         {
@@ -180,7 +133,7 @@ Instructions
     ksp = res4py.create_mumps_solver(comm, T)
     res4py.check_lu_factorization(comm, T, ksp)
 
-    Top = res4py.linear_operators.MatrixLinearOperator(comm, T, ksp, nblocks)
+    Top = matrix.MatrixLinearOperator(comm, T, ksp, nblocks)
 
     # ------------------------------------------------------------------------------
     # -------- Read base-flow time-derivative and define projection operators ------
@@ -271,11 +224,6 @@ Instructions
         ax.set_ylabel(r"$\mathrm{Imag}(\lambda)$")
         plt.tight_layout()
         plt.savefig(res_path + "floquet_exponents.png", dpi=100)
-
-
-.. rst-class:: sphx-glr-timing
-
-   **Total running time of the script:** (0 minutes 0.951 seconds)
 
 
 .. _sphx_glr_download_auto_examples_toy_model_demonstrate_harmonic_resolvent.py:
