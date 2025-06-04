@@ -3,7 +3,7 @@ __all__ = [
     "LowRankLinearOperator",
     "LowRankUpdatedLinearOperator",
     "ProductLinearOperator",
-    "ProjectionOperator",
+    "ProjectionLinearOperator",
     "LinearOperator",
 ]
 

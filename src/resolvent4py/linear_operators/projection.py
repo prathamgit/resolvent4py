@@ -39,7 +39,7 @@ class ProjectionLinearOperator(LinearOperator):
     """
 
     def __init__(
-        self: "ProjectionOperator",
+        self: "ProjectionLinearOperator",
         comm: MPI.Comm,
         Phi: SLEPc.BV,
         Psi: SLEPc.BV,
@@ -67,7 +67,7 @@ class ProjectionLinearOperator(LinearOperator):
         else:
             self.L = LowRankLinearOperator(comm, Phi, Sig, Psi, nblocks)
 
-        super().__init__(comm, "ProjectionOperator", dimensions, nblocks)
+        super().__init__(comm, "ProjectionLinearOperator", dimensions, nblocks)
 
     def apply(self, x, y=None):
         return self.L.apply(x, y)
