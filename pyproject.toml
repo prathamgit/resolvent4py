@@ -21,25 +21,8 @@ authors = [
     { name = "Vishal Anantharaman", email = "vanantha@caltech.edu" },
     { name = "Clancy Rowley", email = "cwrowley@princeton.edu" },
 ]
-requires-python = ">=3.10"
-dependencies = [
-    "numpy>=2.0", "scipy>=1.10", "mpi4py>=3.1", 
-    "petsc4py>=3.13", "slepc4py>=3.13",
-]
+requires-python = ">=3.9"
 readme = { file = "README.md", content-type = "text/markdown" }
-classifiers = [
-  "Development Status :: 4 - Beta",
-  "Intended Audience :: Science/Research",
-  "License :: OSI Approved :: MIT License",
-  "Programming Language :: Python :: 3",
-  "Programming Language :: Python :: 3.10",
-  "Programming Language :: Python :: 3.11",
-  "Operating System :: POSIX :: Linux",
-  "Operating System :: MacOS",
-  "Topic :: Scientific/Engineering",
-  "Topic :: Scientific/Engineering :: Mathematics",
-  "Topic :: Software Development :: Libraries :: Python Modules"
-]
 
 [project.urls]
 Homepage = "https://github.com/albertopadovan/resolvent4py"
