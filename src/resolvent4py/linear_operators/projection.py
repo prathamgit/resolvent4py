@@ -18,13 +18,13 @@ class ProjectionLinearOperator(LinearOperator):
     .. math::
 
         L = \begin{cases}
-        \Phi \Sigma \Psi^{*} & \text{if } \texttt{complement=False} \\ 
-        I - \Phi \Sigma \Psi^{*} & \text{otherwise}
+        \Phi \left(\Psi^*\Phi\right)^{-1} \Psi^{*} & \text{if } \texttt{complement=False} \\ 
+        I - \Phi \left(\Psi^*\Phi\right)^{-1} \Psi^{*} & \text{otherwise}
         \end{cases}
 
-    where :math:`\Phi` and :math:`\Psi` are SLEPc BVs and 
-    :math:`\Sigma = \left(\Psi^* \Phi\right)^{-1}` so that
-    :math:`L` is indeed a projection.
+    where :math:`\Phi` and :math:`\Psi` are tall and skinny matrices of size
+    :math:`N\times r` stored as SLEPc BVs. (It is easy to check that :math:`L` 
+    is a projection since :math:`L^2 = L`.)
     
     :param comm: MPI communicator :code:`MPI.COMM_WORLD`
     :type comm: MPI.Comm

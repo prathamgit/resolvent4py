@@ -67,7 +67,7 @@ In particular, we demonstrate the following:
   Floquet exponents associated with the underlying time-periodic linear system
   (see :cite:`Wereley91`).
 
-.. GENERATED FROM PYTHON SOURCE LINES 52-205
+.. GENERATED FROM PYTHON SOURCE LINES 52-203
 
 .. code-block:: Python
 
@@ -79,8 +79,6 @@ In particular, we demonstrate the following:
     import resolvent4py as res4py
     from mpi4py import MPI
     from slepc4py import SLEPc
-
-    from resolvent4py.linear_operators import matrix
 
     plt.rcParams.update(
         {
@@ -133,7 +131,7 @@ In particular, we demonstrate the following:
     ksp = res4py.create_mumps_solver(comm, T)
     res4py.check_lu_factorization(comm, T, ksp)
 
-    Top = matrix.MatrixLinearOperator(comm, T, ksp, nblocks)
+    Top = res4py.linear_operators.MatrixLinearOperator(comm, T, ksp, nblocks)
 
     # ------------------------------------------------------------------------------
     # -------- Read base-flow time-derivative and define projection operators ------

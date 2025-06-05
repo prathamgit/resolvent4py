@@ -58,8 +58,6 @@ import resolvent4py as res4py
 from mpi4py import MPI
 from slepc4py import SLEPc
 
-from resolvent4py.linear_operators import matrix
-
 plt.rcParams.update(
     {
         "font.family": "serif",
@@ -111,7 +109,7 @@ Id.destroy()
 ksp = res4py.create_mumps_solver(comm, T)
 res4py.check_lu_factorization(comm, T, ksp)
 
-Top = matrix.MatrixLinearOperator(comm, T, ksp, nblocks)
+Top = res4py.linear_operators.MatrixLinearOperator(comm, T, ksp, nblocks)
 
 # ------------------------------------------------------------------------------
 # -------- Read base-flow time-derivative and define projection operators ------

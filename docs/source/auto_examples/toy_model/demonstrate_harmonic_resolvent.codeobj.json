@@ -17,15 +17,6 @@
    "name": "BV"
   }
  ],
- "matrix.MatrixLinearOperator": [
-  {
-   "is_class": false,
-   "is_explicit": false,
-   "module": "resolvent4py.linear_operators.matrix",
-   "module_short": "resolvent4py.linear_operators",
-   "name": "MatrixLinearOperator"
-  }
- ],
  "np.arange": [
   {
    "is_class": false,
@@ -204,6 +195,15 @@
    "module": "resolvent4py.linalg",
    "module_short": "resolvent4py.linalg",
    "name": "randomized_svd"
+  }
+ ],
+ "res4py.linear_operators.MatrixLinearOperator": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "resolvent4py.linear_operators",
+   "module_short": "resolvent4py.linear_operators",
+   "name": "MatrixLinearOperator"
   }
  ],
  "res4py.linear_operators.ProductLinearOperator": [
