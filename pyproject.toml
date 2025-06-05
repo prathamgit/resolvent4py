@@ -7,22 +7,42 @@ build-backend = "setuptools.build_meta"
 name = "resolvent4py"
 version = "0.1.0"
 description = """\
-  A parallel Python-based library for the analysis, model reduction and \
+  A parallel Python-based library for analysis, model reduction and \
   control of large-scale linear systems.\
 """
 license = "MIT"
 license-files = ["LICENSE"]
-keywords = ["control", "model reduction", "large-scale systems", "parallel computing"]
-
-requires-python = ">=3.8"
-
-dependencies = [
-    "numpy>=2.0",
-    "scipy>=1.10",
-    "mpi4py>=3.1",
-    "petsc4py>=3.13",
-    "slepc4py>=3.13",
+keywords = [
+  "linear systems", "parallel computing", "MPI", "PETSc", "SLEPc",
+  "resolvent analysis", "model reduction", "control",
 ]
+authors = [
+    { name = "Alberto Padovan", email = "alberto.padovan.94@gmail.com" },
+    { name = "Vishal Anantharaman", email = "vanantha@caltech.edu" },
+    { name = "Clancy Rowley", email = "cwrowley@princeton.edu" },
+]
+requires-python = ">=3.10"
+dependencies = [
+    "numpy>=2.0", "scipy>=1.10", "mpi4py>=3.1", 
+    "petsc4py>=3.13", "slepc4py>=3.13",
+]
+readme = { file = "README.md", content-type = "text/markdown" }
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Science/Research",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Operating System :: POSIX :: Linux",
+  "Operating System :: MacOS",
+  "Topic :: Scientific/Engineering",
+  "Topic :: Scientific/Engineering :: Mathematics",
+  "Topic :: Software Development :: Libraries :: Python Modules"
+]
+
+[project.urls]
+Homepage = "https://github.com/albertopadovan/resolvent4py"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
