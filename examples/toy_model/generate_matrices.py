@@ -14,12 +14,11 @@ plt.rcParams.update(
 )
 
 from petsc4py import PETSc
-from mpi4py import MPI
 import resolvent4py as res4py
 
-comm = MPI.COMM_WORLD
+comm = PETSc.COMM_WORLD
 
-if comm.Get_size() > 1:
+if comm.getSize() > 1:
     raise ValueError("This script must be run in series.")
 
 
@@ -117,23 +116,23 @@ for j in range(Ashat.shape[-1]):
     for i, array in enumerate(arrays):
         fname = save_path + fnames[i]
         vec = PETSc.Vec().createWithArray(
-            array, len(array), None, MPI.COMM_SELF
+            array, len(array), None, PETSc.COMM_SELF
         )
-        res4py.write_to_file(MPI.COMM_WORLD, fname, vec)
+        res4py.write_to_file(comm, fname, vec)
         vec.destroy()
-
+    
     qj = Qhat[:, j]
-    vec = PETSc.Vec().createWithArray(qj, 3, None, MPI.COMM_SELF)
-    res4py.write_to_file(MPI.COMM_WORLD, save_path + "Q_%02d.dat" % j, vec)
+    vec = PETSc.Vec().createWithArray(qj, 3, None, PETSc.COMM_SELF)
+    res4py.write_to_file(comm, save_path + "Q_%02d.dat" % j, vec)
     vec.destroy()
 
     jom = j * omega * 1j
-    vec = PETSc.Vec().createWithArray(jom * qj, 3, None, MPI.COMM_SELF)
-    res4py.write_to_file(MPI.COMM_WORLD, save_path + "dQ_%02d.dat" % j, vec)
+    vec = PETSc.Vec().createWithArray(jom * qj, 3, None, PETSc.COMM_SELF)
+    res4py.write_to_file(comm, save_path + "dQ_%02d.dat" % j, vec)
     vec.destroy()
 
     Aj = Aj.todense()
-    Aj_mat = PETSc.Mat().createDense((3, 3), None, Aj, MPI.COMM_SELF)
-    res4py.write_to_file(MPI.COMM_WORLD, save_path + "Aj_%02d.dat" % j, Aj_mat)
+    Aj_mat = PETSc.Mat().createDense((3, 3), None, Aj, PETSc.COMM_SELF)
+    res4py.write_to_file(comm, save_path + "Aj_%02d.dat" % j, Aj_mat)
 
 np.save(save_path + "bflow_freqs.npy", freqs)

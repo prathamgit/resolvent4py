@@ -12,7 +12,7 @@ def test_projection_on_vectors(comm, square_matrix_size):
     U, Upython = pytest_utils.generate_random_bv(comm, (N, r))
     V, Vpython = pytest_utils.generate_random_bv(comm, (N, r))
     S = sp.linalg.inv(Vpython.conj().T @ Upython)
-
+    
     complements = [False, True]
     P = Upython @ S @ Vpython.conj().T
     Apython = [P, np.eye(N) - P]

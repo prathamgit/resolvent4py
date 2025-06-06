@@ -15,14 +15,14 @@ from .matrix import convert_coo_to_csr
 
 
 def generate_random_petsc_sparse_matrix(
-    comm: MPI.Comm,
+    comm: PETSc.Comm,
     sizes: typing.Tuple[typing.Tuple[int, int], typing.Tuple[int, int]],
     nnz: int,
     complex: typing.Optional[bool] = False,
 ) -> PETSc.Mat:
     r"""
     :param comm: MPI communicator
-    :type comm: MPI.Comm
+    :type comm: PETSc.Comm
     :param sizes: :code:`((local rows, global rows), (local cols, global cols))`
     :type sizes: Tuple[Tuple[int, int], Tuple[int, int]]
     :param nnz: number of non-zero entries
@@ -63,13 +63,13 @@ def generate_random_petsc_sparse_matrix(
 
 
 def generate_random_petsc_vector(
-    comm: MPI.Comm,
+    comm: PETSc.Comm,
     sizes: typing.Tuple[int, int],
     complex: typing.Optional[bool] = False,
 ) -> PETSc.Vec:
     r"""
     :param comm: MPI communicator
-    :type comm: MPI.Comm
+    :type comm: PETSc.Comm
     :param sizes: vector sizes
     :type sizes: Tuple[int, int]
     :param complex: :code:`True` if you want a complex-valued vector

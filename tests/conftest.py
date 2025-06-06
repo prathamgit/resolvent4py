@@ -1,6 +1,7 @@
 import sys
 import os
 from mpi4py import MPI
+from petsc4py import PETSc
 from . import pytest_utils
 import pytest
 
@@ -13,13 +14,13 @@ if MPI.COMM_WORLD.Get_rank() != 0:
 @pytest.fixture(scope="session")
 def comm():
     """MPI communicator fixture."""
-    return MPI.COMM_WORLD
+    return PETSc.COMM_WORLD
 
 
 @pytest.fixture(scope="session")
 def rank_size(comm):
     """Return rank and size of MPI communicator."""
-    return comm.Get_rank(), comm.Get_size()
+    return comm.getRank(), comm.getSize()
 
 
 @pytest.fixture(

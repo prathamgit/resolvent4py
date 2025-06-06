@@ -2,12 +2,11 @@ __all__ = ["enforce_complex_conjugacy", "check_complex_conjugacy"]
 
 import numpy as np
 import typing
-from mpi4py import MPI
 from petsc4py import PETSc
 
 
 def enforce_complex_conjugacy(
-    comm: MPI.Comm, vec: PETSc.Vec, nblocks: int
+    comm: PETSc.Comm, vec: PETSc.Vec, nblocks: int
 ) -> None:
     r"""
     Suppose we have a vector
@@ -35,7 +34,7 @@ def enforce_complex_conjugacy(
     scatter, vec_seq = PETSc.Scatter().toZero(vec)
     scatter.begin(vec, vec_seq, addv=PETSc.InsertMode.INSERT)
     scatter.end(vec, vec_seq, addv=PETSc.InsertMode.INSERT)
-    if comm.Get_rank() == 0:
+    if comm.getRank() == 0:
         array = vec_seq.getArray()
         block_size = len(array) // nblocks
         for i in range(nblocks // 2):
@@ -65,7 +64,7 @@ def enforce_complex_conjugacy(
 
 
 def check_complex_conjugacy(
-    comm: MPI.Comm, vec: PETSc.Vec, nblocks: int
+    comm: PETSc.Comm, vec: PETSc.Vec, nblocks: int
 ) -> bool:
     r"""
     Verify whether the components :math:`v_i` of the vector
@@ -94,7 +93,7 @@ def check_complex_conjugacy(
     scatter.begin(vec, vec_seq, addv=PETSc.InsertMode.INSERT)
     scatter.end(vec, vec_seq, addv=PETSc.InsertMode.INSERT)
     cc = None
-    if comm.Get_rank() == 0:
+    if comm.getRank() == 0:
         array = vec_seq.getArray()
         block_size = len(array) // nblocks
         array_block = np.zeros(block_size, dtype=np.complex128)
@@ -104,7 +103,7 @@ def check_complex_conjugacy(
         cc = True if np.linalg.norm(array_block.imag) <= 1e-13 else False
     scatter.destroy()
     vec_seq.destroy()
-    cc = comm.bcast(cc, root=0)
+    cc = comm.tompi4py().bcast(cc, root=0)
     return cc
 
 
@@ -133,7 +132,7 @@ def assemble_harmonic_balanced_vector(
         )
 
     # Create the harmonic-balanced BV
-    Vec = PETSc.Vec().create(comm=MPI.COMM_WORLD)
+    Vec = PETSc.Vec().create(comm=PETSc.COMM_WORLD)
     Vec.setSizes(sizes)
     Vec.setUp()
     r0, _ = Vec.getOwnershipRange()

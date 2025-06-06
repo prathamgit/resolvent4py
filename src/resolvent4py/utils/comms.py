@@ -10,7 +10,6 @@ __all__ = [
 import typing
 
 import numpy as np
-from mpi4py import MPI
 from petsc4py import PETSc
 
 from .miscellaneous import get_mpi_type
@@ -40,7 +39,7 @@ def compute_local_size(Ng: int) -> int:
     :return: local size
     :rtype: int
     """
-    size, rank = MPI.COMM_WORLD.Get_size(), MPI.COMM_WORLD.Get_rank()
+    size, rank = PETSc.COMM_WORLD.getSize(), PETSc.COMM_WORLD.Get_rank()
     Nl = Ng // size + 1 if np.mod(Ng, size) > rank else Ng // size
     return Nl
 
@@ -93,19 +92,20 @@ def sequential_to_distributed_vector(
 
 
 def distributed_to_sequential_matrix(
-    comm: MPI.Comm, Mat_dist: PETSc.Mat
+    comm: PETSc.Comm, Mat_dist: PETSc.Mat
 ) -> PETSc.Mat:
     r"""
     Allgather dense distributed PETSc matrix into a dense sequential PETSc
     matrix.
 
-    :param comm: MPI communicator :code:`MPI.COMM_WORLD`
-    :type comm: MPI.Comm
+    :param comm: MPI communicator :code:`PETSc.COMM_WORLD`
+    :type comm: PETSc.Comm
     :param Mat_dist: a distributed dense matrix
     :type Mat_dist: PETSc.Mat.Type.DENSE
 
     :rtype: PETSc.Mat.Type.DENSE
     """
+    comm = comm.tompi4py()
     array = Mat_dist.getDenseArray().copy().reshape(-1)
     counts = np.asarray(comm.allgather(len(array)))
     disps = np.concatenate(([0], np.cumsum(counts[:-1])))
@@ -114,40 +114,41 @@ def distributed_to_sequential_matrix(
     sizes = Mat_dist.getSizes()
     nr, nc = sizes[0][-1], sizes[-1][-1]
     recvbuf = recvbuf.reshape((nr, nc))
-    Mat_seq = PETSc.Mat().createDense((nr, nc), None, recvbuf, MPI.COMM_SELF)
+    Mat_seq = PETSc.Mat().createDense((nr, nc), None, recvbuf, PETSc.COMM_SELF)
     return Mat_seq
 
 
 def distributed_to_sequential_vector(
-    comm: MPI.Comm, vec_dist: PETSc.Vec
+    comm: PETSc.Comm, vec_dist: PETSc.Vec
 ) -> PETSc.Vec:
     r"""
     Allgather distribued PETSc vector into PETSc sequential vector.
 
     :param comm: MPI communicator
-    :type comm: MPI.Comm
+    :type comm: PETSc.Comm
     :param vec_dist: a distributed vector
     :type vec_dist: PETSc.Vec.Type.STANDARD
 
     :rtype: PETSc.Vec.Type.SEQ
     """
+    comm = comm.tompi4py()
     array = vec_dist.getArray().copy()
     counts = comm.allgather(len(array))
     disps = np.concatenate(([0], np.cumsum(counts[:-1]))).astype(PETSc.IntType)
     recvbuf = np.zeros(np.sum(counts), dtype=array.dtype)
     comm.Allgatherv(array, (recvbuf, counts, disps, get_mpi_type(array.dtype)))
-    vec_seq = PETSc.Vec().createWithArray(recvbuf, comm=MPI.COMM_SELF)
+    vec_seq = PETSc.Vec().createWithArray(recvbuf, comm=PETSc.COMM_SELF)
     return vec_seq
 
 
 def scatter_array_from_root_to_all(
-    comm: MPI.Comm, array: np.array, locsize: typing.Optional[int] = None
+    comm: PETSc.Comm, array: np.array, locsize: typing.Optional[int] = None
 ) -> np.array:
     r"""
     Scatter numpy array from root to all other processors
 
     :param comm: MPI communicator
-    :type comm: MPI.Comm
+    :type comm: PETSc.Comm
     :param array: numpy array to be scattered
     :type array: numpy.array
     :param locsize: local size owned by each processor. If :code:`None`,
@@ -157,6 +158,7 @@ def scatter_array_from_root_to_all(
 
     :rtype: numpy.array
     """
+    comm = comm.tompi4py()
     size, rank = comm.Get_size(), comm.Get_rank()
     counts, displs = None, None
     if locsize == None:

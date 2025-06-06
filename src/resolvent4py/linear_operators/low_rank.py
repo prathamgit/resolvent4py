@@ -1,7 +1,6 @@
 import typing
 
 import numpy as np
-from mpi4py import MPI
 from petsc4py import PETSc
 from slepc4py import SLEPc
 
@@ -19,8 +18,8 @@ class LowRankLinearOperator(LinearOperator):
     where :math:`U`, :math:`\Sigma` and :math:`V` are matrices of
     conformal sizes (and :math:`\Sigma` is not necessarily diagonal).
 
-    :param comm: MPI communicator :code:`MPI.COMM_WORLD`
-    :type comm: MPI.Comm
+    :param comm: MPI communicator :code:`PETSc.COMM_WORLD`
+    :type comm: PETSc.Comm
     :param U: a tall and skinny matrix
     :type U: SLEPc.BV
     :param Sigma: 2D numpy array
@@ -33,7 +32,7 @@ class LowRankLinearOperator(LinearOperator):
 
     def __init__(
         self: "LowRankLinearOperator",
-        comm: MPI.Comm,
+        comm: PETSc.Comm,
         U: SLEPc.BV,
         Sigma: np.ndarray,
         V: SLEPc.BV,
@@ -60,7 +59,7 @@ class LowRankLinearOperator(LinearOperator):
     def apply_mat(self, X, Y=None):
         M = X.dot(self.V)
         L = self.Sigma @ M.getDenseArray()
-        Lm = PETSc.Mat().createDense(L.shape, None, L, MPI.COMM_SELF)
+        Lm = PETSc.Mat().createDense(L.shape, None, L, PETSc.COMM_SELF)
         Y = X.duplicate() if Y == None else Y
         Y.mult(1.0, 0.0, self.U, Lm)
         Lm.destroy()
@@ -70,7 +69,7 @@ class LowRankLinearOperator(LinearOperator):
     def apply_hermitian_transpose_mat(self, X, Y=None):
         M = X.dot(self.U)
         L = self.Sigma.conj().T @ M.getDenseArray()
-        Lm = PETSc.Mat().createDense(L.shape, None, L, MPI.COMM_SELF)
+        Lm = PETSc.Mat().createDense(L.shape, None, L, PETSc.COMM_SELF)
         Y = X.duplicate() if Y == None else Y
         Y.mult(1.0, 0.0, self.V, Lm)
         Lm.destroy()

@@ -1,7 +1,7 @@
 import typing
 
 import scipy as sp
-from mpi4py import MPI
+from petsc4py import PETSc
 from slepc4py import SLEPc
 
 from ..utils.matrix import create_AIJ_identity
@@ -26,8 +26,8 @@ class ProjectionLinearOperator(LinearOperator):
     :math:`N\times r` stored as SLEPc BVs. (It is easy to check that :math:`L` 
     is a projection since :math:`L^2 = L`.)
     
-    :param comm: MPI communicator :code:`MPI.COMM_WORLD`
-    :type comm: MPI.Comm
+    :param comm: MPI communicator :code:`PETSc.COMM_WORLD`
+    :type comm: PETSc.Comm
     :param Phi: tall and skinny matrix
     :type Phi: SLEPc.BV
     :param Psi: tall and skinny matrix
@@ -40,7 +40,7 @@ class ProjectionLinearOperator(LinearOperator):
 
     def __init__(
         self: "ProjectionLinearOperator",
-        comm: MPI.Comm,
+        comm: PETSc.Comm,
         Phi: SLEPc.BV,
         Psi: SLEPc.BV,
         complement: typing.Optional[bool] = False,
