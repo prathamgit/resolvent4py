@@ -1,10 +1,10 @@
 {
- "MPI.COMM_WORLD": [
+ "PETSc.COMM_WORLD": [
   {
    "is_class": false,
    "is_explicit": false,
-   "module": "mpi4py.MPI",
-   "module_short": "mpi4py.MPI",
+   "module": "petsc4py.PETSc",
+   "module_short": "petsc4py.PETSc",
    "name": "COMM_WORLD"
   }
  ],

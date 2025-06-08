@@ -41,57 +41,55 @@ to the user through the `resolvent4py` namespace are:
 
 
 ## Dependencies
-- `Python>=3.9`
+- `Python>=3.10`
 - `numpy`
 - `scipy`
 - `matplotlib`
-- `petsc4py>=3.20`
-- `slepc4py>=3.20`
+- `pymanopt`
+- `sphinx`
+- `sphinx-rtd-theme`
+- `sphinx-gallery`
+- `sphinxcontrib-bibtex`
+- `petsc4py`
+- `slepc4py`
 - `mpi4py`
 
 ## Instructions
 
 ### Installing the dependencies
 
-All the requirements above can be installed straightforwardly with `pip`. 
-The installation of `PETSc` and `SLEPc` and their `4py` counterparts can be 
-more cumbersome, and is outlined in detail below.
+All the dependencies above can be installed straightforwardly with `pip`, 
+except for `petsc4py` and `slepc4py` whose installation is easier if 
+`PETSc` and `SLEPc` are built from source.
 
-
-- Download [PETSc](https://petsc.org/release/install/download/) either by 
-    cloning the repository or by downloading a tarball file. Any version >= 3.20
-    should work. Development was done with version 3.20.1.
-- Configure PETSc following the [configuration guidelines](
-    https://petsc.org/release/install/install/). A required configuration option
-    is `--with-scalar-type=complex`, and required external libraries include
-    `mumps`, `scalapack`, `metis`, `parmetis`, `bison` and `ptscotch`.
-    For example, our version of PETSc was configured as follows:
-
+- We recommend creating a clean Python environment.
+- Download [PETSc](https://petsc.org/release/install/download/). Any version >= 
+  3.20.0 should work. (The latest version that we tested is 3.23.3.)
+- Configure PETSc using the command below,
     ```bash
-    ./configure PETSC_ARCH=resolvent4py_arch --with-cc=gcc --with-cxx=g++ 
-    --with-fc=gfortran --download-mpich --download-fblaslapack 
+    ./configure PETSC_ARCH=resolvent4py_arch --download-fblaslapack 
     --download-mumps --download-scalapack --download-parmetis 
-    --download-metis --download-ptscotch --download-bison 
-    --with-scalar-type=complex --with-debugging=0 
-    COPTFLAGS=-O3 CXXOPTFLAGS=-O3 FOPTFLAGS=-O3
+    --download-metis --download-ptscotch --with-scalar-type=complex 
+    --with-debugging=0 COPTFLAGS=-O3 CXXOPTFLAGS=-O3 FOPTFLAGS=-O3
     ```
-- Build with
+  If some of the libraries above (e.g., `scalapack`, `metis`, etc.) are already
+  available to the user, then see the `PETSc` [configuration guidelines](
+  https://petsc.org/release/install/install/) for details on how to link against
+  them.
+- Follow the `PETSc` instructions (provided during the configuration step) to 
+  build the library. Then make sure to export the environment variables
+  `PETSC_DIR` and `PETSC_ARCH`.
+- Install [SLEPc](https://slepc.upv.es/documentation/instal.htm). Any version >=
+  3.20.0 should work. (The latest version that we tested was 3.23.1.)
+- Install `mpi4py`, `petsc4py` and `slepc4py`
     ```bash
-    make PETSC_DIR=/your/petsc/dir PETSC_ARCH=resolvent4py_arch all 
+    pip install mpi4py petsc4py==petsc-version slepc4py==slepc-version
     ```
-- Check the build with
+- Ensure that the installation was successful by running
     ```bash
-    make all check
-    ```
-- Make sure that `PETSC_DIR` and `PETSC_ARCH` have been exported 
-    correctly by running
-    ```bash
-    echo $PETSC_DIR && echo $PETSC_ARCH
-    ```
-- Install [SLEPc](https://slepc.upv.es/documentation/instal.htm)
-- Install `petsc4py` and `slepc4py`
-    ```bash
-    pip install petsc4py==petsc-version slepc4py==slepc-version 
+    python -c "from mpi4py import MPI"
+    python -c "from petsc4py import PETSc"
+    python -c "from slepc4py import SLEPc"
     ```
 
 ## Installing `resolvent4py` and building the documentation
@@ -101,11 +99,7 @@ more cumbersome, and is outlined in detail below.
     ```bash
         pip install .
     ```
-- Unless already available, download `sphinx` to build the documentation
-    ```bash
-        pip install sphinx sphinx-rtd-theme
-    ```
-- Build the documentation and open it with
+- Build the documentation and open it with the following commands
     ```bash
         ./compile_html.sh && open build/html/index.html
     ```

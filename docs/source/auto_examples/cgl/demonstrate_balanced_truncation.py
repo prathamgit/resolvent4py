@@ -26,7 +26,7 @@ from functools import partial
 import matplotlib.pyplot as plt
 import numpy as np
 import resolvent4py as res4py
-from mpi4py import MPI
+from petsc4py import PETSc
 
 plt.rcParams.update(
     {
@@ -39,7 +39,7 @@ plt.rcParams.update(
 
 
 def L_generator(omega, A):
-    comm = MPI.COMM_WORLD
+    comm = PETSc.COMM_WORLD
     Rinv = res4py.create_AIJ_identity(comm, A.getSizes())
     Rinv.scale(1j * omega)
     Rinv.axpy(-1.0, A)
@@ -48,7 +48,7 @@ def L_generator(omega, A):
     return (L, L.solve_mat, (L.destroy,))
 
 
-comm = MPI.COMM_WORLD
+comm = PETSc.COMM_WORLD
 
 # Read the A matrix from file
 res4py.petscprint(comm, "Reading matrix from file...")
