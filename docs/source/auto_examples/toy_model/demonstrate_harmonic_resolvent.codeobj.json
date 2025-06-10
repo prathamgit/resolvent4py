@@ -1,0 +1,290 @@
+{
+ "MPI.COMM_WORLD": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "mpi4py.MPI",
+   "module_short": "mpi4py.MPI",
+   "name": "COMM_WORLD"
+  }
+ ],
+ "SLEPc.BV": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "slepc4py.SLEPc",
+   "module_short": "slepc4py.SLEPc",
+   "name": "BV"
+  }
+ ],
+ "np.arange": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "numpy",
+   "module_short": "numpy",
+   "name": "arange"
+  }
+ ],
+ "np.argwhere": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "numpy",
+   "module_short": "numpy",
+   "name": "argwhere"
+  }
+ ],
+ "np.diag": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "numpy",
+   "module_short": "numpy",
+   "name": "diag"
+  }
+ ],
+ "np.load": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "numpy",
+   "module_short": "numpy",
+   "name": "load"
+  }
+ ],
+ "os.makedirs": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "os",
+   "module_short": "os",
+   "name": "makedirs"
+  }
+ ],
+ "os.path.exists": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "os.path",
+   "module_short": "os.path",
+   "name": "exists"
+  }
+ ],
+ "plt.figure": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "matplotlib.pyplot",
+   "module_short": "matplotlib.pyplot",
+   "name": "figure"
+  }
+ ],
+ "plt.gca": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "matplotlib.pyplot",
+   "module_short": "matplotlib.pyplot",
+   "name": "gca"
+  }
+ ],
+ "plt.plot": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "matplotlib.pyplot",
+   "module_short": "matplotlib.pyplot",
+   "name": "plot"
+  }
+ ],
+ "plt.rcParams.update": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "matplotlib.pyplot.rcParams",
+   "module_short": "matplotlib.pyplot.rcParams",
+   "name": "update"
+  }
+ ],
+ "plt.savefig": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "matplotlib.pyplot",
+   "module_short": "matplotlib.pyplot",
+   "name": "savefig"
+  }
+ ],
+ "plt.subplots": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "matplotlib.pyplot",
+   "module_short": "matplotlib.pyplot",
+   "name": "subplots"
+  }
+ ],
+ "plt.tight_layout": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "matplotlib.pyplot",
+   "module_short": "matplotlib.pyplot",
+   "name": "tight_layout"
+  }
+ ],
+ "res4py.assemble_harmonic_resolvent_generator": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "resolvent4py",
+   "module_short": "resolvent4py",
+   "name": "assemble_harmonic_resolvent_generator"
+  }
+ ],
+ "res4py.check_lu_factorization": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "resolvent4py",
+   "module_short": "resolvent4py",
+   "name": "check_lu_factorization"
+  }
+ ],
+ "res4py.compute_local_size": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "resolvent4py",
+   "module_short": "resolvent4py",
+   "name": "compute_local_size"
+  }
+ ],
+ "res4py.create_AIJ_identity": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "resolvent4py",
+   "module_short": "resolvent4py",
+   "name": "create_AIJ_identity"
+  }
+ ],
+ "res4py.create_mumps_solver": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "resolvent4py",
+   "module_short": "resolvent4py",
+   "name": "create_mumps_solver"
+  }
+ ],
+ "res4py.linalg.eig": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "resolvent4py.linalg",
+   "module_short": "resolvent4py.linalg",
+   "name": "eig"
+  }
+ ],
+ "res4py.linalg.randomized_svd": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "resolvent4py.linalg",
+   "module_short": "resolvent4py.linalg",
+   "name": "randomized_svd"
+  }
+ ],
+ "res4py.linear_operators.MatrixLinearOperator": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "resolvent4py.linear_operators",
+   "module_short": "resolvent4py.linear_operators",
+   "name": "MatrixLinearOperator"
+  }
+ ],
+ "res4py.linear_operators.ProductLinearOperator": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "resolvent4py.linear_operators",
+   "module_short": "resolvent4py.linear_operators",
+   "name": "ProductLinearOperator"
+  }
+ ],
+ "res4py.linear_operators.ProjectionLinearOperator": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "resolvent4py.linear_operators",
+   "module_short": "resolvent4py.linear_operators",
+   "name": "ProjectionLinearOperator"
+  }
+ ],
+ "res4py.read_harmonic_balanced_matrix": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "resolvent4py",
+   "module_short": "resolvent4py",
+   "name": "read_harmonic_balanced_matrix"
+  }
+ ],
+ "res4py.read_harmonic_balanced_vector": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "resolvent4py",
+   "module_short": "resolvent4py",
+   "name": "read_harmonic_balanced_vector"
+  }
+ ],
+ "resolvent4py.linalg.eigendecomposition.eig": [
+  {
+   "is_class": false,
+   "is_explicit": true,
+   "module": "resolvent4py.linalg.eigendecomposition",
+   "module_short": "resolvent4py.linalg",
+   "name": "eig"
+  }
+ ],
+ "resolvent4py.linalg.randomized_svd.randomized_svd": [
+  {
+   "is_class": false,
+   "is_explicit": true,
+   "module": "resolvent4py.linalg.randomized_svd",
+   "module_short": "resolvent4py.linalg",
+   "name": "randomized_svd"
+  }
+ ],
+ "resolvent4py.linear_operators.product.ProductLinearOperator": [
+  {
+   "is_class": false,
+   "is_explicit": true,
+   "module": "resolvent4py.linear_operators.product",
+   "module_short": "resolvent4py.linear_operators",
+   "name": "ProductLinearOperator"
+  }
+ ],
+ "resolvent4py.linear_operators.projection.ProjectionLinearOperator": [
+  {
+   "is_class": false,
+   "is_explicit": true,
+   "module": "resolvent4py.linear_operators.projection",
+   "module_short": "resolvent4py.linear_operators",
+   "name": "ProjectionLinearOperator"
+  }
+ ],
+ "resolvent4py.utils.io.read_harmonic_balanced_matrix": [
+  {
+   "is_class": false,
+   "is_explicit": true,
+   "module": "resolvent4py.utils.io",
+   "module_short": "resolvent4py",
+   "name": "read_harmonic_balanced_matrix"
+  }
+ ]
+}

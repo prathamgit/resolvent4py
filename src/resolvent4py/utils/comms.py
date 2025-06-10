@@ -133,7 +133,7 @@ def distributed_to_sequential_vector(
     """
     array = vec_dist.getArray().copy()
     counts = comm.allgather(len(array))
-    disps = np.concatenate(([0], np.cumsum(counts[:-1]))).astype(np.int32)
+    disps = np.concatenate(([0], np.cumsum(counts[:-1]))).astype(PETSc.IntType)
     recvbuf = np.zeros(np.sum(counts), dtype=array.dtype)
     comm.Allgatherv(array, (recvbuf, counts, disps, get_mpi_type(array.dtype)))
     vec_seq = PETSc.Vec().createWithArray(recvbuf, comm=MPI.COMM_SELF)
@@ -189,10 +189,14 @@ def scatter_array_from_root_to_all(
             dtype = comm.recv(source=0, tag=1)
     recvbuf = np.empty(count, dtype=dtype)
     counts = (
-        np.asarray(counts, dtype=np.int64) if counts is not None else counts
+        np.asarray(counts, dtype=PETSc.IntType)
+        if counts is not None
+        else counts
     )
     displs = (
-        np.asarray(displs, dtype=np.int64) if displs is not None else displs
+        np.asarray(displs, dtype=PETSc.IntType)
+        if displs is not None
+        else displs
     )
     comm.Scatterv(
         [array, counts, displs, get_mpi_type(dtype)], recvbuf, root=0

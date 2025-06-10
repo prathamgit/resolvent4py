@@ -187,7 +187,7 @@ def compute_balanced_projection(
     svd = SLEPc.SVD().create(MPI.COMM_WORLD)
     svd.setOperators(Z)
     svd.setProblemType(SLEPc.SVD.ProblemType.STANDARD)
-    svd.setType(SLEPc.SVD.Type.CROSS)
+    svd.setType(SLEPc.SVD.Type.RANDOMIZED)
     svd.setWhichSingularTriplets(SLEPc.SVD.Which.LARGEST)
     svd.setUp()
     svd.solve()
@@ -215,8 +215,8 @@ def compute_balanced_projection(
             idx = np.argmax(np.abs(U_[:, i].imag))
             angle = np.angle(U_[idx, i])
         angle = comm.bcast(angle, root=0)
-        U_[:, i] *= np.exp(-1j*angle)
-        V_[:, i] *= np.exp(-1j*angle)
+        U_[:, i] *= np.exp(-1j * angle)
+        V_[:, i] *= np.exp(-1j * angle)
 
     S.assemble(None)
     u.destroy()
@@ -238,12 +238,13 @@ def compute_balanced_projection(
         obj.destroy()
     return (Phi, Psi, S_)
 
+
 def assemble_reduced_order_tensors(
-        L: LinearOperator,
-        B: SLEPc.BV,
-        C: SLEPc.BV,
-        Phi: SLEPc.BV,
-        Psi: SLEPc.BV,
+    L: LinearOperator,
+    B: SLEPc.BV,
+    C: SLEPc.BV,
+    Phi: SLEPc.BV,
+    Psi: SLEPc.BV,
 ) -> typing.Tuple[np.ndarray, np.ndarray, np.ndarray]:
     r"""
     Assemble the reduced-order tensors :math:`A_r = \Psi^\intercal L \Phi`,
@@ -271,4 +272,3 @@ def assemble_reduced_order_tensors(
     for obj in objs:
         obj.destroy()
     return Ar, Br, Cr
-

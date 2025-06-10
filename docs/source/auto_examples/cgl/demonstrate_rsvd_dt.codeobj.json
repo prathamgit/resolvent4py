@@ -1,0 +1,128 @@
+{
+ "MPI.COMM_WORLD": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "mpi4py.MPI",
+   "module_short": "mpi4py.MPI",
+   "name": "COMM_WORLD"
+  }
+ ],
+ "PETSc.InsertMode.INSERT_VALUES": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "petsc4py.PETSc.InsertMode",
+   "module_short": "petsc4py.PETSc.InsertMode",
+   "name": "INSERT_VALUES"
+  }
+ ],
+ "PETSc.Mat.AssemblyType.FINAL": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "petsc4py.PETSc.Mat.AssemblyType",
+   "module_short": "petsc4py.PETSc.Mat.AssemblyType",
+   "name": "FINAL"
+  }
+ ],
+ "PETSc.Mat.Option.NEW_NONZERO_LOCATION_ERR": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "petsc4py.PETSc.Mat.Option",
+   "module_short": "petsc4py.PETSc.Mat.Option",
+   "name": "NEW_NONZERO_LOCATION_ERR"
+  }
+ ],
+ "PETSc.Viewer": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "petsc4py.PETSc",
+   "module_short": "petsc4py.PETSc",
+   "name": "Viewer"
+  }
+ ],
+ "np.array": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "numpy",
+   "module_short": "numpy",
+   "name": "array"
+  }
+ ],
+ "pathlib.Path": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "pathlib",
+   "module_short": "pathlib",
+   "name": "Path"
+  }
+ ],
+ "plt.rcParams.update": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "matplotlib.pyplot.rcParams",
+   "module_short": "matplotlib.pyplot.rcParams",
+   "name": "update"
+  }
+ ],
+ "res4py.MatrixLinearOperator": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "resolvent4py",
+   "module_short": "resolvent4py",
+   "name": "MatrixLinearOperator"
+  }
+ ],
+ "res4py.compute_local_size": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "resolvent4py",
+   "module_short": "resolvent4py",
+   "name": "compute_local_size"
+  }
+ ],
+ "res4py.create_gmres_bjacobi_solver": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "resolvent4py",
+   "module_short": "resolvent4py",
+   "name": "create_gmres_bjacobi_solver"
+  }
+ ],
+ "res4py.linalg.randomized_time_stepping_svd": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "resolvent4py.linalg",
+   "module_short": "resolvent4py.linalg",
+   "name": "randomized_time_stepping_svd"
+  }
+ ],
+ "res4py.petscprint": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "resolvent4py",
+   "module_short": "resolvent4py",
+   "name": "petscprint"
+  }
+ ],
+ "res4py.read_coo_matrix": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "resolvent4py",
+   "module_short": "resolvent4py",
+   "name": "read_coo_matrix"
+  }
+ ]
+}

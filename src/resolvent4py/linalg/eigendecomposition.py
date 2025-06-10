@@ -31,7 +31,7 @@ def arnoldi_iteration(
     orthonormal basis and the corresponding Hessenberg matrix 
     for the range of the linear operator specified by
     :code:`L` and :code:`action`.
-
+    
     :param L: instance of the :class:`.LinearOperator` class
     :type L: :class:`.LinearOperator`
     :param action: one of :meth:`.LinearOperator.apply`, 

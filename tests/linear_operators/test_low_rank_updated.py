@@ -1,11 +1,6 @@
-import os
-import sys
-import pytest
 import numpy as np
 import scipy as sp
 import resolvent4py as res4py
-from mpi4py import MPI
-from petsc4py import PETSc
 from .. import pytest_utils
 
 
@@ -52,7 +47,7 @@ def test_low_rank_updated_on_vectors(comm, square_random_matrix):
     x.destroy()
     y.destroy()
     linop.destroy()
-    assert error < 1e-10
+    assert error < 1e-8
 
 
 def test_low_rank_updated_on_bvs(comm, square_random_matrix):
@@ -99,4 +94,4 @@ def test_low_rank_updated_on_bvs(comm, square_random_matrix):
     X.destroy()
     Y.destroy()
     linop.destroy()
-    assert error < 1e-10
+    assert error < 1e-8

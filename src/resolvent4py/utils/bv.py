@@ -119,8 +119,8 @@ def assemble_harmonic_balanced_bv(
     r0, _ = m.getOwnershipRange()
     bvs_lst[0].restoreMat(m)
 
-    nfb = (len(bflow_freqs) - 1) // 2  # Number of perturbation frequencies
-    nfp = (len(pertb_freqs) - 1) // 2  # Number of baseflow frequencies
+    nfb = (len(bflow_freqs) - 1) // 2  # Number of baseflow frequencies
+    nfp = (len(pertb_freqs) - 1) // 2  # Number of perturbation frequencies
     bv_sizes = bvs_lst[0].getSizes()
     nrows_loc, nrows = bv_sizes[0]
     ncols = bv_sizes[-1]
@@ -128,15 +128,15 @@ def assemble_harmonic_balanced_bv(
 
     for i in range(2 * nfp + 1):
         cols = []
-        rows = i * nrows + np.arange(nrows_loc, dtype=np.int32) + r0
+        rows = i * nrows + np.arange(nrows_loc, dtype=PETSc.IntType) + r0
         for j in range(2 * nfb + 1):
             k = i - j + nfb
             if k >= 0:
                 m = bvs_lst[k].getMat()
                 bvdata[:, j * ncols : (j + 1) * ncols] = m.getDenseArray()
                 bvs_lst[k].restoreMat(m)
-                cols.extend(np.arange(ncols, dtype=np.int32) + j * ncols)
-        cols = np.asarray(cols, dtype=np.int32)
+                cols.extend(np.arange(ncols, dtype=PETSc.IntType) + j * ncols)
+        cols = np.asarray(cols, dtype=PETSc.IntType)
         BV_mat.setValues(rows, cols, bvdata, None)
     BV_mat.assemble(None)
     BV.restoreMat(BV_mat)
@@ -207,6 +207,7 @@ def bv_roll(
         Y.multInPlace(Q, 0, Y.getSizes()[-1])
         Q.destroy()
     else:
+        # from ..linear_operators import MatrixLinearOperator
         Ym = Y.getMat()
         r0, r1 = Ym.getOwnershipRange()
         cols = np.arange(r1 - r0) + r0

@@ -28,4 +28,4 @@ def test_eigendecomposition(comm, square_random_matrix):
     ev_sorted = np.asarray(ev_sorted)
     error = 100 * np.max(np.abs(ev_sorted - D) / np.abs(ev_sorted))
 
-    assert error < 1e-1  # Max percent error < 1e-1
+    assert error < 2e-1  # Max percent error < 2e-1

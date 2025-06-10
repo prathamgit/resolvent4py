@@ -1,14 +1,53 @@
 # Resolvent4py
 
-Resolvent4py is a petsc4py-based package for the analysis, model reduction
-and control of large-scale linear systems. 
+[![Tests](https://github.com/albertopadovan/resolvent4py/actions/workflows/tests.yml/badge.svg)](https://github.com/albertopadovan/resolvent4py/actions/workflows/tests.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Code Size](https://img.shields.io/github/languages/code-size/albertopadovan/resolvent4py.svg)](https://github.com/albertopadovan/resolvent4py)
+
+
+
+`resolvent4py` is a parallel Python toolbox to perform 
+analysis, model reduction and control of high-dimensional linear systems. 
+It relies on `mpi4py` for multi-processing parallelism, and it leverages 
+the functionalities and data structures provided by `petsc4py` and `slepc4py`.
+The goal of this project is to provide users with a friendly python-like
+experience, while also leveraging the high-performance and parallel-computing
+capabilities of the PETSc and SLEPc libraries.
+The core of the package is an abstract class, called `LinearOperator`, which 
+serves as a blueprint for user-defined child classes that can be used to
+define any linear operator. 
+`resolvent4py` currently ships with 5 linear operator subclasses:
+
+- `MatrixLinearOperator`
+- `LowRankLinearOperator`
+- `LowRankUpdatedLinearOperator`
+- `ProjectionLinearOperator`
+- `ProductLinearOperator`
+
+Once a linear operator is instantiated, `resolvent4py` currently allows for
+several analyses, including:
+
+- Right and left eigendecomposition using Arnoldi iteration (with shift and 
+  invert)
+- (Randomized) singular value decomposition (SVD)
+- Resolvent analysis via randomized SVD
+- Harmonic resolvent analysis via randomized SVD
+- Balanced truncation for time-invariant linear systems
+
+Additional functionalities (found in `resolvent4py/utils`) and available 
+to the user through the `resolvent4py` namespace are:
+
+- Support for parallel I/O through `petsc4py`
+- Support for MPI communications using `mpi4py`
+- Support for manipulation of PETSc matrices/vector and SLEPc BVs
+- Support for time-stepping of linear ordinary differential equations
+
 
 ## Dependencies
 - `Python>=3.9`
 - `numpy`
 - `scipy`
 - `matplotlib`
-- `pymanopt`
 - `petsc4py>=3.20`
 - `slepc4py>=3.20`
 - `mpi4py`
