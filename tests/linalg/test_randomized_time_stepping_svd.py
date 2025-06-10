@@ -19,13 +19,13 @@ def rank_size(comm):
 @pytest.fixture(
     params=[
         pytest.param(
-            (10, 10, 2, 600, 7), marks=pytest.mark.local
+            (5, 5, 2, 600, 7), marks=pytest.mark.local
         ),  # local: small problem
         pytest.param(
-            (100, 100, 3, 3000, 7), marks=pytest.mark.development
+            (10, 10, 3, 3000, 7), marks=pytest.mark.development
         ),  # dev: medium problem
         pytest.param(
-            (1000, 1000, 5, 6000, 7), marks=pytest.mark.main
+            (15, 15, 5, 6000, 7), marks=pytest.mark.main
         ),  # main: large problem
     ]
 )

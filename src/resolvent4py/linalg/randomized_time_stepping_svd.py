@@ -159,7 +159,7 @@ def randomized_time_stepping_svd(lin_op, omega, n_periods, n_timesteps, n_rand, 
                 elif ts_method.upper() == 'CN':
                     forcing_arg = (f, f_next)
 
-                q_temp_next_step = timestep(lin_op, q_temp, dt, f=forcing_arg, method=ts_method)
+                q_temp_next_step = timestep(lin_op, q_temp, f=forcing_arg, method=ts_method)
                 q_temp_next_step.copy(q_temp) 
 
                 if period == n_periods - 1 and i % t_ratio == 0:
@@ -179,6 +179,7 @@ def randomized_time_stepping_svd(lin_op, omega, n_periods, n_timesteps, n_rand, 
             Y_curr = Y_hat[i].getMat()
             Y_curr.matMult(dft_mat, Y_temp_mat)
             Y_hat[i].restoreMat(Y_curr)
+            Y_temp_mat.scale(t_ratio)
             Y_temp_i.restoreMat(Y_temp_mat)
             Y_temp.append(Y_temp_i)
         return Y_temp
@@ -205,7 +206,7 @@ def randomized_time_stepping_svd(lin_op, omega, n_periods, n_timesteps, n_rand, 
                 elif ts_method.upper() == 'CN':
                     forcing_arg = (f, f_next)
 
-                q_temp_next_step = timestep(lin_op, q_temp, dt, f=forcing_arg, method=ts_method)
+                q_temp_next_step = timestep(lin_op, q_temp, f=forcing_arg, method=ts_method)
                 q_temp_next_step.copy(q_temp) 
                     
                 if period == n_periods - 1 and i % t_ratio == 0:
@@ -227,6 +228,7 @@ def randomized_time_stepping_svd(lin_op, omega, n_periods, n_timesteps, n_rand, 
             S_curr = S_hat[i].getMat()
             S_curr.matMult(dft_mat, S_temp_mat)
             S_hat[i].restoreMat(S_curr)
+            S_temp_mat.scale(t_ratio)
             S_temp_i.restoreMat(S_temp_mat)
             S_temp.append(S_temp_i)
         return S_temp
