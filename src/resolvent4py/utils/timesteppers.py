@@ -83,11 +83,6 @@ def _setup_cn(lin_op, u, dt):
     I_mat.setDiagonal(PETSc.Vec().createWithArray([1.0]*A_lhs.getLocalSize()[0], comm=PETSc.COMM_SELF))
     I_mat.assemble()
     A_lhs.axpy(1.0, I_mat)
-    
-    A_rhs_op_part = lin_op.A.duplicate(copy=True)
-    A_rhs_op_part.scale(0.5*dt)
-    A_rhs_op_part.axpy(1.0, I_mat) 
-    I_mat.destroy()
 
     rhs = u.duplicate()
     temp_op_eval_out = u.duplicate()
@@ -174,8 +169,11 @@ def timestep(lin_op: 'LinearOperator', u: SLEPc.BV, f: Optional[Union[SLEPc.BV, 
 def runge_kutta4(lin_op: 'LinearOperator', u: SLEPc.BV, timestepping_intermediates: Tuple[any, ...], f: Optional[Tuple[SLEPc.BV, SLEPc.BV]] = None) -> SLEPc.BV:
     (dt, k1, k2, k3, k4, temp, u_next, f_sum, Q_ident) = timestepping_intermediates
 
-    f_sum.mult(1.0, 0.0, f[0], Q_ident)
-    f_sum.mult(0.5, 0.5, f[1], Q_ident)
+    if f is not None and f[0] is not None and f[1] is not None:
+        f_sum.mult(1.0, 0.0, f[0], Q_ident)
+        f_sum.mult(0.5, 0.5, f[1], Q_ident)
+    else:
+        f_sum = None
 
     lin_op.apply_mat(u, k1)
     if f is not None and f[0] is not None:
@@ -212,14 +210,14 @@ def runge_kutta4(lin_op: 'LinearOperator', u: SLEPc.BV, timestepping_intermediat
 def backward_euler(lin_op: 'LinearOperator', u: SLEPc.BV, timestepping_intermediates: Tuple[any, ...], f: Optional[SLEPc.BV] = None) -> SLEPc.BV:
     (dt, rhs, u_next, Q_ident, ksp) = timestepping_intermediates
 
-    rhs.copy(u)
+    u.copy(rhs)
     if f is not None:
         rhs.mult(dt, 1.0, f, Q_ident)
     
-    u_mat = u.getMat()
+    rhs_mat = rhs.getMat()
     u_next_mat = u_next.getMat()
-    ksp.matSolve(u_mat, u_next_mat)
-    u.restoreMat(u_mat)
+    ksp.matSolve(rhs_mat, u_next_mat)
+    rhs.restoreMat(rhs_mat)
     u_next.restoreMat(u_next_mat)
 
     assert not np.isnan(u_next.norm()) , "NaNs already present after timestep"
@@ -229,15 +227,13 @@ def backward_euler(lin_op: 'LinearOperator', u: SLEPc.BV, timestepping_intermedi
 def crank_nicolson(lin_op: 'LinearOperator', u: SLEPc.BV, timestepping_intermediates: Tuple[any, ...], f: Optional[Tuple[SLEPc.BV, SLEPc.BV]] = None) -> SLEPc.BV:
     (dt, rhs, temp_op_eval_out, u_next, Q_ident, ksp) = timestepping_intermediates
 
-    rhs.copy(u)
-    if f is not None and f[0] is not None:
-        rhs.mult(1.0, 0.5 * dt, f[0], Q_ident)
+    u.copy(rhs)
+    if f is not None and f[0] is not None and f[1] is not None:
+        rhs.mult(0.5 * dt, 1.0, f[0], Q_ident)
+        rhs.mult(0.5 * dt, 1.0, f[1], Q_ident)
 
     lin_op.apply_mat(u, temp_op_eval_out)
-    rhs.mult(1.0, 0.5 * dt, temp_op_eval_out, Q_ident)
-
-    if f is not None and f[1] is not None:
-        rhs.mult(1.0, 0.5 * dt, f[1], Q_ident)
+    rhs.mult(0.5 * dt, 1.0, temp_op_eval_out, Q_ident)
     
     rhs_mat = rhs.getMat()
     u_next_mat = u_next.getMat()

@@ -18,24 +18,25 @@ from ..linear_operators import MatrixLinearOperator, ProductLinearOperator
 
 np.seterr(all='raise')
 
-def construct_dft_mats(n_omega, n_timesteps, n):
-    dft_mat = create_dense_matrix(MPI.COMM_WORLD, (n_omega, n_omega // 2))
-    i_dft_mat = create_dense_matrix(
-        MPI.COMM_SELF, (2 * n_timesteps, n_omega // 2)
-    )
-    r0, r1 = i_dft_mat.getOwnershipRange()
-    j_local = np.arange(r0, r1)
+def construct_dft_mats(n_omega, n_omega_eff, n_timesteps, n, real_op):
+    dft_mat = create_dense_matrix(PETSc.COMM_WORLD, (n_omega, n_omega_eff))
+    i_dft_mat = create_dense_matrix(PETSc.COMM_SELF, (2 * n_timesteps, n_omega_eff))
+    j_local = np.arange(2 * n_timesteps)
     alpha = -np.pi * 1j / n_timesteps
-    for i in range(n_omega // 2):
+    for i in range(n_omega_eff):
+        if real_op:
+            exp_val = alpha * i
+        else:
+            exp_val = alpha * i if i <= n_omega_eff/2 - 1 else alpha * ((i - n_omega_eff) + 2*n_timesteps)
         col = i_dft_mat.getDenseColumnVec(i)
         col_arr = col.getArray()
-        col_arr[:] = np.conj(np.exp(alpha * i * j_local)) / n_timesteps
+        col_arr[:] = np.conj(np.exp(exp_val * j_local)) / n_timesteps
         i_dft_mat.restoreDenseColumnVec(i, col)
     
     r0, r1 = dft_mat.getOwnershipRange()
     j_local = np.arange(r0, r1)
-    alpha = -2 * np.pi * 1j / n_omega
-    for i in range(n_omega // 2):
+    alpha = -2 * np.pi * 1j / (2*n_omega_eff) if real_op else -2 * np.pi * 1j / n_omega_eff
+    for i in range(n_omega_eff):
         col = dft_mat.getDenseColumnVec(i)
         col_arr = col.getArray()
         col_arr[:] = np.exp(alpha * i * j_local)
@@ -68,10 +69,14 @@ def randomized_time_stepping_svd(lin_op, omega, n_periods, n_timesteps, n_rand, 
     """
 
     n_omega = len(omega)
+    real_op = lin_op._real
+    n_omega_eff = n_omega / 2 if real_op else n_omega
     t_s = 2 * np.pi / np.min(np.abs(omega[omega != 0]))
-
     delta_t = t_s / n_omega
     dt = delta_t / ceil(delta_t / (t_s / n_timesteps))
+    t_ratio = delta_t / dt
+    
+    omega = omega[omega >= 0] if real_op else omega
 
     comm = MPI.COMM_WORLD
     rank = comm.Get_rank()
@@ -92,10 +97,6 @@ def randomized_time_stepping_svd(lin_op, omega, n_periods, n_timesteps, n_rand, 
     except RuntimeError as err:
         print(f"Eigenvalue probe failed: {err}")
 
-    t_ratio = int(delta_t / dt)
-
-    omega = omega[omega >= 0]
-
     # Assemble random BV
     N = lin_op.get_dimensions()[0][1]
     Nl = compute_local_size(N)
@@ -104,14 +105,13 @@ def randomized_time_stepping_svd(lin_op, omega, n_periods, n_timesteps, n_rand, 
     for k in range(n_rand):
         comm.barrier()
         X_k = SLEPc.BV().create(comm=MPI.COMM_WORLD)
-        X_k.setSizes(N, n_omega // 2)
+        X_k.setSizes(N, n_omega_eff)
         X_k.setType("vecs")
         X_k.setRandomNormal()
-        X_k.orthogonalize(None)
         X.append(X_k)
 
     # Assemble DFT matrices
-    dft_mat, i_dft_mat = construct_dft_mats(n_omega, n_timesteps, N)
+    dft_mat, i_dft_mat = construct_dft_mats(n_omega, n_omega_eff, n_timesteps, N, real_op)
 
     q_temp = SLEPc.BV().create(comm=MPI.COMM_WORLD)
     q_temp.setSizes(N, n_rand)
@@ -147,22 +147,20 @@ def randomized_time_stepping_svd(lin_op, omega, n_periods, n_timesteps, n_rand, 
         setup(lin_op, q_temp, dt, method=ts_method)
         for period in range(n_periods):
             for i in range(n_timesteps):
-                print(f"Period {period}, Timestep {i}")
-                sample_forcing(f, forcing_mat, (2*(n_timesteps - i)) % (2*n_timesteps))
-                sample_forcing(f_next, forcing_mat, (2*(n_timesteps - i) - 2) % (2*n_timesteps))
+                # print(f"Period {period}, Timestep {i}")
+                sample_forcing(f, forcing_mat, (2*i) % (2*n_timesteps))
+                sample_forcing(f_next, forcing_mat, (2*i + 2) % (2*n_timesteps))
 
                 forcing_arg = None
-                if ts_method.upper() == 'RK4':
+                if ts_method.upper() == 'RK4' or ts_method.upper() == 'CN':
                     forcing_arg = (f, f_next)
                 elif ts_method.upper() == 'BE':
-                    forcing_arg = f_next 
-                elif ts_method.upper() == 'CN':
-                    forcing_arg = (f, f_next)
+                    forcing_arg = f_next
 
                 q_temp_next_step = timestep(lin_op, q_temp, f=forcing_arg, method=ts_method)
-                q_temp_next_step.copy(q_temp) 
+                q_temp_next_step.copy(q_temp)
 
-                if period == n_periods - 1 and i % t_ratio == 0:
+                if period == n_periods - 1 and (i+1) % t_ratio == 0:
                     Y_new = SLEPc.BV().create(comm=MPI.COMM_WORLD)
                     Y_new.setSizes(N, n_rand)
                     Y_new.setType("vecs")
@@ -172,15 +170,15 @@ def randomized_time_stepping_svd(lin_op, omega, n_periods, n_timesteps, n_rand, 
         Y_hat = permute_mat_to_k_list_full(Y_hat)
         for i in range(n_rand):
             Y_temp_i = SLEPc.BV().create(comm=MPI.COMM_WORLD)
-            Y_temp_i.setSizes(N, n_omega // 2)
+            Y_temp_i.setSizes(N, n_omega_eff)
             Y_temp_i.setType("vecs")
             Y_temp_mat = Y_temp_i.getMat()
 
             Y_curr = Y_hat[i].getMat()
             Y_curr.matMult(dft_mat, Y_temp_mat)
             Y_hat[i].restoreMat(Y_curr)
-            Y_temp_mat.scale(t_ratio)
             Y_temp_i.restoreMat(Y_temp_mat)
+            Y_temp_i.scale(t_ratio)
             Y_temp.append(Y_temp_i)
         return Y_temp
 
@@ -194,22 +192,20 @@ def randomized_time_stepping_svd(lin_op, omega, n_periods, n_timesteps, n_rand, 
         setup(lin_op, q_temp, dt, method=ts_method)
         for period in range(n_periods):
             for i in range(n_timesteps):
-                print(f"Period {period}, Timestep {i}")
-                sample_forcing(f, forcing_mat, (2*(n_timesteps - i)) % (2*n_timesteps))
-                sample_forcing(f_next, forcing_mat, (2*(n_timesteps - i) - 2) % (2*n_timesteps))
+                # print(f"Period {period}, Timestep {i}")
+                sample_forcing(f, forcing_mat, (2*(n_timesteps - i - 1)) % (2*n_timesteps))
+                sample_forcing(f_next, forcing_mat, (2*(n_timesteps - i - 1) - 2) % (2*n_timesteps))
 
                 forcing_arg = None
-                if ts_method.upper() == 'RK4':
+                if ts_method.upper() == 'RK4' or ts_method.upper() == 'CN':
                     forcing_arg = (f, f_next)
                 elif ts_method.upper() == 'BE':
-                    forcing_arg = f_next 
-                elif ts_method.upper() == 'CN':
-                    forcing_arg = (f, f_next)
+                    forcing_arg = f_next
 
                 q_temp_next_step = timestep(lin_op, q_temp, f=forcing_arg, method=ts_method)
                 q_temp_next_step.copy(q_temp) 
                     
-                if period == n_periods - 1 and i % t_ratio == 0:
+                if period == n_periods - 1 and (i+1) % t_ratio == 0:
                     S_new = SLEPc.BV().create(comm=MPI.COMM_WORLD)
                     S_new.setSizes(N, n_rand)
                     S_new.setType("vecs")
@@ -221,21 +217,21 @@ def randomized_time_stepping_svd(lin_op, omega, n_periods, n_timesteps, n_rand, 
         S_hat = permute_mat_to_k_list_full(S_hat)
         for i in range(n_rand):
             S_temp_i = SLEPc.BV().create(comm=MPI.COMM_WORLD)
-            S_temp_i.setSizes(N, n_omega // 2)
+            S_temp_i.setSizes(N, n_omega_eff)
             S_temp_i.setType("vecs")
             S_temp_mat = S_temp_i.getMat()
 
             S_curr = S_hat[i].getMat()
             S_curr.matMult(dft_mat, S_temp_mat)
             S_hat[i].restoreMat(S_curr)
-            S_temp_mat.scale(t_ratio)
             S_temp_i.restoreMat(S_temp_mat)
+            S_temp_i.scale(t_ratio)
             S_temp.append(S_temp_i)
         return S_temp
 
     def permute_mat_to_Nw_list(mat):
         mat_hat_mod = []
-        for ww in range(n_omega // 2):
+        for ww in range(n_omega_eff):
             mat_tt = SLEPc.BV().create(comm=MPI.COMM_WORLD)
             mat_tt.setSizes(N, n_rand)
             mat_tt.setType("vecs")
@@ -257,9 +253,9 @@ def randomized_time_stepping_svd(lin_op, omega, n_periods, n_timesteps, n_rand, 
         mat_hat_mod = []
         for k in range(n_rand):
             mat_tt = SLEPc.BV().create(comm=MPI.COMM_WORLD)
-            mat_tt.setSizes(N, n_omega // 2)
+            mat_tt.setSizes(N, n_omega_eff)
             mat_tt.setType("vecs")
-            for ww in range(n_omega // 2):
+            for ww in range(n_omega_eff):
                 curr = mat[ww]
                 col = curr.getColumn(k)
                 col_tt = mat_tt.getColumn(ww)
@@ -269,7 +265,7 @@ def randomized_time_stepping_svd(lin_op, omega, n_periods, n_timesteps, n_rand, 
                 mat_tt.restoreColumn(ww, col_tt)
                 curr.restoreColumn(k, col)
             mat_hat_mod.append(mat_tt)
-        for ww in range(n_omega // 2):
+        for ww in range(n_omega_eff):
             mat[ww].destroy()
         return mat_hat_mod
 
@@ -294,30 +290,33 @@ def randomized_time_stepping_svd(lin_op, omega, n_periods, n_timesteps, n_rand, 
         return mat_hat_mod
 
     def orthogonalize_timestepped_mat(Z):
-        for i in range(n_omega // 2):
+        for i in range(n_omega_eff):
             Z_i = Z[i]
             Z_i.orthogonalize(None)
             Z[i] = Z_i
         return Z
 
+    def order_mat_for_Nw(mat):
+        mat = mat[int(n_omega_eff/2):] + mat[:int(n_omega_eff/2)]
+        return mat
+
     Y_hat = permute_mat_to_k_list(orthogonalize_timestepped_mat(permute_mat_to_Nw_list(direct_action(X))))
     for q in range(n_loops):
         S_hat = permute_mat_to_k_list(orthogonalize_timestepped_mat(permute_mat_to_Nw_list(adjoint_action(Y_hat))))
         Y_hat = permute_mat_to_k_list(orthogonalize_timestepped_mat(permute_mat_to_Nw_list(direct_action(S_hat))))
-    S_hat = permute_mat_to_Nw_list(adjoint_action(Y_hat))
-
-    Y_hat = permute_mat_to_Nw_list(Y_hat)
+    S_hat = order_mat_for_Nw(permute_mat_to_Nw_list(adjoint_action(Y_hat)))
+    Y_hat = order_mat_for_Nw(permute_mat_to_Nw_list(Y_hat))
 
     if rank == 0:
         S = PETSc.Mat().createDense(
-            [n_omega // 2, n_svals], comm=MPI.COMM_SELF
+            [n_omega_eff, n_svals], comm=PETSc.COMM_SELF
         )
         S.setUp()
     else:
         S = 0
     U = []
     V = []
-    for i in range(n_omega // 2):
+    for i in range(n_omega_eff):
         Y_local = Y_hat[i].getMat().getDenseArray()
         S_local = S_hat[i].getMat().getDenseArray()
 
@@ -326,16 +325,18 @@ def randomized_time_stepping_svd(lin_op, omega, n_periods, n_timesteps, n_rand, 
 
         if rank == 0:
             Y_full = np.vstack(Y_all)
-            S_local = np.vstack(S_all).T
-
+            S_local = np.vstack(S_all).conj().T
             if not np.isfinite(S_local).all():
                 raise ValueError("S_local contains NaN/Inf")
-
             if np.max(np.abs(S_local)) == 0:
                 raise ValueError("S_local is identically zero - cannot compute SVD")
 
             u_tilde, s, vh = sp.sparse.linalg.svds(S_local, k=n_svals)
+            s = np.flip(s)
             S[i, :] = s
+            S.assemblyBegin(PETSc.Mat.AssemblyType.FINAL)
+            S.assemblyEnd(PETSc.Mat.AssemblyType.FINAL)
+            
             factor = u_tilde @ np.diag(s)
             U_arr = Y_full @ factor
             U_i = SLEPc.BV().create(comm=MPI.COMM_SELF)
@@ -358,6 +359,7 @@ def randomized_time_stepping_svd(lin_op, omega, n_periods, n_timesteps, n_rand, 
             U.append(U_i)
             V.append(V_i)
 
+            print(omega[i])
             print(s)
 
     temp_rhs.destroy()
