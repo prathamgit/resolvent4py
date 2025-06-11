@@ -34,6 +34,16 @@ def square_matrix_size(request):
     """Matrix size fixture with different sizes for different test levels."""
     return request.param
 
+@pytest.fixture(
+    params=[
+        pytest.param((6, 6), marks=pytest.mark.local),
+        pytest.param((8, 8), marks=pytest.mark.development),
+        pytest.param((10, 10), marks=pytest.mark.main),
+    ]
+)
+def square_negative_semidefinite_matrix_size(request):
+    """Matrix size fixture with different sizes for different test levels."""
+    return request.param
 
 @pytest.fixture(
     params=[
@@ -52,6 +62,11 @@ def square_random_matrix(comm, square_matrix_size):
     """Generate random test matrix."""
     return pytest_utils.generate_random_matrix(comm, square_matrix_size)
 
+
+@pytest.fixture
+def square_random_negative_semidefinite_matrix(comm, square_negative_semidefinite_matrix_size):
+    """Generate random negative semidefinite test matrix."""
+    return pytest_utils.generate_negative_semidefinite_matrix(comm, square_negative_semidefinite_matrix_size)
 
 @pytest.fixture
 def rectangular_random_matrix(comm, rectangular_matrix_size):

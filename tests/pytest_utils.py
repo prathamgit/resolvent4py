@@ -21,6 +21,34 @@ def generate_random_matrix(comm, size, complex=True):
     return Apetsc, Apython
 
 
+def generate_negative_semidefinite_matrix(comm, size, complex=True):
+    r"""Create negative semidefinite matrix A of shape (N, N), i.e. all eigenvalues ≤ 0."""
+    N, _ = size
+    Nl = res4py.compute_local_size(N)
+    Bpetsc = res4py.generate_random_petsc_sparse_matrix(
+        comm, ((Nl, N), (Nl, N)),
+        int(0.3 * N * N),
+        complex
+    )
+    Bpetsc.scale(100)
+    B = Bpetsc.copy()
+    BH = Bpetsc.copy()
+    BH.hermitianTranspose()
+    A = B.matMult(BH)
+    A.scale(-1.0)
+
+    Atemp = A.copy()
+    Atemp.convert(PETSc.Mat.Type.DENSE)
+    Aseq = res4py.distributed_to_sequential_matrix(comm, Atemp)
+    Apython = Aseq.getDenseArray().copy()
+    B.destroy()
+    BH.destroy()
+    Aseq.destroy()
+    Atemp.destroy()
+    return A, Apython
+
+
+
 def generate_random_bv(comm, size, complex=True):
     r"""Create random SLEPc BV of size = (Nrows, Ncols)"""
     Nr, Nc = size
