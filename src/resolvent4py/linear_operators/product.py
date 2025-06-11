@@ -1,6 +1,5 @@
 import typing
 
-from mpi4py import MPI
 from petsc4py import PETSc
 from slepc4py import SLEPc
 
@@ -25,8 +24,8 @@ class ProductLinearOperator(LinearOperator):
         L = L_2^{-1}L_1^*.
 
 
-    :param comm: MPI communicator :code:`MPI.COMM_WORLD`
-    :type comm: MPI.Comm
+    :param comm: MPI communicator :code:`PETSc.COMM_WORLD`
+    :type comm: PETSc.Comm
     :param linops: list of linear operators (see example above).
     :type linops: List[LinearOperator]
     :param linops_actions: list of actions (see example above). Must be one of
@@ -40,7 +39,7 @@ class ProductLinearOperator(LinearOperator):
 
     def __init__(
         self: "ProductLinearOperator",
-        comm: MPI.Comm,
+        comm: PETSc.Comm,
         linops: typing.List[LinearOperator],
         linops_actions: typing.List[
             typing.Callable[[PETSc.Vec, typing.Optional[PETSc.Vec]], PETSc.Vec]

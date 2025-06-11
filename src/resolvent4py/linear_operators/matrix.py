@@ -1,6 +1,5 @@
 import typing
 
-from mpi4py import MPI
 from petsc4py import PETSc
 from slepc4py import SLEPc
 
@@ -16,8 +15,8 @@ class MatrixLinearOperator(LinearOperator):
     may also provide a PETSc KSP object :code:`ksp` to act with :math:`A^{-1}`
     on vectors and matrices.
 
-    :param comm: MPI communicator :code:`MPI.COMM_WORLD`
-    :type comm: MPI.Comm
+    :param comm: MPI communicator :code:`PETSc.COMM_WORLD`
+    :type comm: PETSc.Comm
     :param A: a PETSc matrix
     :type A: PETSc.Mat
     :param ksp: a PETSc KSP object to enable the :code:`solve()`
@@ -30,7 +29,7 @@ class MatrixLinearOperator(LinearOperator):
 
     def __init__(
         self: "MatrixLinearOperator",
-        comm: MPI.Comm,
+        comm: PETSc.Comm,
         A: PETSc.Mat,
         ksp: typing.Optional[typing.Union[PETSc.KSP, None]] = None,
         nblocks: typing.Optional[typing.Union[int, None]] = None,

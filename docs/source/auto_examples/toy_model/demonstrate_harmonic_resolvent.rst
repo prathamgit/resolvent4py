@@ -67,7 +67,7 @@ In particular, we demonstrate the following:
   Floquet exponents associated with the underlying time-periodic linear system
   (see :cite:`Wereley91`).
 
-.. GENERATED FROM PYTHON SOURCE LINES 52-203
+.. GENERATED FROM PYTHON SOURCE LINES 52-204
 
 .. code-block:: Python
 
@@ -77,7 +77,7 @@ In particular, we demonstrate the following:
     import matplotlib.pyplot as plt
     import numpy as np
     import resolvent4py as res4py
-    from mpi4py import MPI
+    from petsc4py import PETSc
     from slepc4py import SLEPc
 
     plt.rcParams.update(
@@ -89,7 +89,7 @@ In particular, we demonstrate the following:
         }
     )
 
-    comm = MPI.COMM_WORLD
+    comm = PETSc.COMM_WORLD
 
     save_path = "data/"
     bflow_freqs = np.load(save_path + "bflow_freqs.npy")
@@ -172,9 +172,10 @@ In particular, we demonstrate the following:
     S2 = np.diag(S2)
 
     res_path = "results/"
-    os.makedirs(res_path) if not os.path.exists(res_path) else None
+    if comm.getRank() == 0:
+        os.makedirs(res_path) if not os.path.exists(res_path) else None
 
-    if comm.Get_rank() == 0:
+    if comm.getRank() == 0:
         fig, ax = plt.subplots()
         ax.plot(np.arange(1, len(S) + 1), S.real, "ko", label=r"$P_r T^{-1} P_d$")
         ax.set_xlabel(r"Index $j$ for $P_r T^{-1} P_d$")
@@ -205,7 +206,7 @@ In particular, we demonstrate the following:
     D, _ = res4py.linalg.eig(Linop, Linop.apply, N - 3, 30, lambda x: -1 / x)
     D = np.diag(D)
 
-    if comm.Get_rank() == 0:
+    if comm.getRank() == 0:
         omega = bflow_freqs[1]
         idces = np.argwhere((D.imag > -omega / 2) & (D.imag <= omega / 2)).reshape(
             -1

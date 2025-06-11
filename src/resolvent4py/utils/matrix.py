@@ -17,7 +17,7 @@ from .comms import scatter_array_from_root_to_all
 
 
 def create_dense_matrix(
-    comm: MPI.Comm, sizes: tuple[tuple[int, int], tuple[int, int]]
+    comm: PETSc.Comm, sizes: tuple[tuple[int, int], tuple[int, int]]
 ) -> PETSc.Mat:
     r"""
     Create dense matrix
@@ -33,13 +33,13 @@ def create_dense_matrix(
 
 
 def create_AIJ_identity(
-    comm: MPI.Comm, sizes: tuple[tuple[int, int], tuple[int, int]]
+    comm: PETSc.Comm, sizes: tuple[tuple[int, int], tuple[int, int]]
 ) -> PETSc.Mat:
     r"""
     Create identity matrix of sparse AIJ type
 
     :param comm: MPI Communicator
-    :type comm: MPI.Comm
+    :type comm: PETSc.Comm
     :param sizes: see `MatSizeSpec <MatSizeSpec_>`_
     :type sizes: tuple[tuple[int, int], tuple[int, int]]
 
@@ -90,13 +90,13 @@ def mat_solve_hermitian_transpose(
 
 
 def hermitian_transpose(
-    comm: MPI.Comm, Mat: PETSc.Mat, in_place=False, MatHT=None
+    comm: PETSc.Comm, Mat: PETSc.Mat, in_place=False, MatHT=None
 ) -> PETSc.Mat:
     r"""
     Return the hermitian transpose of the matrix :code:`Mat`.
 
     :param comm: MPI communicator
-    :type comm: MPI.Comm
+    :type comm: PETSc.Comm
     :param Mat: PETSc matrix
     :type Mat: PETSc.Mat
     :param in_place: in-place transposition if :code:`True` and
@@ -122,7 +122,7 @@ def hermitian_transpose(
 
 
 def convert_coo_to_csr(
-    comm: MPI.Comm,
+    comm: PETSc.Comm,
     arrays: tuple[np.array, np.array, np.array],
     sizes: tuple[tuple[int, int], tuple[int, int]],
 ) -> tuple[np.array, np.array, np.array]:
@@ -132,8 +132,8 @@ def convert_coo_to_csr(
     (Petsc4py currently does not support COO matrix assembly, hence the need
     to convert.)
 
-    :param comm: MPI communicator (only MPI.COMM_WORLD is supported for now)
-    :type comm: MPI.Comm
+    :param comm: MPI communicator (only PETSc.COMM_WORLD is supported for now)
+    :type comm: PETSc.Comm
     :param arrays: a list of numpy arrays (e.g., arrays = [rows,cols,vals])
     :type array: tuple[np.array, np.array, np.array]
     :param sizes: see `MatSizeSpec <MatSizeSpec_>`_
@@ -143,6 +143,7 @@ def convert_coo_to_csr(
         matrix assembly
     :rtype: tuple[np.array, np.array, np.array]
     """
+    comm = comm.tompi4py()
     rank = comm.Get_rank()
     pool = np.arange(comm.Get_size())
     rows, cols, vals = arrays
@@ -168,7 +169,7 @@ def convert_coo_to_csr(
         send_rows.append(rows[idces])
         send_cols.append(cols[idces])
         send_vals.append(vals[idces])
-
+    
     recv_bufs = [np.empty(1, dtype=PETSc.IntType) for _ in pool]
     recv_reqs = [comm.Irecv(bf, source=i) for (bf, i) in zip(recv_bufs, pool)]
     send_reqs = [comm.Isend(sz, dest=i) for (i, sz) in enumerate(lengths)]
@@ -217,7 +218,7 @@ def convert_coo_to_csr(
 
 
 def assemble_harmonic_resolvent_generator(
-    comm: MPI.Comm, A: PETSc.Mat, freqs: np.array
+    comm: PETSc.Comm, A: PETSc.Mat, freqs: np.array
 ) -> PETSc.Mat:
     r"""
     Assemble :math:`T = -M + A`, where :math:`A` is the output of
@@ -227,7 +228,7 @@ def assemble_harmonic_resolvent_generator(
     and :math:`k\omega` is the :math:`k` th entry of :code:`freqs`.
 
     :param comm: MPI Communicator
-    :type comm: MPI.Comm
+    :type comm: PETSc.Comm
     :param A: assembled PETSc matrix
     :type A: PETSc.Mat
     :param freqs: array :math:`\omega\left(\ldots, -1, 0, 1, \ldots\right)`

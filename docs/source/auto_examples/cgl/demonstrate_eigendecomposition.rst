@@ -39,7 +39,7 @@ This script demonstrates the following:
     import matplotlib.pyplot as plt
     import numpy as np
     import resolvent4py as res4py
-    from mpi4py import MPI
+    from petsc4py import PETSc
 
     import cgl
 
@@ -52,7 +52,7 @@ This script demonstrates the following:
         }
     )
 
-    comm = MPI.COMM_WORLD
+    comm = PETSc.COMM_WORLD
 
     # Read the A matrix from file
     res4py.petscprint(comm, "Reading matrix from file...")
@@ -81,8 +81,8 @@ This script demonstrates the following:
 
     # Compute the eigendecomp.
     res4py.petscprint(comm, "Running Arnoldi iteration...")
-    krylov_dim = 200
-    n_evals = 20
+    krylov_dim = 50
+    n_evals = 10
     D, V = res4py.linalg.eig(
         L, L.solve, krylov_dim, n_evals, lambda x: s - 1.0 / x
     )
@@ -97,7 +97,7 @@ This script demonstrates the following:
     V.destroy()
 
     # Make some plots
-    if comm.Get_rank() == 0:
+    if comm.getRank() == 0:
         l = 30 * 2
         x = np.linspace(-l / 2, l / 2, num=N, endpoint=True)
         nu = 1.0 * (2 + 0.4 * 1j)

@@ -2,7 +2,6 @@ import typing
 
 import numpy as np
 import scipy as sp
-from mpi4py import MPI
 from petsc4py import PETSc
 from slepc4py import SLEPc
 
@@ -38,8 +37,8 @@ class LowRankUpdatedLinearOperator(LinearOperator):
         \textcolor{black}{Y} = A^{-*}C,
 
 
-    :param comm: MPI communicator :code:`MPI.COMM_WORLD`
-    :type comm: MPI.Comm
+    :param comm: MPI communicator :code:`PETSc.COMM_WORLD`
+    :type comm: PETSc.Comm
     :param A: instance of the :class:`.LinearOperator` class
     :param B: tall and skinny matrix
     :type B: SLEPc.BV
@@ -59,7 +58,7 @@ class LowRankUpdatedLinearOperator(LinearOperator):
 
     def __init__(
         self: "LowRankUpdatedLinearOperator",
-        comm: MPI.Comm,
+        comm: PETSc.Comm,
         A: LinearOperator,
         B: SLEPc.BV,
         K: np.ndarray,
@@ -83,12 +82,12 @@ class LowRankUpdatedLinearOperator(LinearOperator):
 
     def compute_woodbury_operator(
         self: "LowRankUpdatedLinearOperator",
-        comm: MPI.Comm,
+        comm: PETSc.Comm,
         nblocks: typing.Union[int, None],
     ) -> LowRankLinearOperator:
         r"""
-        :param comm: MPI communicator :code:`MPI.COMM_WORLD`
-        :type comm: MPI.Comm
+        :param comm: MPI communicator :code:`PETSc.COMM_WORLD`
+        :type comm: PETSc.Comm
         :param nblocks: number of blocks (if the operator has block structure)
         :type nblocks: Unions[int, None]
 
@@ -100,7 +99,7 @@ class LowRankUpdatedLinearOperator(LinearOperator):
             X = self.A.solve_mat(self.L.U)
             Y = self.A.solve_hermitian_transpose_mat(self.L.V)
             S = PETSc.Mat().createDense(
-                self.L.Sigma.shape, None, self.L.Sigma, MPI.COMM_SELF
+                self.L.Sigma.shape, None, self.L.Sigma, PETSc.COMM_SELF
             )
             XS = SLEPc.BV().create(comm)
             XS.setSizes(X.getSizes()[0], self.L.Sigma.shape[-1])

@@ -21,7 +21,7 @@ def test_product_on_vectors(comm, square_matrix_size):
     U, Upython = pytest_utils.generate_random_bv(comm, (N, r))
     V, Vpython = pytest_utils.generate_random_bv(comm, (N, r))
     S = np.random.randn(r, r) + 1j * np.random.randn(r, r)
-    S = comm.bcast(S, root=0)
+    S = comm.tompi4py().bcast(S, root=0)
     Apython1 += Upython @ S @ Vpython.conj().T
 
     ksp = res4py.create_mumps_solver(comm, Apetsc1)
@@ -91,7 +91,7 @@ def test_product_on_bvs(comm, square_matrix_size):
     U, Upython = pytest_utils.generate_random_bv(comm, (N, r))
     V, Vpython = pytest_utils.generate_random_bv(comm, (N, r))
     S = np.random.randn(r, r) + 1j * np.random.randn(r, r)
-    S = comm.bcast(S, root=0)
+    S = comm.tompi4py().bcast(S, root=0)
     Apython1 += Upython @ S @ Vpython.conj().T
 
     ksp = res4py.create_mumps_solver(comm, Apetsc1)

@@ -12,7 +12,6 @@ __all__ = [
 import typing
 
 import numpy as np
-from mpi4py import MPI
 from petsc4py import PETSc
 from slepc4py import SLEPc
 
@@ -22,15 +21,15 @@ from .matrix import convert_coo_to_csr
 
 
 def read_vector(
-    comm: MPI.Comm,
+    comm: PETSc.Comm,
     filename: str,
     sizes: typing.Optional[typing.Tuple[int, int]] = None,
 ) -> PETSc.Vec:
     r"""
     Read PETSc vector from file
 
-    :param comm: MPI communicator (MPI.COMM_WORLD or MPI.COMM_SELF)
-    :type comm: MPI.Comm
+    :param comm: MPI communicator (PETSc.COMM_WORLD or PETSc.COMM_SELF)
+    :type comm: PETSc.Comm
     :param filename: name of the file that holds the vector
     :type filename: str
     :param sizes: :code:`(local size, global size)`
@@ -47,15 +46,15 @@ def read_vector(
 
 
 def read_coo_matrix(
-    comm: MPI.Comm,
+    comm: PETSc.Comm,
     filenames: typing.Tuple[str, str, str],
     sizes: typing.Tuple[typing.Tuple[int, int], typing.Tuple[int, int]],
 ) -> PETSc.Mat:
     r"""
     Read COO matrix from file
 
-    :param comm: MPI communicator (MPI.COMM_WORLD or MPI.COMM_SELF)
-    :type comm: MPI.Comm
+    :param comm: MPI communicator (PETSc.COMM_WORLD or PETSc.COMM_SELF)
+    :type comm: PETSc.Comm
     :param filenames: names of the files that hold the rows, columns and values
         of the sparse matrix (e.g., :code:`(rows, cols, values)`)
     :type filenames: Tuple[str, str, str]
@@ -90,7 +89,7 @@ def read_coo_matrix(
 
 
 def read_harmonic_balanced_matrix(
-    comm: MPI.Comm,
+    comm: PETSc.Comm,
     filenames_lst: typing.List[typing.Tuple[str, str, str]],
     real_bflow: bool,
     block_sizes: typing.Tuple[typing.Tuple[int, int], typing.Tuple[int, int]],
@@ -113,8 +112,8 @@ def read_harmonic_balanced_matrix(
         & & & \ddots & \ddots & \ddots & \ddots \\
         \end{bmatrix}
     
-    :param comm: MPI communicator (MPI.COMM_WORLD)
-    :type comm: MPI.Comm
+    :param comm: MPI communicator (PETSc.COMM_WORLD)
+    :type comm: PETSc.Comm
     :param filenames_lst: list of tuples, with each tuple of the form
         :code:`(rows_j.dat, cols_j.dat, vals_j.dat)` containing the COO arrays
         of the matrix :math:`A_j`
@@ -205,15 +204,15 @@ def read_harmonic_balanced_matrix(
 
 
 def read_dense_matrix(
-    comm: MPI.Comm,
+    comm: PETSc.Comm,
     filename: str,
     sizes: typing.Tuple[typing.Tuple[int, int], typing.Tuple[int, int]],
 ) -> PETSc.Mat:
     r"""
     Read dense PETSc matrix from file.
 
-    :param comm: MPI communicator (MPI.COMM_WORLD or MPI.COMM_SELF)
-    :type comm: MPI.Comm
+    :param comm: MPI communicator (PETSc.COMM_WORLD or PETSc.COMM_SELF)
+    :type comm: PETSc.Comm
     :param filename: name of the file that holds the matrix
     :type filename: str
     :param sizes: :code:`((local rows, global rows), (local cols, global cols))`
@@ -229,15 +228,15 @@ def read_dense_matrix(
 
 
 def read_bv(
-    comm: MPI.Comm,
+    comm: PETSc.Comm,
     filename: str,
     sizes: typing.Tuple[typing.Tuple[int, int], int],
 ) -> SLEPc.BV:
     r"""
     Read dense matrix from file and store as a SLEPc BV
 
-    :param comm: MPI communicator (MPI.COMM_WORLD or MPI.COMM_SELF)
-    :type comm: MPI.Comm
+    :param comm: MPI communicator (PETSc.COMM_WORLD or PETSc.COMM_SELF)
+    :type comm: PETSc.Comm
     :param filename: name of the file that holds the matrix
     :type filename: str
     :param sizes: :code:`((local rows, global rows), global columns)`
@@ -255,7 +254,7 @@ def read_bv(
 
 
 def read_harmonic_balanced_bv(
-    comm: MPI.Comm,
+    comm: PETSc.Comm,
     filenames_lst: typing.List[str],
     real_bflow: bool,
     block_sizes: typing.Tuple[typing.Tuple[int, int], int],
@@ -278,8 +277,8 @@ def read_harmonic_balanced_bv(
         & & & \ddots & \ddots & \ddots & \ddots \\
         \end{bmatrix}
     
-    :param comm: MPI communicator (MPI.COMM_WORLD)
-    :type comm: MPI.Comm
+    :param comm: MPI communicator (PETSc.COMM_WORLD)
+    :type comm: PETSc.Comm
     :param filenames_lst: list of names of files where the Fourier modes 
         :math:`A_j` are stored as SLEPc BVs
     :type filenames_lst: List[str]
@@ -351,7 +350,7 @@ def read_harmonic_balanced_bv(
 
 
 def read_harmonic_balanced_vector(
-    comm: MPI.Comm,
+    comm: PETSc.Comm,
     filenames_lst: typing.List[str],
     real_bflow: bool,
     block_sizes: typing.Tuple[int, int],
@@ -369,7 +368,7 @@ def read_harmonic_balanced_vector(
         \end{bmatrix}.
 
     :param comm: MPI Communicator
-    :type comm: MPI.Comm
+    :type comm: PETSc.Comm
     :param filenames_lst: list of names of files where the Fourier modes
         :math:`v_j` are stored as PETSc Vec
     :type filenames_lst: List[str]
@@ -403,7 +402,7 @@ def read_harmonic_balanced_vector(
             vec_lst.insert(0, vecconj.copy())
             vecconj.destroy()
 
-    Vec = PETSc.Vec().create(comm=MPI.COMM_WORLD)
+    Vec = PETSc.Vec().create(comm=PETSc.COMM_WORLD)
     Vec.setSizes(full_sizes)
     Vec.setUp()
     r0, _ = vec_lst[0].getOwnershipRange()
@@ -428,15 +427,15 @@ def read_harmonic_balanced_vector(
 
 
 def write_to_file(
-    comm: MPI.Comm,
+    comm: PETSc.Comm,
     filename: str,
     object: typing.Union[PETSc.Mat, PETSc.Vec, SLEPc.BV],
 ) -> None:
     r"""
     Write PETSc/SLEPc object (PETSc.Mat, PETSc.Vec or SLEPc.BV) to file.
 
-    :param comm: MPI communicator (MPI.COMM_WORLD or MPI.COMM_SELF)
-    :type comm: MPI.Comm
+    :param comm: MPI communicator (PETSc.COMM_WORLD or PETSc.COMM_SELF)
+    :type comm: PETSc.Comm
     :param filename: name of the file to store the object
     :type filename: str
     :param object: any PETSc matrix or vector, or SLEPc BV

@@ -9,7 +9,6 @@ __all__ = [
 import typing
 
 import numpy as np
-from mpi4py import MPI
 from slepc4py import SLEPc
 from petsc4py import PETSc
 
@@ -111,7 +110,7 @@ def assemble_harmonic_balanced_bv(
         )
 
     # Create the harmonic-balanced BV
-    BV = SLEPc.BV().create(comm=MPI.COMM_WORLD)
+    BV = SLEPc.BV().create(comm=PETSc.COMM_WORLD)
     BV.setSizes(sizes)
     BV.setType("mat")
     BV_mat = BV.getMat()
@@ -151,7 +150,7 @@ def assemble_harmonic_balanced_bv(
 
 
 def bv_slice(
-    comm: MPI.Comm,
+    comm: PETSc.Comm,
     X: SLEPc.BV,
     columns: np.array,
     Y: typing.Optional[SLEPc.BV] = None,
@@ -173,14 +172,14 @@ def bv_slice(
     Q = np.zeros((X.getSizes()[-1], len(columns)))
     for i in range(len(columns)):
         Q[columns[i], i] = 1.0
-    Q = PETSc.Mat().createDense(Q.shape, None, Q, MPI.COMM_SELF)
+    Q = PETSc.Mat().createDense(Q.shape, None, Q, PETSc.COMM_SELF)
     Y.mult(1.0, 0.0, X, Q)
     Q.destroy()
     return Y
 
 
 def bv_roll(
-    comm: MPI.Comm,
+    comm: PETSc.Comm,
     X: SLEPc.BV,
     roll: int,
     axis: int,
@@ -203,7 +202,7 @@ def bv_roll(
     if axis == -1:
         Q = np.diag(np.ones(Y.getSizes()[-1]))
         Q = np.roll(Q, roll, axis=-1)
-        Q = PETSc.Mat().createDense(Q.shape, None, Q, MPI.COMM_SELF)
+        Q = PETSc.Mat().createDense(Q.shape, None, Q, PETSc.COMM_SELF)
         Y.multInPlace(Q, 0, Y.getSizes()[-1])
         Q.destroy()
     else:

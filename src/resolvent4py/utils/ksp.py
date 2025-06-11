@@ -7,21 +7,20 @@ __all__ = [
 
 import typing
 
-from mpi4py import MPI
 from petsc4py import PETSc
 
 from .miscellaneous import petscprint
 from .random import generate_random_petsc_vector
 
 
-def create_mumps_solver(comm: MPI.Comm, A: PETSc.Mat) -> PETSc.KSP:
+def create_mumps_solver(comm: PETSc.Comm, A: PETSc.Mat) -> PETSc.KSP:
     r"""
     Compute an LU factorization of the matrix A using
     `MUMPS <https://mumps-solver.org/index.php?page=doc>`
 
-    :param comm: MPI communicator (one of :code:`MPI.COMM_WORLD` or
-        :code:`MPI.COMM_SELF`)
-    :type comm: MPI.Comm
+    :param comm: MPI communicator (one of :code:`PETSc.COMM_WORLD` or
+        :code:`PETSc.COMM_SELF`)
+    :type comm: PETSc.Comm
     :param A: PETSc matrix
     :type A: PETSc.Mat
 
@@ -40,15 +39,15 @@ def create_mumps_solver(comm: MPI.Comm, A: PETSc.Mat) -> PETSc.KSP:
 
 
 def check_lu_factorization(
-    comm: MPI.Comm, A: PETSc.Mat, ksp: PETSc.KSP
+    comm: PETSc.Comm, A: PETSc.Mat, ksp: PETSc.KSP
 ) -> None:
     r"""
     Check that the LU factorization computed in :func:`.create_mumps_solver`
     has succeeded.
 
-    :param comm: MPI communicator (one of :code:`MPI.COMM_WORLD` or
-        :code:`MPI.COMM_SELF`)
-    :type comm: MPI.Comm
+    :param comm: MPI communicator (one of :code:`PETSc.COMM_WORLD` or
+        :code:`PETSc.COMM_SELF`)
+    :type comm: PETSc.Comm
     :param A: PETSc matrix
     :type A: PETSc.Mat
     :param ksp: PETSc KSP solver
@@ -72,7 +71,7 @@ def check_lu_factorization(
 
 
 def create_gmres_bjacobi_solver(
-    comm: MPI.Comm,
+    comm: PETSc.Comm,
     A: PETSc.Mat,
     nblocks: int,
     rtol: typing.Optional[float] = 1e-10,
@@ -82,9 +81,9 @@ def create_gmres_bjacobi_solver(
     r"""
     Create GMRES solver with block-jacobi preconditioner.
 
-    :param comm: MPI communicator (one of :code:`MPI.COMM_WORLD` or
-        :code:`MPI.COMM_SELF`)
-    :type comm: MPI.Comm
+    :param comm: MPI communicator (one of :code:`PETSc.COMM_WORLD` or
+        :code:`PETSc.COMM_SELF`)
+    :type comm: PETSc.Comm
     :param A: PETSc matrix
     :type A: PETSc.Mat
     :param nblocks: number of blocks for the block jacobi preconditioner
@@ -129,15 +128,15 @@ def create_gmres_bjacobi_solver(
 
 
 def check_gmres_bjacobi_solver(
-    comm: MPI.Comm, A: PETSc.Mat, ksp: PETSc.KSP
+    comm: PETSc.Comm, A: PETSc.Mat, ksp: PETSc.KSP
 ) -> None:
     r"""
     Check that the solver computed in :func:`.create_gmres_bjacobi_solver`
     has succeeded.
 
-    :param comm: MPI communicator (one of :code:`MPI.COMM_WORLD` or
-        :code:`MPI.COMM_SELF`)
-    :type comm: MPI.Comm
+    :param comm: MPI communicator (one of :code:`PETSc.COMM_WORLD` or
+        :code:`PETSc.COMM_SELF`)
+    :type comm: PETSc.Comm
     :param A: PETSc matrix
     :type A: PETSc.Mat
     :param ksp: PETSc KSP solver

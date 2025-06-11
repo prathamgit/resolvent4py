@@ -7,7 +7,6 @@ import typing
 
 import numpy as np
 import scipy as sp
-from mpi4py import MPI
 from petsc4py import PETSc
 from slepc4py import SLEPc
 
@@ -86,7 +85,7 @@ def randomized_svd(
     Qfwd = SLEPc.BV().create(comm=L._comm)
     Qfwd.setSizes(L._dimensions[0], n_rand)
     Qfwd.setType("mat")
-    R = create_dense_matrix(MPI.COMM_SELF, (n_rand, n_rand))
+    R = create_dense_matrix(PETSc.COMM_SELF, (n_rand, n_rand))
     for j in range(n_loops):
         Qfwd = action(Qadj, Qfwd)
         Qfwd.orthogonalize(None)
@@ -99,8 +98,8 @@ def randomized_svd(
     s = s[:n_svals]
     u = u[:, :n_svals]
     v = v[:, :n_svals]
-    u = PETSc.Mat().createDense((n_rand, n_svals), None, u, comm=MPI.COMM_SELF)
-    v = PETSc.Mat().createDense((n_rand, n_svals), None, v, comm=MPI.COMM_SELF)
+    u = PETSc.Mat().createDense((n_rand, n_svals), None, u, comm=PETSc.COMM_SELF)
+    v = PETSc.Mat().createDense((n_rand, n_svals), None, v, comm=PETSc.COMM_SELF)
     Qfwd.multInPlace(v, 0, n_svals)
     Qfwd.setActiveColumns(0, n_svals)
     Qfwd.resize(n_svals, copy=True)
@@ -138,9 +137,9 @@ def check_randomized_svd_convergence(
     :rtype: np.array
     """
     if monitor:
-        petscprint(MPI.COMM_WORLD, " ")
+        petscprint(PETSc.COMM_WORLD, " ")
         petscprint(
-            MPI.COMM_WORLD, "Executing SVD triplet convergence check..."
+            PETSc.COMM_WORLD, "Executing SVD triplet convergence check..."
         )
     x = U.createVec()
     n_svals = S.shape[-1]
@@ -155,12 +154,12 @@ def check_randomized_svd_convergence(
         error_vec[k] = error.real
         if monitor:
             str = "Error for SVD triplet %d = %1.15e" % (k + 1, error)
-            petscprint(MPI.COMM_WORLD, str)
+            petscprint(PETSc.COMM_WORLD, str)
         U.restoreColumn(k, u)
         V.restoreColumn(k, v)
     x.destroy()
     if monitor:
         petscprint(
-            MPI.COMM_WORLD, "Executing SVD triplet convergence check..."
+            PETSc.COMM_WORLD, "Executing SVD triplet convergence check..."
         )
-        petscprint(MPI.COMM_WORLD, " ")
+        petscprint(PETSc.COMM_WORLD, " ")

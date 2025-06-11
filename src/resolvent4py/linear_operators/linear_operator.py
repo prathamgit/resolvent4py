@@ -2,7 +2,6 @@ import abc
 from typing import Optional, Union
 
 import numpy as np
-from mpi4py import MPI
 from petsc4py import PETSc
 from slepc4py import SLEPc
 
@@ -15,8 +14,8 @@ class LinearOperator(metaclass=abc.ABCMeta):
     r"""
     Abstract base class for linear operators :math:`L`.
 
-    :param comm: MPI communicator :code:`MPI.COMM_WORLD`
-    :type comm: MPI.Comm
+    :param comm: MPI communicator :code:`PETSc.COMM_WORLD`
+    :type comm: PETSc.Comm
     :param name: name of the linear operator
     :type name: str
     :param dimensions: local and global sizes of the range and domain
@@ -30,7 +29,7 @@ class LinearOperator(metaclass=abc.ABCMeta):
 
     def __init__(
         self: "LinearOperator",
-        comm: MPI.Comm,
+        comm: PETSc.Comm,
         name: str,
         dimensions: tuple[tuple[int, int], tuple[int, int]],
         nblocks: Optional[int] = None,
@@ -46,11 +45,11 @@ class LinearOperator(metaclass=abc.ABCMeta):
             else None
         )
 
-    def get_comm(self: "LinearOperator") -> MPI.Comm:
+    def get_comm(self: "LinearOperator") -> PETSc.Comm:
         r"""
         The MPI communicator
 
-        :rtype: MPI.Comm
+        :rtype: PETSc.Comm
         """
         return self._comm
 
@@ -136,7 +135,7 @@ class LinearOperator(metaclass=abc.ABCMeta):
         x = generate_random_petsc_vector(self._comm, sizes)
         Lx = self.apply(x)
         Lxai = Lx.getArray().imag
-        norm = np.sqrt(sum(self._comm.allgather(np.linalg.norm(Lxai) ** 2)))
+        norm = np.sqrt(sum(self._comm.tompi4py().allgather(np.linalg.norm(Lxai) ** 2)))
         result = True if norm <= 1e-14 else False
         x.destroy()
         Lx.destroy()

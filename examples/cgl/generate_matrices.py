@@ -7,9 +7,9 @@ from petsc4py import PETSc
 
 import cgl
 
-comm = MPI.COMM_WORLD
+comm = PETSc.COMM_WORLD
 
-if comm.Get_size() > 1:
+if comm.getSize() > 1:
     raise ValueError("This script should be run in series.")
 
 # Define the physical parameters of the CGL equation
@@ -32,7 +32,7 @@ arrays = [system.A.row, system.A.col, system.A.data]
 fnames = ["rows.dat", "cols.dat", "vals.dat"]
 for i, array in enumerate(arrays):
     fname = save_path + fnames[i]
-    vec = PETSc.Vec().createWithArray(array, len(array), None, MPI.COMM_SELF)
+    vec = PETSc.Vec().createWithArray(array, len(array), None, PETSc.COMM_SELF)
     res4py.write_to_file(comm, fname, vec)
 
 # Generate input and output matrices B and C as in Chen & Rowley, 2011

@@ -131,7 +131,7 @@ def eig(
     evals = evals[idces]
     evecs = evecs[:, idces]
     evecs_ = PETSc.Mat().createDense(
-        evecs.shape, None, evecs, comm=MPI.COMM_SELF
+        evecs.shape, None, evecs, comm=PETSc.COMM_SELF
     )
     Q.multInPlace(evecs_, 0, n_evals)
     Q.setActiveColumns(0, n_evals)
@@ -190,7 +190,7 @@ def match_right_and_left_eigenvectors(
     idces = np.argwhere(np.abs(evals) < 1e-10).reshape(-1)
     evals[idces] += 1e-10
     Minv = evecs @ np.diag(1.0 / evals) @ sp.linalg.inv(evecs)
-    Minv = PETSc.Mat().createDense(Minv.shape, None, Minv, MPI.COMM_SELF)
+    Minv = PETSc.Mat().createDense(Minv.shape, None, Minv, PETSc.COMM_SELF)
     V.multInPlace(Minv, 0, V.getSizes()[-1])
     M.destroy()
     Minv.destroy()
@@ -220,8 +220,8 @@ def check_eig_convergence(
     :rtype: np.array
     """
     if monitor:
-        petscprint(MPI.COMM_WORLD, " ")
-        petscprint(MPI.COMM_WORLD, "Executing eigenpair convergence check...")
+        petscprint(PETSc.COMM_WORLD, " ")
+        petscprint(PETSc.COMM_WORLD, "Executing eigenpair convergence check...")
     error_vec = np.zeros(D.shape[0])
     w = V.createVec()
     for j in range(D.shape[-1]):
@@ -236,9 +236,9 @@ def check_eig_convergence(
         e.destroy()
         if monitor:
             str = "Error for eigenpair %d = %1.15e" % (j + 1, error)
-            petscprint(MPI.COMM_WORLD, str)
+            petscprint(PETSc.COMM_WORLD, str)
     w.destroy()
     if monitor:
-        petscprint(MPI.COMM_WORLD, "Executing eigenpair convergence check...")
-        petscprint(MPI.COMM_WORLD, " ")
+        petscprint(PETSc.COMM_WORLD, "Executing eigenpair convergence check...")
+        petscprint(PETSc.COMM_WORLD, " ")
     return error_vec
