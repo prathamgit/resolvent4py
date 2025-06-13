@@ -23,9 +23,10 @@ RSVD-dt Demonstration
 
 Description here.
 
-.. GENERATED FROM PYTHON SOURCE LINES 7-156
+.. GENERATED FROM PYTHON SOURCE LINES 7-137
 
 .. code-block:: Python
+
 
     import os
 
@@ -99,7 +100,7 @@ Description here.
     # Read the A matrix from file
     res4py.petscprint(comm, "Reading matrix from file...")
     load_path = "data/"
-    N = 242004
+    N = 48884
     Nl = res4py.compute_local_size(N)
     sizes = ((Nl, N), (Nl, N))
     names = [
@@ -108,53 +109,33 @@ Description here.
         load_path + "vals.dat",
     ]
     A = res4py.read_coo_matrix(comm, names, sizes)
-    names = [
-        load_path + "rowsG.dat",
-        load_path + "colsG.dat",
-        load_path + "valsG.dat",
-    ]
-    G = res4py.read_coo_matrix(comm, names, sizes)
-    res4py.petscprint(comm, "Done reading matrix from file...")
-    # ensure_structural_diagonal(A)
-    # res4py.petscprint(comm, "A structural diagonal")
-    # ensure_structural_diagonal(G)
-    # res4py.petscprint(comm, "G structural diagonal")
 
     comm.barrier()
-    # shift_matrix_by_matrix(A,G,1)
 
-    # Compute the SVD of the resolvent operator R = inv(1j*omega*I - A) using
-    # the randomized SVD algorithm
-    s = 0.0724
+    s = 0.0206
 
-    # ksp = res4py.create_mumps_solver(comm, A)
     ksp = res4py.create_gmres_bjacobi_solver(comm, A, nblocks=comm.Get_size())
     res4py.petscprint(comm, "A ksp")
-    L = res4py.MatrixLinearOperator(comm, A, ksp)
+    L = res4py.linear_operators.MatrixLinearOperator(comm, A, ksp)
     res4py.petscprint(comm, "A operator")
-    # ksp2 = res4py.create_mumps_solver(comm, G)
-    ksp2 = res4py.create_gmres_bjacobi_solver(comm, G, nblocks=comm.Get_size())
-    res4py.petscprint(comm, "G ksp")
-    L_mass = res4py.MatrixLinearOperator(comm, G, ksp2)
-    res4py.petscprint(comm, "G operator")
 
     # Compute the svd
     res4py.petscprint(comm, "Running randomized SVD...")
     n_periods = 20
-    n_timesteps = 48000
-    n_rand = 8
+    n_timesteps = 20000
+    n_rand = 5
     n_loops = 3
-    n_svals = 3
+    n_svals = 1
 
     U, S, V = res4py.linalg.randomized_time_stepping_svd(
         L,
-        L_mass,
         np.array([-2 * s, -s, 0, s]),
         n_periods,
         n_timesteps,
         n_rand,
         n_loops,
         n_svals,
+        ts_method="RK4",
     )
 
     if rank == 0:
@@ -174,8 +155,8 @@ Description here.
     # for bv in U: bv.destroy()
     # for bv in V: bv.destroy()
 
-    # [   5.14221094   62.50264993 1664.94629749]
-    # [  1.49456623  12.78965421 277.0569927 ]
+    # [223073.00213949]
+    # [131396.3608767]
 
 
 .. _sphx_glr_download_auto_examples_cgl_demonstrate_rsvd_dt.py:

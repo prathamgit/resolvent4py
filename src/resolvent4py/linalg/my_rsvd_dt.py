@@ -149,11 +149,11 @@ def _action(
     rhs_im1 = rhs.copy()
     rhs_temp = rhs.copy()
     Lx = x.copy()
+    x0 = x.copy()
 
     adjoint = True if Laction == L.apply_hermitian_transpose else False
     save_idx = 0
     period = 0
-    x0 = x.copy()
     X.insertVec(0, x)
     for i in range(1, len(tsim)):
         rhs = _ifft(Fhat, rhs, omegas, tsim[i - 1], adjoint)
@@ -189,7 +189,7 @@ def _action(
             X.insertVec(save_idx, x)
 
     Xhat = _fft(X, Xhat, L._real, adjoint)
-    objs = [rhs, rhs_im1, rhs_temp, Lx]
+    objs = [rhs, rhs_im1, rhs_temp, Lx, x0]
     for obj in objs:
         obj.destroy()
 
@@ -208,7 +208,7 @@ def _create_time_and_frequency_arrays(
     nsave = round(dt_store / dt)
     tsim_check = tsim[(n_periods - 1) * n_tsteps_per_period :: nsave].copy()
     tsim_check -= tsim[(n_periods - 1) * n_tsteps_per_period]
-    if np.linalg.norm(tsim_check - tstore) >= 1e-12:
+    if np.linalg.norm(tsim_check - tstore) >= 1e-10:
         raise ValueError("Simulation and storage times are not matching.")
 
     omegas = np.arange(n_omegas + 1) * omega

@@ -28,11 +28,11 @@ by computing the singular value decomposition (SVD) of the resolvent operator
 
     R(i\omega) = \left(i\omega I - A\right)^{-1}
 
-with :math:`\omega = 0.648` the natural frequency of the linearized CGL 
+with :math:`\omega = 0.648` the natural frequency of the linearized CGL
 equation. This script demonstrates the following:
 
 - LU decomposition using :func:`~resolvent4py.utils.ksp.create_mumps_solver`
-- Resolvent analysis in the frequency domain using 
+- Resolvent analysis in the frequency domain using
   :func:`~resolvent4py.linalg.randomized_svd.randomized_svd`
 
 .. GENERATED FROM PYTHON SOURCE LINES 20-114
@@ -114,7 +114,6 @@ equation. This script demonstrates the following:
 
 
     if comm.getRank() == 0:
-
         save_path = "results/"
         os.makedirs(save_path) if not os.path.exists(save_path) else None
 
@@ -134,6 +133,7 @@ equation. This script demonstrates the following:
         plt.legend()
         plt.tight_layout()
         plt.savefig(save_path + "singular_values.png")
+
 
 .. _sphx_glr_download_auto_examples_cgl_demonstrate_rsvd.py:
 

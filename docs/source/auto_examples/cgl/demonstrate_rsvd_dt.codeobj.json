@@ -71,15 +71,6 @@
    "name": "update"
   }
  ],
- "res4py.MatrixLinearOperator": [
-  {
-   "is_class": false,
-   "is_explicit": false,
-   "module": "resolvent4py",
-   "module_short": "resolvent4py",
-   "name": "MatrixLinearOperator"
-  }
- ],
  "res4py.compute_local_size": [
   {
    "is_class": false,
@@ -105,6 +96,15 @@
    "module": "resolvent4py.linalg",
    "module_short": "resolvent4py.linalg",
    "name": "randomized_time_stepping_svd"
+  }
+ ],
+ "res4py.linear_operators.MatrixLinearOperator": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "resolvent4py.linear_operators",
+   "module_short": "resolvent4py.linear_operators",
+   "name": "MatrixLinearOperator"
   }
  ],
  "res4py.petscprint": [

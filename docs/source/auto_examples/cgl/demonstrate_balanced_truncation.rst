@@ -38,7 +38,7 @@ using the algorithm presented in :cite:`dergham2011`.
 - Balanced truncation in the frequency domain using 
   :func:`~resolvent4py.model_reduction.balanced_truncation`
 
-.. GENERATED FROM PYTHON SOURCE LINES 23-80
+.. GENERATED FROM PYTHON SOURCE LINES 23-81
 
 .. code-block:: Python
 
@@ -100,6 +100,7 @@ using the algorithm presented in :cite:`dergham2011`.
 
     res4py.petscprint(comm, "Computing balanced projection...")
     Phi, Psi, S = res4py.model_reduction.compute_balanced_projection(X, Y, 10)
+
 
 .. _sphx_glr_download_auto_examples_cgl_demonstrate_balanced_truncation.py:
 
