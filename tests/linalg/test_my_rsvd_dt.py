@@ -96,7 +96,6 @@ def test_time_stepper(comm, square_matrix_size):
     r"""Test time stepper in RSVD-dt algorithm."""
 
     N, _ = square_matrix_size
-    N = 5 if N > 5 else N
 
     n_periods = 50
     omega = random.uniform(0.5, 1.5)
@@ -183,8 +182,7 @@ def test_rsvd_dt(comm, square_matrix_size):
     n_periods = 50
     omega = random.uniform(0.5, 1.5)
     n_omegas = np.random.randint(1, 10)
-    # dt = random.uniform(1e-4, 2 * np.pi / omega / 1000)
-    dt = 1e-3
+    dt = random.uniform(1e-4, 2 * np.pi / omega / 1000)
     comm_mpi = comm.tompi4py()
     omega = comm_mpi.bcast(omega, root=0)
     n_omegas = comm_mpi.bcast(n_omegas, root=0)
@@ -199,7 +197,7 @@ def test_rsvd_dt(comm, square_matrix_size):
         L = res4py.linear_operators.MatrixLinearOperator(comm, Apetsc)
 
         n_rand = N
-        n_loops = 1
+        n_loops = 2
         n_svals = 1
         _, Slst, _ = res4py.linalg.my_rsvd_dt.rsvd_dt(
             L, dt, omega, n_omegas, n_periods, n_rand, n_loops, n_svals
@@ -216,88 +214,4 @@ def test_rsvd_dt(comm, square_matrix_size):
             error += 100 * np.abs(Slst_[i][0] - Slst[i][0, 0]) / Slst_[i][0]
         errors.append(error)
 
-    assert np.max(errors) < 1
-
-
-# def integrate(Apython, Fhat, omegas, tsim):
-#     Fhatm = Fhat.getMat()
-#     Fhat_seq = res4py.distributed_to_sequential_matrix(PETSc.COMM_WORLD, Fhatm)
-#     Fhat_a = Fhat_seq.getDenseArray().copy()
-#     Fhat_seq.destroy()
-#     Fhat.restoreMat(Fhatm)
-
-#     def feval(t):
-#         q = np.exp(1j * omegas * t)
-#         if np.min(omegas) == 0.0:
-#             c = 2 * np.ones(len(q))
-#             c[0] = 1.0
-#             q *= c
-#             f = (Fhat_a @ q).real
-#         else:
-#             f = Fhat_a @ q
-#         return f
-
-#     def rhsfun(t, x):
-#         return Apython @ x + feval(t)
-
-#     x = np.zeros(Apython.shape[0], dtype=Apython.dtype)
-#     t_span = [0, tsim[-1]]
-#     sol = sp.integrate.solve_ivp(
-#         rhsfun, t_span, x, method="RK23", t_eval=t_span
-#     ).y
-
-#     Xhat_a = np.zeros_like(Fhat_a)
-#     for i in range(len(omegas)):
-#         w = 1j * omegas[i]
-#         Xhat_a[:, i] = sp.linalg.inv(w * np.eye(N) - Apython) @ Fhat_a[:, i]
-
-#     return Xhat_a
-
-
-# import sys
-
-# sys.path.append("../")
-# import pytest_utils
-
-# comm = PETSc.COMM_WORLD
-# N = 5
-# size = (N, N)
-# complex = False
-
-# A, Apython = pytest_utils.generate_stable_random_matrix(
-#     comm, size, complex=complex
-# )
-
-# omega = random.uniform(0.5, 1.5)
-# # n_omegas = np.random.randint(1, 10)
-# n_omegas = 4
-# n_periods = 150
-
-# dt = 2e-3
-# comm_mpi = comm.tompi4py()
-# omega = comm_mpi.bcast(omega, root=0)
-# n_omegas = comm_mpi.bcast(n_omegas, root=0)
-# dt = comm_mpi.bcast(dt, root=0)
-
-
-# L = res4py.linear_operators.MatrixLinearOperator(comm, A)
-
-# n_rand = N
-# n_loops = 1
-# n_svals = 1
-# Ulst, Slst, Vlst = res4py.linalg.my_rsvd_dt.rsvd_dt(
-#     L, dt, omega, n_omegas, n_periods, n_rand, n_loops, n_svals
-# )
-
-# _, _, omegas, _ = res4py.linalg.my_rsvd_dt._create_time_and_frequency_arrays(
-#     dt, omega, n_omegas, n_periods, not complex
-# )
-# _, Slst_, _ = _compute_exact_svd(Apython, omegas, n_svals)
-
-# for i in range(len(Slst)):
-#     plt.figure()
-#     plt.plot(np.diag(Slst[i]), "ko")
-#     plt.plot(Slst_[i], "rx")
-#     # ax = plt.gca()
-#     # ax.set_yscale('log')
-#     plt.show()
+    assert np.max(errors) < 0.1

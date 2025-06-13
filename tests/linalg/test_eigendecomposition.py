@@ -22,7 +22,7 @@ def test_eigendecomposition(comm, square_random_matrix):
     lambda_fun = lambda x: 1j * omega - 1 / x
     D, _ = res4py.linalg.eig(linop, linop.solve, krylov_dim, r, lambda_fun)
     D = np.diag(D)
-    
+
     ev, _ = sp.linalg.eig(Apython)
     ev_sorted = [ev[np.argmin(np.abs(ev - D[i]))] for i in range(len(D))]
     ev_sorted = np.asarray(ev_sorted)

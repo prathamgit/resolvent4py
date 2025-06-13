@@ -75,6 +75,57 @@ def _fft(
     return Xhat
 
 
+# def _action(
+#     L: LinearOperator,
+#     Laction: typing.Callable,
+#     tsim: np.array,
+#     tstore: np.array,
+#     omegas: np.array,
+#     x: PETSc.Vec,
+#     Fhat: SLEPc.BV,
+#     Xhat: SLEPc.BV,
+#     X: SLEPc.BV,
+# ):
+#     dt = tsim[1] - tsim[0]
+#     dt_store = tstore[1] - tstore[0]
+#     T = tstore[-1] + dt_store
+#     n_periods = round((tsim[-1] + dt) / T)
+#     n_save = round(dt_store / dt)
+#     idx = np.argmin(np.abs(tsim - (n_periods - 1) * T))
+#     save_idces = idx + np.arange(len(tsim[idx:]))[::n_save]
+
+#     rhs = L.create_left_vector()
+#     rhs_im1 = rhs.copy()
+#     rhs_temp = rhs.copy()
+#     Lx = x.copy()
+
+#     adjoint = True if Laction == L.apply_hermitian_transpose else False
+#     save_idx = 0
+#     for i in range(1, len(tsim)):
+#         rhs = _ifft(Fhat, rhs, omegas, tsim[i - 1], adjoint)
+#         rhs.axpy(1.0, Laction(x, Lx))
+#         if i == 1:
+#             rhs.copy(rhs_im1)
+#         else:
+#             rhs.copy(rhs_temp)
+#             rhs.scale(3 / 2)
+#             rhs.axpy(-1 / 2, rhs_im1)
+#             rhs_temp.copy(rhs_im1)
+#         x.axpy(dt, rhs)
+#         if i in save_idces:
+#             if math.isnan(x.norm()):
+#                 raise ValueError(f"Code blew up at time step {i}")
+#             X.insertVec(save_idx, x)
+#             save_idx += 1
+
+#     Xhat = _fft(X, Xhat, L._real, adjoint)
+#     objs = [rhs, rhs_im1, rhs_temp, Lx]
+#     for obj in objs:
+#         obj.destroy()
+
+#     return Xhat
+
+
 def _action(
     L: LinearOperator,
     Laction: typing.Callable,
@@ -85,14 +136,14 @@ def _action(
     Fhat: SLEPc.BV,
     Xhat: SLEPc.BV,
     X: SLEPc.BV,
+    tol: typing.Optional[float] = 1e-3,
 ):
     dt = tsim[1] - tsim[0]
     dt_store = tstore[1] - tstore[0]
     T = tstore[-1] + dt_store
-    n_periods = round((tsim[-1] + dt) / T)
     n_save = round(dt_store / dt)
-    idx = np.argmin(np.abs(tsim - (n_periods - 1) * T))
-    save_idces = idx + np.arange(len(tsim[idx:]))[::n_save]
+    n_save_per_period = round(T / dt_store)
+    n_periods = round((tsim[-1] + dt) / T)
 
     rhs = L.create_left_vector()
     rhs_im1 = rhs.copy()
@@ -101,7 +152,9 @@ def _action(
 
     adjoint = True if Laction == L.apply_hermitian_transpose else False
     save_idx = 0
-    dt = tsim[1] - tsim[0]
+    period = 0
+    x0 = x.copy()
+    X.insertVec(0, x)
     for i in range(1, len(tsim)):
         rhs = _ifft(Fhat, rhs, omegas, tsim[i - 1], adjoint)
         rhs.axpy(1.0, Laction(x, Lx))
@@ -113,11 +166,27 @@ def _action(
             rhs.axpy(-1 / 2, rhs_im1)
             rhs_temp.copy(rhs_im1)
         x.axpy(dt, rhs)
-        if i in save_idces:
+
+        if np.mod(i, n_save) == 0:
             if math.isnan(x.norm()):
                 raise ValueError(f"Code blew up at time step {i}")
+            save_idx = np.mod(save_idx + 1, n_save_per_period)
+            if save_idx == 0:
+                period += 1
+                x0.axpy(-1.0, x)
+                error = 100 * x0.norm() / x.norm()
+                x.copy(x0)
+                string = "Error = %1.5e [%d / %d] periods" % (
+                    error,
+                    period,
+                    n_periods,
+                )
+                petscprint(PETSc.COMM_WORLD, string)
+                if (
+                    error < tol
+                ):  # Reached limit cycle, no need to integrate further
+                    break
             X.insertVec(save_idx, x)
-            save_idx += 1
 
     Xhat = _fft(X, Xhat, L._real, adjoint)
     objs = [rhs, rhs_im1, rhs_temp, Lx]
@@ -207,10 +276,10 @@ def rsvd_dt(
     Qadj_hat_lst = _reorder_list(Qadj_hat_lst2, Qadj_hat_lst)
 
     x = L.create_left_vector()
-    x.zeroEntries()
     for j in range(n_loops):
         for k in range(n_rand):
             petscprint(L._comm, f"Running k (fwd) {k}")
+            x.zeroEntries()
             Qfwd_hat_lst[k] = _action(
                 L,
                 L.apply,
@@ -229,6 +298,7 @@ def rsvd_dt(
 
         for k in range(n_rand):
             petscprint(L._comm, f"Running k (adj) {k}")
+            x.zeroEntries()
             Qadj_hat_lst[k] = _action(
                 L,
                 L.apply_hermitian_transpose,
@@ -252,6 +322,7 @@ def rsvd_dt(
             for obj in Rlst:
                 obj.destroy()
 
+    x.destroy()
     # Compute low-rank SVD
     Slst = []
     for j, R in enumerate(Rlst):

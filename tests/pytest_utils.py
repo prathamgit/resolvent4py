@@ -28,11 +28,12 @@ def generate_stable_random_matrix(comm, size, complex=True):
     evals, _ = sp.linalg.eig(Apython)
     shift = np.sort(evals.real)[-1]
     if shift >= 0.0:
+        alpha = 1.1
         Id = res4py.create_AIJ_identity(comm, Apetsc.getSizes())
         Id.convert(PETSc.Mat.Type.AIJ)
-        Apetsc.axpy(-2.0 * shift, Id)
+        Apetsc.axpy(-alpha * shift, Id)
         Id.destroy()
-        Apython -= 2.0 * shift * np.eye(Apython.shape[0])
+        Apython -= alpha * shift * np.eye(Apython.shape[0])
     return Apetsc, Apython
 
 
