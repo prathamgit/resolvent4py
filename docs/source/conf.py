@@ -36,8 +36,14 @@ extensions = [
 bibtex_bibfiles = ["refs.bib"]
 
 sphinx_gallery_conf = {
-    "examples_dirs": ["../../examples/toy_model", "../../examples/cgl"],  # Paths to your scripts
-    "gallery_dirs": ["auto_examples/toy_model", "auto_examples/cgl"],  # Where to output the HTML
+    "examples_dirs": [
+        "../../examples/toy_model",
+        "../../examples/cgl",
+    ],  # Paths to your scripts
+    "gallery_dirs": [
+        "auto_examples/toy_model",
+        "auto_examples/cgl",
+    ],  # Where to output the HTML
     "filename_pattern": r"^.*\.py$",  # Include all .py files
     "ignore_pattern": r"generate_matrices\.py|toy_model\.py|cgl\.py",
     "plot_gallery": False,

@@ -60,10 +60,17 @@ def randomized_svd(
     )
     # Assemble random BV (this will be multiplied against L^*)
     rowsizes = L._dimensions[0]
+    # Set seed
+    rank = L.get_comm().getRank()
+    rand = PETSc.Random().create(comm=L.get_comm())
+    rand.setType(PETSc.Random.Type.RAND)
+    rand.setSeed(round(np.random.randint(1000, 100000) + rank))
     X = SLEPc.BV().create(comm=L._comm)
     X.setSizes(rowsizes, n_rand)
     X.setType("mat")
+    X.setRandomContext(rand)
     X.setRandomNormal()
+    rand.destroy()
     for j in range(n_rand):
         xj = X.getColumn(j)
         if L._real:
@@ -98,8 +105,12 @@ def randomized_svd(
     s = s[:n_svals]
     u = u[:, :n_svals]
     v = v[:, :n_svals]
-    u = PETSc.Mat().createDense((n_rand, n_svals), None, u, comm=PETSc.COMM_SELF)
-    v = PETSc.Mat().createDense((n_rand, n_svals), None, v, comm=PETSc.COMM_SELF)
+    u = PETSc.Mat().createDense(
+        (n_rand, n_svals), None, u, comm=PETSc.COMM_SELF
+    )
+    v = PETSc.Mat().createDense(
+        (n_rand, n_svals), None, v, comm=PETSc.COMM_SELF
+    )
     Qfwd.multInPlace(v, 0, n_svals)
     Qfwd.setActiveColumns(0, n_svals)
     Qfwd.resize(n_svals, copy=True)

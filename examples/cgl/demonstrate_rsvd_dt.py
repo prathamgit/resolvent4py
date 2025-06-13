@@ -4,6 +4,7 @@ RSVD-dt Demonstration
 
 Description here.
 """
+
 import os
 
 import matplotlib.pyplot as plt
@@ -103,7 +104,16 @@ n_rand = 5
 n_loops = 3
 n_svals = 1
 
-U, S, V = res4py.linalg.randomized_time_stepping_svd(L, np.array([-2*s, -s, 0, s]), n_periods, n_timesteps, n_rand, n_loops, n_svals, ts_method='RK4')
+U, S, V = res4py.linalg.randomized_time_stepping_svd(
+    L,
+    np.array([-2 * s, -s, 0, s]),
+    n_periods,
+    n_timesteps,
+    n_rand,
+    n_loops,
+    n_svals,
+    ts_method="RK4",
+)
 
 if rank == 0:
     save_bv_list(U, "U", save_path)

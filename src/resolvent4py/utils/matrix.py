@@ -169,7 +169,7 @@ def convert_coo_to_csr(
         send_rows.append(rows[idces])
         send_cols.append(cols[idces])
         send_vals.append(vals[idces])
-    
+
     recv_bufs = [np.empty(1, dtype=PETSc.IntType) for _ in pool]
     recv_reqs = [comm.Irecv(bf, source=i) for (bf, i) in zip(recv_bufs, pool)]
     send_reqs = [comm.Isend(sz, dest=i) for (i, sz) in enumerate(lengths)]

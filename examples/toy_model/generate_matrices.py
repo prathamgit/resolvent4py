@@ -120,7 +120,7 @@ for j in range(Ashat.shape[-1]):
         )
         res4py.write_to_file(comm, fname, vec)
         vec.destroy()
-    
+
     qj = Qhat[:, j]
     vec = PETSc.Vec().createWithArray(qj, 3, None, PETSc.COMM_SELF)
     res4py.write_to_file(comm, save_path + "Q_%02d.dat" % j, vec)

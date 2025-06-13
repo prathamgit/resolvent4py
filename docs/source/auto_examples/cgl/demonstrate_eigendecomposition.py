@@ -7,7 +7,7 @@ the matrix :math:`A` closest to the origin using the shift-and-invert technique.
 This script demonstrates the following:
 
 - LU decomposition using :func:`~resolvent4py.utils.ksp.create_mumps_solver`
-- Eigendecomposition using 
+- Eigendecomposition using
   :func:`~resolvent4py.linalg.eigendecomposition.eig`
 
 """

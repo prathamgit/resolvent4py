@@ -135,7 +135,9 @@ class LinearOperator(metaclass=abc.ABCMeta):
         x = generate_random_petsc_vector(self._comm, sizes)
         Lx = self.apply(x)
         Lxai = Lx.getArray().imag
-        norm = np.sqrt(sum(self._comm.tompi4py().allgather(np.linalg.norm(Lxai) ** 2)))
+        norm = np.sqrt(
+            sum(self._comm.tompi4py().allgather(np.linalg.norm(Lxai) ** 2))
+        )
         result = True if norm <= 1e-14 else False
         x.destroy()
         Lx.destroy()

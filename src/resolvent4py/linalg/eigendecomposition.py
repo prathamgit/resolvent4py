@@ -221,7 +221,9 @@ def check_eig_convergence(
     """
     if monitor:
         petscprint(PETSc.COMM_WORLD, " ")
-        petscprint(PETSc.COMM_WORLD, "Executing eigenpair convergence check...")
+        petscprint(
+            PETSc.COMM_WORLD, "Executing eigenpair convergence check..."
+        )
     error_vec = np.zeros(D.shape[0])
     w = V.createVec()
     for j in range(D.shape[-1]):
@@ -239,6 +241,8 @@ def check_eig_convergence(
             petscprint(PETSc.COMM_WORLD, str)
     w.destroy()
     if monitor:
-        petscprint(PETSc.COMM_WORLD, "Executing eigenpair convergence check...")
+        petscprint(
+            PETSc.COMM_WORLD, "Executing eigenpair convergence check..."
+        )
         petscprint(PETSc.COMM_WORLD, " ")
     return error_vec

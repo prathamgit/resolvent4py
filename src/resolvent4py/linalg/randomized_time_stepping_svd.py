@@ -10,44 +10,71 @@ from petsc4py import PETSc
 from slepc4py import SLEPc
 
 from ..utils.matrix import create_dense_matrix, create_AIJ_identity
-from ..utils.ksp import create_mumps_solver, create_gmres_bjacobi_solver, check_lu_factorization
+from ..utils.ksp import (
+    create_mumps_solver,
+    create_gmres_bjacobi_solver,
+    check_lu_factorization,
+)
 from ..utils.comms import compute_local_size
-from ..utils.timesteppers import timestep, setup, estimate_dt_max as estimate_dt_max_util
+from ..utils.timesteppers import (
+    timestep,
+    setup,
+    estimate_dt_max as estimate_dt_max_util,
+)
 
 from ..linear_operators import MatrixLinearOperator, ProductLinearOperator
 
-np.seterr(all='raise')
 
 def construct_dft_mats(n_omega, n_omega_eff, n_timesteps, n, real_op):
     dft_mat = create_dense_matrix(PETSc.COMM_WORLD, (n_omega, n_omega_eff))
-    i_dft_mat = create_dense_matrix(PETSc.COMM_SELF, (2 * n_timesteps, n_omega_eff))
+    i_dft_mat = create_dense_matrix(
+        PETSc.COMM_SELF, (2 * n_timesteps, n_omega_eff)
+    )
     j_local = np.arange(2 * n_timesteps)
     alpha = -np.pi * 1j / n_timesteps
     for i in range(n_omega_eff):
         if real_op:
             exp_val = alpha * i
         else:
-            exp_val = alpha * i if i <= n_omega_eff/2 - 1 else alpha * ((i - n_omega_eff) + 2*n_timesteps)
+            exp_val = (
+                alpha * i
+                if i <= n_omega_eff / 2 - 1
+                else alpha * ((i - n_omega_eff) + 2 * n_timesteps)
+            )
         col = i_dft_mat.getDenseColumnVec(i)
         col_arr = col.getArray()
         col_arr[:] = np.conj(np.exp(exp_val * j_local)) / n_timesteps
         i_dft_mat.restoreDenseColumnVec(i, col)
-    
+
     r0, r1 = dft_mat.getOwnershipRange()
     j_local = np.arange(r0, r1)
-    alpha = -2 * np.pi * 1j / (2*n_omega_eff) if real_op else -2 * np.pi * 1j / n_omega_eff
+    alpha = (
+        -2 * np.pi * 1j / (2 * n_omega_eff)
+        if real_op
+        else -2 * np.pi * 1j / n_omega_eff
+    )
     for i in range(n_omega_eff):
         col = dft_mat.getDenseColumnVec(i)
         col_arr = col.getArray()
         col_arr[:] = np.exp(alpha * i * j_local)
         dft_mat.restoreDenseColumnVec(i, col)
-    
+
     for M in (i_dft_mat, dft_mat):
         M.assemblyBegin(PETSc.Mat.AssemblyType.FINAL)
         M.assemblyEnd(PETSc.Mat.AssemblyType.FINAL)
     return dft_mat, i_dft_mat.transpose()
 
-def randomized_time_stepping_svd(lin_op, omega, n_periods, n_timesteps, n_rand, n_loops, n_svals, ts_method: str = 'RK4'):
+
+def randomized_time_stepping_svd(
+    lin_op,
+    omega,
+    n_periods,
+    n_timesteps,
+    n_rand,
+    n_loops,
+    n_svals,
+    ts_method: str = "RK4",
+):
     r"""
         Compute the SVD of the linear operator :math:`iwI - A`
         specified by :code:`lin_op` using a time-stepping randomized SVD algorithm
@@ -75,7 +102,7 @@ def randomized_time_stepping_svd(lin_op, omega, n_periods, n_timesteps, n_rand, 
     delta_t = t_s / n_omega
     dt = delta_t / ceil(delta_t / (t_s / n_timesteps))
     t_ratio = delta_t / dt
-    
+
     omega = omega[omega >= 0] if real_op else omega
 
     comm = MPI.COMM_WORLD
@@ -111,7 +138,9 @@ def randomized_time_stepping_svd(lin_op, omega, n_periods, n_timesteps, n_rand, 
         X.append(X_k)
 
     # Assemble DFT matrices
-    dft_mat, i_dft_mat = construct_dft_mats(n_omega, n_omega_eff, n_timesteps, N, real_op)
+    dft_mat, i_dft_mat = construct_dft_mats(
+        n_omega, n_omega_eff, n_timesteps, N, real_op
+    )
 
     q_temp = SLEPc.BV().create(comm=MPI.COMM_WORLD)
     q_temp.setSizes(N, n_rand)
@@ -148,19 +177,23 @@ def randomized_time_stepping_svd(lin_op, omega, n_periods, n_timesteps, n_rand, 
         for period in range(n_periods):
             for i in range(n_timesteps):
                 # print(f"Period {period}, Timestep {i}")
-                sample_forcing(f, forcing_mat, (2*i) % (2*n_timesteps))
-                sample_forcing(f_next, forcing_mat, (2*i + 2) % (2*n_timesteps))
+                sample_forcing(f, forcing_mat, (2 * i) % (2 * n_timesteps))
+                sample_forcing(
+                    f_next, forcing_mat, (2 * i + 2) % (2 * n_timesteps)
+                )
 
                 forcing_arg = None
-                if ts_method.upper() == 'RK4' or ts_method.upper() == 'CN':
+                if ts_method.upper() == "RK4" or ts_method.upper() == "CN":
                     forcing_arg = (f, f_next)
-                elif ts_method.upper() == 'BE':
+                elif ts_method.upper() == "BE":
                     forcing_arg = f_next
 
-                q_temp_next_step = timestep(lin_op, q_temp, f=forcing_arg, method=ts_method)
+                q_temp_next_step = timestep(
+                    lin_op, q_temp, f=forcing_arg, method=ts_method
+                )
                 q_temp_next_step.copy(q_temp)
 
-                if period == n_periods - 1 and (i+1) % t_ratio == 0:
+                if period == n_periods - 1 and (i + 1) % t_ratio == 0:
                     Y_new = SLEPc.BV().create(comm=MPI.COMM_WORLD)
                     Y_new.setSizes(N, n_rand)
                     Y_new.setType("vecs")
@@ -193,19 +226,29 @@ def randomized_time_stepping_svd(lin_op, omega, n_periods, n_timesteps, n_rand, 
         for period in range(n_periods):
             for i in range(n_timesteps):
                 # print(f"Period {period}, Timestep {i}")
-                sample_forcing(f, forcing_mat, (2*(n_timesteps - i - 1)) % (2*n_timesteps))
-                sample_forcing(f_next, forcing_mat, (2*(n_timesteps - i - 1) - 2) % (2*n_timesteps))
+                sample_forcing(
+                    f,
+                    forcing_mat,
+                    (2 * (n_timesteps - i - 1)) % (2 * n_timesteps),
+                )
+                sample_forcing(
+                    f_next,
+                    forcing_mat,
+                    (2 * (n_timesteps - i - 1) - 2) % (2 * n_timesteps),
+                )
 
                 forcing_arg = None
-                if ts_method.upper() == 'RK4' or ts_method.upper() == 'CN':
+                if ts_method.upper() == "RK4" or ts_method.upper() == "CN":
                     forcing_arg = (f, f_next)
-                elif ts_method.upper() == 'BE':
+                elif ts_method.upper() == "BE":
                     forcing_arg = f_next
 
-                q_temp_next_step = timestep(lin_op, q_temp, f=forcing_arg, method=ts_method)
-                q_temp_next_step.copy(q_temp) 
-                    
-                if period == n_periods - 1 and (i+1) % t_ratio == 0:
+                q_temp_next_step = timestep(
+                    lin_op, q_temp, f=forcing_arg, method=ts_method
+                )
+                q_temp_next_step.copy(q_temp)
+
+                if period == n_periods - 1 and (i + 1) % t_ratio == 0:
                     S_new = SLEPc.BV().create(comm=MPI.COMM_WORLD)
                     S_new.setSizes(N, n_rand)
                     S_new.setType("vecs")
@@ -297,13 +340,23 @@ def randomized_time_stepping_svd(lin_op, omega, n_periods, n_timesteps, n_rand, 
         return Z
 
     def order_mat_for_Nw(mat):
-        mat = mat[int(n_omega_eff/2):] + mat[:int(n_omega_eff/2)]
+        mat = mat[int(n_omega_eff / 2) :] + mat[: int(n_omega_eff / 2)]
         return mat
 
-    Y_hat = permute_mat_to_k_list(orthogonalize_timestepped_mat(permute_mat_to_Nw_list(direct_action(X))))
+    Y_hat = permute_mat_to_k_list(
+        orthogonalize_timestepped_mat(permute_mat_to_Nw_list(direct_action(X)))
+    )
     for q in range(n_loops):
-        S_hat = permute_mat_to_k_list(orthogonalize_timestepped_mat(permute_mat_to_Nw_list(adjoint_action(Y_hat))))
-        Y_hat = permute_mat_to_k_list(orthogonalize_timestepped_mat(permute_mat_to_Nw_list(direct_action(S_hat))))
+        S_hat = permute_mat_to_k_list(
+            orthogonalize_timestepped_mat(
+                permute_mat_to_Nw_list(adjoint_action(Y_hat))
+            )
+        )
+        Y_hat = permute_mat_to_k_list(
+            orthogonalize_timestepped_mat(
+                permute_mat_to_Nw_list(direct_action(S_hat))
+            )
+        )
     S_hat = order_mat_for_Nw(permute_mat_to_Nw_list(adjoint_action(Y_hat)))
     Y_hat = order_mat_for_Nw(permute_mat_to_Nw_list(Y_hat))
 
@@ -329,14 +382,16 @@ def randomized_time_stepping_svd(lin_op, omega, n_periods, n_timesteps, n_rand, 
             if not np.isfinite(S_local).all():
                 raise ValueError("S_local contains NaN/Inf")
             if np.max(np.abs(S_local)) == 0:
-                raise ValueError("S_local is identically zero - cannot compute SVD")
+                raise ValueError(
+                    "S_local is identically zero - cannot compute SVD"
+                )
 
             u_tilde, s, vh = sp.sparse.linalg.svds(S_local, k=n_svals)
             s = np.flip(s)
             S[i, :] = s
             S.assemblyBegin(PETSc.Mat.AssemblyType.FINAL)
             S.assemblyEnd(PETSc.Mat.AssemblyType.FINAL)
-            
+
             factor = u_tilde @ np.diag(s)
             U_arr = Y_full @ factor
             U_i = SLEPc.BV().create(comm=MPI.COMM_SELF)

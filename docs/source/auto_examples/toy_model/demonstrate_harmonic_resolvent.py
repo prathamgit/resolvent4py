@@ -35,7 +35,7 @@ In particular, we demonstrate the following:
   (This projector is, in general, more appropriate because its range is an
   invariant subspace of :math:`T`.)
 
-- Using :func:`~resolvent4py.linalg.randomized_svd.randomized_svd` 
+- Using :func:`~resolvent4py.linalg.randomized_svd.randomized_svd`
   to compute the
   singular value decomposition of :math:`H_1` and :math:`H_2`.
   These agree with each other, except that :math:`\sigma_1(H_2) \to \infty`

@@ -2,6 +2,7 @@ from petsc4py import PETSc
 from slepc4py import SLEPc
 import resolvent4py as res4py
 import numpy as np
+import scipy as sp
 
 
 def generate_random_matrix(comm, size, complex=True):
@@ -21,32 +22,18 @@ def generate_random_matrix(comm, size, complex=True):
     return Apetsc, Apython
 
 
-def generate_negative_semidefinite_matrix(comm, size, complex=True):
-    r"""Create negative semidefinite matrix A of shape (N, N), i.e. all eigenvalues ≤ 0."""
-    N, _ = size
-    Nl = res4py.compute_local_size(N)
-    Bpetsc = res4py.generate_random_petsc_sparse_matrix(
-        comm, ((Nl, N), (Nl, N)),
-        int(0.3 * N * N),
-        complex
-    )
-    Bpetsc.scale(100)
-    B = Bpetsc.copy()
-    BH = Bpetsc.copy()
-    BH.hermitianTranspose()
-    A = B.matMult(BH)
-    A.scale(-1.0)
-
-    Atemp = A.copy()
-    Atemp.convert(PETSc.Mat.Type.DENSE)
-    Aseq = res4py.distributed_to_sequential_matrix(comm, Atemp)
-    Apython = Aseq.getDenseArray().copy()
-    B.destroy()
-    BH.destroy()
-    Aseq.destroy()
-    Atemp.destroy()
-    return A, Apython
-
+def generate_stable_random_matrix(comm, size, complex=True):
+    r"""Create random matrix with eigenvalues with negative real part"""
+    Apetsc, Apython = generate_random_matrix(comm, size, complex)
+    evals, _ = sp.linalg.eig(Apython)
+    shift = np.sort(evals.real)[-1]
+    if shift >= 0.0:
+        Id = res4py.create_AIJ_identity(comm, Apetsc.getSizes())
+        Id.convert(PETSc.Mat.Type.AIJ)
+        Apetsc.axpy(-2.0 * shift, Id)
+        Id.destroy()
+        Apython -= 2.0 * shift * np.eye(Apython.shape[0])
+    return Apetsc, Apython
 
 
 def generate_random_bv(comm, size, complex=True):
