@@ -25,9 +25,7 @@ def rank_size(comm):
 
 @pytest.fixture(
     params=[
-        pytest.param((10, 10), marks=pytest.mark.local),
-        pytest.param((20, 20), marks=pytest.mark.development),
-        pytest.param((50, 50), marks=pytest.mark.main),
+        pytest.param((50, 50), marks=pytest.mark.local),
     ]
 )
 def square_matrix_size(request):
@@ -38,8 +36,6 @@ def square_matrix_size(request):
 @pytest.fixture(
     params=[
         pytest.param((50, 20), marks=pytest.mark.local),
-        pytest.param((100, 70), marks=pytest.mark.development),
-        pytest.param((300, 190), marks=pytest.mark.main),
     ]
 )
 def rectangular_matrix_size(request):

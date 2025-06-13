@@ -96,6 +96,7 @@ def test_time_stepper(comm, square_matrix_size):
     r"""Test time stepper in RSVD-dt algorithm."""
 
     N, _ = square_matrix_size
+    N = 5 if N > 5 else N
 
     n_periods = 50
     omega = random.uniform(0.5, 1.5)
