@@ -65,13 +65,13 @@ L = res4py.linear_operators.MatrixLinearOperator(comm, Rinv, ksp)
 
 # Compute the svd
 res4py.petscprint(comm, "Running randomized SVD...")
-n_rand = 40
-n_loops = 3
-n_svals = 10
+n_rand = 10
+n_loops = 2
+n_svals = 2
 U, S, V = res4py.linalg.randomized_svd(
     L, L.solve_mat, n_rand, n_loops, n_svals
 )
-
+print(S)
 # Check convergence
 res4py.linalg.check_randomized_svd_convergence(L.solve, U, S, V)
 

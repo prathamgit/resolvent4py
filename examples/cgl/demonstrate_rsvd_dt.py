@@ -1,8 +1,21 @@
 r"""
-RSVD-dt Demonstration
-=====================
+Resolvent Analysis Demonstration
+================================
 
-Description here.
+Given the linear dynamics :math:`d_t q = Aq`, we perform resolvent analysis
+by computing the singular value decomposition (SVD) of the resolvent operator
+
+.. math::
+
+    R(i\omega) = \left(i\omega I - A\right)^{-1}
+
+with :math:`\omega = 0.648` the natural frequency of the linearized CGL
+equation. This script demonstrates the following:
+
+- LU decomposition using :func:`~resolvent4py.utils.ksp.create_mumps_solver`
+- Resolvent analysis in the frequency domain using
+  :func:`~resolvent4py.linalg.randomized_svd.randomized_svd`
+
 """
 
 import os
@@ -11,73 +24,25 @@ import matplotlib.pyplot as plt
 import numpy as np
 import resolvent4py as res4py
 import scipy as sp
-from mpi4py import MPI
 from petsc4py import PETSc
 
-import pathlib
 import cgl
-
-
-def save_bv_list(bv_list, prefix, save_path):
-    save_dir = pathlib.Path(save_path)
-    save_dir.mkdir(parents=True, exist_ok=True)
-    for i, bv in enumerate(bv_list):
-        nv = bv.getSizes()[1]
-        for j in range(nv):
-            vec = bv.getColumn(j)
-            fname = save_dir / f"{prefix}_freq{i:02d}_mode{j:02d}.petsc"
-            viewer = PETSc.Viewer().createBinary(
-                str(fname), "w", comm=vec.comm
-            )
-            vec.view(viewer)
-            viewer.destroy()
-            bv.restoreColumn(j, vec)
-
-
-def ensure_structural_diagonal(mat, value_if_empty=0.0):
-    r0, _ = mat.getOwnershipRange()
-    diag = mat.getDiagonal()
-    holes = diag.getArray() == 0
-    diag.destroy()
-
-    mat.setOption(PETSc.Mat.Option.NEW_NONZERO_LOCATION_ERR, False)
-    for local_i, hole in enumerate(holes):
-        if hole:
-            global_i = r0 + local_i
-            mat.setValue(
-                global_i,
-                global_i,
-                value_if_empty,
-                addv=PETSc.InsertMode.INSERT_VALUES,
-            )
-
-    mat.assemblyBegin(PETSc.Mat.AssemblyType.FINAL)
-    mat.assemblyEnd(PETSc.Mat.AssemblyType.FINAL)
-
-
-def shift_matrix_by_matrix(A, G, alpha):
-    A.axpy(-alpha, G)
-    A.assemblyBegin(PETSc.Mat.AssemblyType.FINAL)
-    A.assemblyEnd(PETSc.Mat.AssemblyType.FINAL)
-
 
 plt.rcParams.update(
     {
         "font.family": "serif",
         "font.sans-serif": ["Computer Modern"],
         "font.size": 18,
-        "text.usetex": False,
+        "text.usetex": True,
     }
 )
 
-comm = MPI.COMM_WORLD
-rank = comm.Get_rank()
-save_path = "results/"
+comm = PETSc.COMM_WORLD
 
 # Read the A matrix from file
 res4py.petscprint(comm, "Reading matrix from file...")
 load_path = "data/"
-N = 48884
+N = 2000
 Nl = res4py.compute_local_size(N)
 sizes = ((Nl, N), (Nl, N))
 names = [
@@ -86,51 +51,52 @@ names = [
     load_path + "vals.dat",
 ]
 A = res4py.read_coo_matrix(comm, names, sizes)
-
-comm.barrier()
-
-s = 0.0206
-
-ksp = res4py.create_gmres_bjacobi_solver(comm, A, nblocks=comm.Get_size())
-res4py.petscprint(comm, "A ksp")
-L = res4py.linear_operators.MatrixLinearOperator(comm, A, ksp)
-res4py.petscprint(comm, "A operator")
+L = res4py.linear_operators.MatrixLinearOperator(comm, A)
 
 # Compute the svd
 res4py.petscprint(comm, "Running randomized SVD...")
-n_periods = 20
-n_timesteps = 20000
-n_rand = 5
-n_loops = 3
-n_svals = 1
+omega = 0.648
+n_omegas = 1
+n_periods = 100
+n_rand = 2
+n_loops = 1
+n_svals = 2
+U, S, V = res4py.linalg.rsvd_dt(L, 1e-4, omega, n_omegas, n_periods, n_rand, n_loops, n_svals, 1)
+S = S[1]
+print(S)
 
-U, S, V = res4py.linalg.randomized_time_stepping_svd(
-    L,
-    np.array([-2 * s, -s, 0, s]),
-    n_periods,
-    n_timesteps,
-    n_rand,
-    n_loops,
-    n_svals,
-    ts_method="RK4",
-)
+# Destroy objects
+L.destroy()
 
-if rank == 0:
-    save_bv_list(U, "U", save_path)
-    save_bv_list(V, "V", save_path)
 
-# S.assemble()
 
-# if comm.rank == 0:
-#     pathlib.Path(save_path).mkdir(exist_ok=True)
-#     s_fname = os.path.join(save_path, "S.petsc")
-#     viewer = PETSc.Viewer().createBinary(s_fname, "w", comm=comm)
-#     S.view(viewer)
-#     viewer.destroy()
+l = 30 * 2
+x = np.linspace(-l / 2, l / 2, num=N, endpoint=True)
+nu = 1.0 * (2 + 0.4 * 1j)
+gamma = 1 - 1j
+mu0 = 0.38
+mu2 = -0.01
+sigma = 0.4
+system = cgl.CGL(x, nu, gamma, mu0, mu2, sigma)
 
-# S.destroy()
-# for bv in U: bv.destroy()
-# for bv in V: bv.destroy()
 
-# [223073.00213949]
-# [131396.3608767]
+if comm.getRank() == 0:
+    save_path = "results/"
+    os.makedirs(save_path) if not os.path.exists(save_path) else None
+    print("Making figure...")
+    Id = sp.sparse.identity(N)
+    R = sp.linalg.inv((1j * omega * Id - system.A).todense())
+    _, s, _ = sp.linalg.svd(R)
+    S = np.diag(S)
+
+    plt.figure()
+    plt.plot(S.real, "ko", label="res4py")
+    plt.plot(s[: len(S)].real, "rx", label="exact")
+    ax = plt.gca()
+    ax.set_xlabel(r"Index $j$")
+    ax.set_ylabel(r"Singular values $\sigma_j(\omega)$")
+    ax.set_title(r"SVD of $R(\omega)$")
+    ax.set_yscale("log")
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(save_path + "singular_values_rsvd_dt.png")
