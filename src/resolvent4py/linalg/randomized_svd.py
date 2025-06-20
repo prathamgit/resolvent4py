@@ -46,7 +46,7 @@ def randomized_svd(
     :type n_loops: int
     :param n_svals: number of singular triplets to return
     :type n_svals: int
-
+    
     :return: leading :code:`n_svals` left singular vectors, 
         singular values and right singular vectors
     :rtype: Tuple[SLEPc.BV, np.ndarray, SLEPc.BV]
