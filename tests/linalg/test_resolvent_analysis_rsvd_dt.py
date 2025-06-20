@@ -6,6 +6,7 @@ from slepc4py import SLEPc
 import matplotlib.pyplot as plt
 import random
 from .. import pytest_utils
+import resolvent4py.linalg.resolvent_analysis_time_stepping as res_ts
 
 
 def _compute_exact_svd(Apython, omegas, n_svals):
@@ -42,7 +43,7 @@ def _create_random_fourier_coefficients(comm, sizes, omegas, tstore, real):
 
     f = F.createVec()
     for i in range(len(tstore)):
-        f = res4py.linalg.my_rsvd_dt._ifft(Fhat, f, omegas, tstore[i])
+        f = res_ts._ifft(Fhat, f, omegas, tstore[i])
         F.insertVec(i, f)
 
     return Fhat, F
@@ -64,16 +65,14 @@ def test_fft(comm, square_matrix_size):
     dt = comm_mpi.bcast(dt, root=0)
 
     for real in [True, False]:
-        _, tstore, omegas, n_omegas = (
-            res4py.linalg.my_rsvd_dt._create_time_and_frequency_arrays(
-                dt, omega, n_omegas, 10, real
-            )
+        _, tstore, omegas, n_omegas = res_ts._create_time_and_frequency_arrays(
+            dt, omega, n_omegas, 10, real
         )
         Fhat, F = _create_random_fourier_coefficients(
             comm, sizes, omegas, tstore, real
         )
         Fhat2 = Fhat.duplicate()
-        Fhat2 = res4py.linalg.my_rsvd_dt._fft(F, Fhat2, real)
+        Fhat2 = res_ts._fft(F, Fhat2, real)
         error = 0
         for i in range(n_omegas):
             f1 = Fhat.getColumn(i)
@@ -113,10 +112,10 @@ def test_time_stepper(comm, square_matrix_size):
                 comm, (N, N), not real
             )
             sizes = Apetsc.getSizes()[0]
-            L = res4py.linear_operators.MatrixLinearOperator(comm, Apetsc)
+            L = res4py.linear_operators.MatrixLinearOperator(Apetsc)
 
             tsim, tstore, omegas, n_omegas = (
-                res4py.linalg.my_rsvd_dt._create_time_and_frequency_arrays(
+                res_ts._create_time_and_frequency_arrays(
                     dt, omega, n_omegas, n_periods, real
                 )
             )
@@ -129,7 +128,7 @@ def test_time_stepper(comm, square_matrix_size):
 
             # Compute post-transient response using rsvd_dt
             Laction = L.apply_hermitian_transpose if adjoint else L.apply
-            Xhat = res4py.linalg.my_rsvd_dt._action(
+            Xhat = res_ts._action(
                 L,
                 Laction,
                 tsim,
@@ -173,7 +172,7 @@ def test_time_stepper(comm, square_matrix_size):
     assert np.max(error) < 1
 
 
-def test_rsvd_dt(comm, square_matrix_size):
+def test_resolvent_analysis_time_stepping(comm, square_matrix_size):
     r"""Test RSVD-dt algorithm."""
 
     N, _ = square_matrix_size
@@ -187,26 +186,24 @@ def test_rsvd_dt(comm, square_matrix_size):
     omega = comm_mpi.bcast(omega, root=0)
     n_omegas = comm_mpi.bcast(n_omegas, root=0)
     dt = comm_mpi.bcast(dt, root=0)
-
+    
     errors = []
     for real in [True, False]:
         Apetsc, Apython = pytest_utils.generate_stable_random_matrix(
             comm, (N, N), not real
         )
 
-        L = res4py.linear_operators.MatrixLinearOperator(comm, Apetsc)
+        L = res4py.linear_operators.MatrixLinearOperator(Apetsc)
 
         n_rand = N
         n_loops = 2
         n_svals = 1
-        _, Slst, _ = res4py.linalg.my_rsvd_dt.rsvd_dt(
+        _, Slst, _ = res_ts.resolvent_analysis_rsvd_dt(
             L, dt, omega, n_omegas, n_periods, n_rand, n_loops, n_svals
         )
 
-        _, _, omegas, _ = (
-            res4py.linalg.my_rsvd_dt._create_time_and_frequency_arrays(
-                dt, omega, n_omegas, n_periods, not complex
-            )
+        _, _, omegas, _ = res_ts._create_time_and_frequency_arrays(
+            dt, omega, n_omegas, n_periods, not complex
         )
         _, Slst_, _ = _compute_exact_svd(Apython, omegas, n_svals)
         error = 0

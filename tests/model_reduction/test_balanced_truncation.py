@@ -14,7 +14,7 @@ def L_generator(omega, A):
     Rinv.scale(1j * omega)
     Rinv.axpy(-1.0, A)
     ksp = res4py.create_mumps_solver(comm, Rinv)
-    L = res4py.linear_operators.MatrixLinearOperator(comm, Rinv, ksp)
+    L = res4py.linear_operators.MatrixLinearOperator(Rinv, ksp)
     return (L, L.solve_mat, (L.destroy,))
 
 
@@ -30,7 +30,7 @@ def test_balanced_truncation_real(comm):
 
     # Compute quadrature points and quadrature weights
     omegas, wlgs = [], []
-    domega = 0.1
+    domega = 0.05
     intervals = np.arange(0, 31 * domega, domega)
     idx = len(intervals)
     domega *= 10
@@ -68,7 +68,7 @@ def test_balanced_truncation_real(comm):
     )
     r = 1
     Phi, Psi, S = res4py.model_reduction.compute_balanced_projection(X, Y, r)
-    linop = res4py.linear_operators.MatrixLinearOperator(comm, Apetsc)
+    linop = res4py.linear_operators.MatrixLinearOperator(Apetsc)
     Ar, _, _ = res4py.model_reduction.assemble_reduced_order_tensors(
         linop, Bpetsc, Cpetsc, Phi, Psi
     )

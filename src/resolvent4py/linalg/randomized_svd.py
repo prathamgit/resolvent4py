@@ -59,13 +59,13 @@ def randomized_svd(
         else L.solve_hermitian_transpose_mat
     )
     # Assemble random BV (this will be multiplied against L^*)
-    rowsizes = L._dimensions[0]
+    rowsizes = L.get_dimensions()[0]
     # Set seed
     rank = L.get_comm().getRank()
     rand = PETSc.Random().create(comm=L.get_comm())
     rand.setType(PETSc.Random.Type.RAND)
     rand.setSeed(round(np.random.randint(1000, 100000) + rank))
-    X = SLEPc.BV().create(comm=L._comm)
+    X = SLEPc.BV().create(comm=L.get_comm())
     X.setSizes(rowsizes, n_rand)
     X.setType("mat")
     X.setRandomContext(rand)
@@ -73,24 +73,24 @@ def randomized_svd(
     rand.destroy()
     for j in range(n_rand):
         xj = X.getColumn(j)
-        if L._real:
+        if L.get_real_flag():
             row_offset = xj.getOwnershipRange()[0]
             rows = np.arange(rowsizes[0], dtype=PETSc.IntType) + row_offset
             xj.setValues(rows, xj.getArray().real)
             xj.assemble()
-        if L._block_cc:
-            enforce_complex_conjugacy(L._comm, xj, L._nblocks)
+        if L.get_block_cc_flag():
+            enforce_complex_conjugacy(L.get_comm(), xj, L.get_nblocks())
         X.restoreColumn(j, xj)
     X.orthogonalize(None)
     # Perform randomized SVD loop
-    Qadj = SLEPc.BV().create(comm=L._comm)
-    Qadj.setSizes(L._dimensions[-1], n_rand)
+    Qadj = SLEPc.BV().create(comm=L.get_comm())
+    Qadj.setSizes(L.get_dimensions()[-1], n_rand)
     Qadj.setType("mat")
     Qadj = action_adj(X, Qadj)
     Qadj.orthogonalize(None)
     X.destroy()
-    Qfwd = SLEPc.BV().create(comm=L._comm)
-    Qfwd.setSizes(L._dimensions[0], n_rand)
+    Qfwd = SLEPc.BV().create(comm=L.get_comm())
+    Qfwd.setSizes(L.get_dimensions()[0], n_rand)
     Qfwd.setType("mat")
     R = create_dense_matrix(PETSc.COMM_SELF, (n_rand, n_rand))
     for j in range(n_loops):

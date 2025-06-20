@@ -47,20 +47,20 @@ def arnoldi_iteration(
     :rtype: (`BV`_ with :code:`krylov_dim` columns, \
         numpy.ndarray of size :code:`krylov_dim x krylov_dim`)
     """
-    comm = L._comm
+    comm = L.get_comm()
     sizes = (
-        L._dimensions[0]
+        L.get_dimensions()[0]
         if action == L.apply or action == L.solve
-        else L._dimensions[1]
+        else L.get_dimensions()[1]
     )
     nblocks = L.get_nblocks()
-    block_cc = L._block_cc
+    block_cc = L.get_block_cc_flag()
     # Initialize the Hessenberg matrix and the BV for the Krylov subspace
     Q = SLEPc.BV().create(comm=comm)
     Q.setSizes(sizes, krylov_dim)
     Q.setType("mat")
     H = np.zeros((krylov_dim, krylov_dim), dtype=np.complex128)
-    complex = False if L._real else True
+    complex = False if L.get_real_flag() else True
     q = generate_random_petsc_vector(comm, sizes, complex)
     enforce_complex_conjugacy(comm, q, nblocks) if block_cc == True else None
     q.scale(1.0 / q.norm())

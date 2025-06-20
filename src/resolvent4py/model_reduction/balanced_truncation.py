@@ -149,8 +149,8 @@ def compute_gramian_factors(
             destroy()
     Xsizes = (LB.getSizes()[0], Xarray.shape[-1])
     Ysizes = (LC.getSizes()[0], Yarray.shape[-1])
-    X = PETSc.Mat().createDense(Xsizes, None, Xarray, MPI.COMM_WORLD)
-    Y = PETSc.Mat().createDense(Ysizes, None, Yarray, MPI.COMM_WORLD)
+    X = PETSc.Mat().createDense(Xsizes, None, Xarray, PETSc.COMM_WORLD)
+    Y = PETSc.Mat().createDense(Ysizes, None, Yarray, PETSc.COMM_WORLD)
     LB.destroy()
     LC.destroy()
     return (X, Y)
@@ -179,12 +179,12 @@ def compute_balanced_projection(
     :return: tuple :math:`(\Phi, \Psi, \Sigma)`
     :rtype: Tuple[SLEPc.BV, SLEPc.BV, numpy.ndarray]
     """
-    comm = MPI.COMM_WORLD
+    comm = PETSc.COMM_WORLD
     # Compute product Y^*@X
     Y.hermitianTranspose()
     Z = Y.matMult(X)
     Y.hermitianTranspose()
-    svd = SLEPc.SVD().create(MPI.COMM_WORLD)
+    svd = SLEPc.SVD().create(comm)
     svd.setOperators(Z)
     svd.setProblemType(SLEPc.SVD.ProblemType.STANDARD)
     svd.setType(SLEPc.SVD.Type.CROSS)
@@ -214,7 +214,7 @@ def compute_balanced_projection(
         if comm.Get_rank() == 0:
             idx = np.argmax(np.abs(U_[:, i].imag))
             angle = np.angle(U_[idx, i])
-        angle = comm.bcast(angle, root=0)
+        angle = comm.tompi4py().bcast(angle, root=0)
         U_[:, i] *= np.exp(-1j * angle)
         V_[:, i] *= np.exp(-1j * angle)
 

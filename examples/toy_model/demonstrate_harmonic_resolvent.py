@@ -109,7 +109,7 @@ Id.destroy()
 ksp = res4py.create_mumps_solver(comm, T)
 res4py.check_lu_factorization(comm, T, ksp)
 
-Top = res4py.linear_operators.MatrixLinearOperator(comm, T, ksp, nblocks)
+Top = res4py.linear_operators.MatrixLinearOperator(T, ksp, nblocks)
 
 # ------------------------------------------------------------------------------
 # -------- Read base-flow time-derivative and define projection operators ------
@@ -131,16 +131,16 @@ Phi.insertVec(0, dQ)
 Psi.insertVec(0, w)
 
 Pd = res4py.linear_operators.ProjectionLinearOperator(
-    comm, Psi, Psi, True, nblocks
+    Psi, Psi, True, nblocks
 )
 Pr = res4py.linear_operators.ProjectionLinearOperator(
-    comm, Phi, Phi, True, nblocks
+    Phi, Phi, True, nblocks
 )
 
 lops = [Pr, Top, Pd]
 lops_actions = [Pr.apply, Top.solve, Pd.apply]
 Linop = res4py.linear_operators.ProductLinearOperator(
-    comm, lops, lops_actions, nblocks
+    lops, lops_actions, nblocks
 )
 
 
@@ -173,12 +173,12 @@ if comm.getRank() == 0:
 
 
 P = res4py.linear_operators.ProjectionLinearOperator(
-    comm, Phi, Psi, True, nblocks
+    Phi, Psi, True, nblocks
 )
 lops = [P, Top, P]
 lops_actions = [P.apply, Top.solve, P.apply]
 Linop = res4py.linear_operators.ProductLinearOperator(
-    comm, lops, lops_actions, nblocks
+    lops, lops_actions, nblocks
 )
 
 D, _ = res4py.linalg.eig(Linop, Linop.apply, N - 3, 30, lambda x: -1 / x)
@@ -189,7 +189,7 @@ if comm.getRank() == 0:
     idces = np.argwhere((D.imag > -omega / 2) & (D.imag <= omega / 2)).reshape(
         -1
     )
-
+    
     plt.figure()
     plt.plot(D.real, D.imag, "ko")
     # plt.plot(D[idces].real, D[idces].imag, 'go')

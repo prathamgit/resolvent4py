@@ -37,8 +37,6 @@ class LowRankUpdatedLinearOperator(LinearOperator):
         \textcolor{black}{Y} = A^{-*}C,
 
 
-    :param comm: MPI communicator :code:`PETSc.COMM_WORLD`
-    :type comm: PETSc.Comm
     :param A: instance of the :class:`.LinearOperator` class
     :param B: tall and skinny matrix
     :type B: SLEPc.BV
@@ -58,7 +56,6 @@ class LowRankUpdatedLinearOperator(LinearOperator):
 
     def __init__(
         self: "LowRankUpdatedLinearOperator",
-        comm: PETSc.Comm,
         A: LinearOperator,
         B: SLEPc.BV,
         K: np.ndarray,
@@ -68,12 +65,13 @@ class LowRankUpdatedLinearOperator(LinearOperator):
         ] = None,
         nblocks: typing.Optional[int] = None,
     ) -> None:
+        comm = A.get_comm()
         self.A = A
-        self.L = LowRankLinearOperator(comm, B, K, C, nblocks)
+        self.L = LowRankLinearOperator(B, K, C, nblocks)
         self.W = (
-            self.compute_woodbury_operator(comm, nblocks)
+            self.compute_woodbury_operator(nblocks)
             if woodbury_factors == None
-            else LowRankLinearOperator(comm, *woodbury_factors, nblocks)
+            else LowRankLinearOperator(*woodbury_factors, nblocks)
         )
         self.create_intermediate_vectors()
         super().__init__(
@@ -82,12 +80,9 @@ class LowRankUpdatedLinearOperator(LinearOperator):
 
     def compute_woodbury_operator(
         self: "LowRankUpdatedLinearOperator",
-        comm: PETSc.Comm,
         nblocks: typing.Union[int, None],
     ) -> LowRankLinearOperator:
         r"""
-        :param comm: MPI communicator :code:`PETSc.COMM_WORLD`
-        :type comm: PETSc.Comm
         :param nblocks: number of blocks (if the operator has block structure)
         :type nblocks: Unions[int, None]
 
@@ -95,6 +90,7 @@ class LowRankUpdatedLinearOperator(LinearOperator):
             Woodbury factors :code:`X`, :code:`D` and :code:`Y`
         :rtype: LowRankUpdatedLinearOperator
         """
+        comm = self.A.get_comm()
         try:
             X = self.A.solve_mat(self.L.U)
             Y = self.A.solve_hermitian_transpose_mat(self.L.V)
@@ -108,7 +104,7 @@ class LowRankUpdatedLinearOperator(LinearOperator):
             M = XS.dot(self.L.V)
             Ma = M.getDenseArray()
             D = self.L.Sigma @ sp.linalg.inv(np.eye(Ma.shape[0]) + Ma)
-            W = LowRankLinearOperator(comm, X, D, Y, nblocks)
+            W = LowRankLinearOperator(X, D, Y, nblocks)
             XS.destroy()
             M.destroy()
             S.destroy()

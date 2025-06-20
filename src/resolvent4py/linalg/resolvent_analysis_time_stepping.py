@@ -1,4 +1,4 @@
-__all__ = ["rsvd_dt"]
+__all__ = ["resolvent_analysis_rsvd_dt"]
 
 import typing
 
@@ -12,7 +12,7 @@ from slepc4py import SLEPc
 from ..linear_operators import LinearOperator
 from ..utils.matrix import create_dense_matrix
 from ..utils.miscellaneous import petscprint
-from ..utils.vector import enforce_complex_conjugacy, vec_real
+from ..utils.vector import vec_real
 
 
 def _reorder_list(Qlist: list[SLEPc.BV], Qlist_reordered: list[SLEPc.BV]):
@@ -73,57 +73,6 @@ def _fft(
     X.restoreMat(Xmat)
     Xhat.restoreMat(Xhat_mat)
     return Xhat
-
-
-# def _action(
-#     L: LinearOperator,
-#     Laction: typing.Callable,
-#     tsim: np.array,
-#     tstore: np.array,
-#     omegas: np.array,
-#     x: PETSc.Vec,
-#     Fhat: SLEPc.BV,
-#     Xhat: SLEPc.BV,
-#     X: SLEPc.BV,
-# ):
-#     dt = tsim[1] - tsim[0]
-#     dt_store = tstore[1] - tstore[0]
-#     T = tstore[-1] + dt_store
-#     n_periods = round((tsim[-1] + dt) / T)
-#     n_save = round(dt_store / dt)
-#     idx = np.argmin(np.abs(tsim - (n_periods - 1) * T))
-#     save_idces = idx + np.arange(len(tsim[idx:]))[::n_save]
-
-#     rhs = L.create_left_vector()
-#     rhs_im1 = rhs.copy()
-#     rhs_temp = rhs.copy()
-#     Lx = x.copy()
-
-#     adjoint = True if Laction == L.apply_hermitian_transpose else False
-#     save_idx = 0
-#     for i in range(1, len(tsim)):
-#         rhs = _ifft(Fhat, rhs, omegas, tsim[i - 1], adjoint)
-#         rhs.axpy(1.0, Laction(x, Lx))
-#         if i == 1:
-#             rhs.copy(rhs_im1)
-#         else:
-#             rhs.copy(rhs_temp)
-#             rhs.scale(3 / 2)
-#             rhs.axpy(-1 / 2, rhs_im1)
-#             rhs_temp.copy(rhs_im1)
-#         x.axpy(dt, rhs)
-#         if i in save_idces:
-#             if math.isnan(x.norm()):
-#                 raise ValueError(f"Code blew up at time step {i}")
-#             X.insertVec(save_idx, x)
-#             save_idx += 1
-
-#     Xhat = _fft(X, Xhat, L._real, adjoint)
-#     objs = [rhs, rhs_im1, rhs_temp, Lx]
-#     for obj in objs:
-#         obj.destroy()
-
-#     return Xhat
 
 
 def _action(
@@ -188,7 +137,7 @@ def _action(
                     break
             X.insertVec(save_idx, x)
 
-    Xhat = _fft(X, Xhat, L._real, adjoint)
+    Xhat = _fft(X, Xhat, L.get_real_flag(), adjoint)
     objs = [rhs, rhs_im1, rhs_temp, Lx, x0]
     for obj in objs:
         obj.destroy()
@@ -219,7 +168,7 @@ def _create_time_and_frequency_arrays(
     return tsim, tstore, omegas, len(omegas)
 
 
-def rsvd_dt(
+def resolvent_analysis_rsvd_dt(
     L: LinearOperator,
     dt: float,
     omega: float,
@@ -228,11 +177,12 @@ def rsvd_dt(
     n_rand: int,
     n_loops: int,
     n_svals: int,
+    tol: typing.Optional[float] = 1e-3,
 ) -> typing.Tuple[SLEPc.BV, np.ndarray, SLEPc.BV]:
     size = L.get_dimensions()[0]
 
     tsim, tstore, omegas, n_omegas = _create_time_and_frequency_arrays(
-        dt, omega, n_omegas, n_periods, L._real
+        dt, omega, n_omegas, n_periods, L.get_real_flag()
     )
 
     Qadj_hat_lst, Qfwd_hat_lst = [], []
@@ -249,7 +199,7 @@ def rsvd_dt(
         X.setRandomContext(rand)
         X.setRandomNormal()
         rand.destroy()
-        if L._real:
+        if L.get_real_flag():
             v = X.getColumn(0)
             v = vec_real(v, True)
             X.restoreColumn(0, v)
@@ -278,7 +228,7 @@ def rsvd_dt(
     x = L.create_left_vector()
     for j in range(n_loops):
         for k in range(n_rand):
-            petscprint(L._comm, f"Running k (fwd) {k}")
+            petscprint(L.get_comm(), f"Running k (fwd) {k}")
             x.zeroEntries()
             Qfwd_hat_lst[k] = _action(
                 L,
@@ -290,6 +240,7 @@ def rsvd_dt(
                 Qadj_hat_lst[k],
                 Qfwd_hat_lst[k],
                 Qfwd,
+                tol,
             )
         Qfwd_hat_lst2 = _reorder_list(Qfwd_hat_lst, Qfwd_hat_lst2)
         for i in range(len(Qfwd_hat_lst2)):
@@ -297,7 +248,7 @@ def rsvd_dt(
         Qfwd_hat_lst = _reorder_list(Qfwd_hat_lst2, Qfwd_hat_lst)
 
         for k in range(n_rand):
-            petscprint(L._comm, f"Running k (adj) {k}")
+            petscprint(L.get_comm(), f"Running k (adj) {k}")
             x.zeroEntries()
             Qadj_hat_lst[k] = _action(
                 L,
@@ -309,6 +260,7 @@ def rsvd_dt(
                 Qfwd_hat_lst[k],
                 Qadj_hat_lst[k],
                 Qadj,
+                tol,
             )
         Qadj_hat_lst2 = _reorder_list(Qadj_hat_lst, Qadj_hat_lst2)
         Rlst = []

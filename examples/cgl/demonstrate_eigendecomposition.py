@@ -55,7 +55,7 @@ M.scale(s)
 M.axpy(-1.0, A)
 ksp = res4py.create_mumps_solver(comm, M)
 res4py.check_lu_factorization(comm, M, ksp)
-L = res4py.linear_operators.MatrixLinearOperator(comm, M, ksp)
+L = res4py.linear_operators.MatrixLinearOperator(M, ksp)
 
 # Compute the eigendecomp.
 res4py.petscprint(comm, "Running Arnoldi iteration...")
@@ -67,7 +67,7 @@ D, V = res4py.linalg.eig(
 
 # Check convergence
 L.destroy()
-L = res4py.linear_operators.MatrixLinearOperator(comm, A)
+L = res4py.linear_operators.MatrixLinearOperator(A)
 res4py.linalg.check_eig_convergence(L.apply, D, V)
 
 # Destroy objects

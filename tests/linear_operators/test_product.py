@@ -25,13 +25,13 @@ def test_product_on_vectors(comm, square_matrix_size):
     Apython1 += Upython @ S @ Vpython.conj().T
 
     ksp = res4py.create_mumps_solver(comm, Apetsc1)
-    linop_ = res4py.linear_operators.MatrixLinearOperator(comm, Apetsc1, ksp)
+    linop_ = res4py.linear_operators.MatrixLinearOperator(Apetsc1, ksp)
     linop1 = res4py.linear_operators.LowRankUpdatedLinearOperator(
-        comm, linop_, U, S, V
+        linop_, U, S, V
     )
-    linop2 = res4py.linear_operators.MatrixLinearOperator(comm, Apetsc2)
-    linop3 = res4py.linear_operators.MatrixLinearOperator(comm, Apetsc3)
-    linop4 = res4py.linear_operators.MatrixLinearOperator(comm, Apetsc4)
+    linop2 = res4py.linear_operators.MatrixLinearOperator(Apetsc2)
+    linop3 = res4py.linear_operators.MatrixLinearOperator(Apetsc3)
+    linop4 = res4py.linear_operators.MatrixLinearOperator(Apetsc4)
 
     A = sp.linalg.inv(Apython1) @ Apython2 @ Apython3.conj().T @ Apython4
     linops = [linop1, linop2, linop3, linop4]
@@ -41,9 +41,7 @@ def test_product_on_vectors(comm, square_matrix_size):
         linop3.apply_hermitian_transpose,
         linop4.apply,
     ]
-    linop = res4py.linear_operators.ProductLinearOperator(
-        comm, linops, actions
-    )
+    linop = res4py.linear_operators.ProductLinearOperator(linops, actions)
 
     x, xpython = pytest_utils.generate_random_vector(comm, A.shape[-1])
     y = linop.create_left_vector()
@@ -95,13 +93,13 @@ def test_product_on_bvs(comm, square_matrix_size):
     Apython1 += Upython @ S @ Vpython.conj().T
 
     ksp = res4py.create_mumps_solver(comm, Apetsc1)
-    linop_ = res4py.linear_operators.MatrixLinearOperator(comm, Apetsc1, ksp)
+    linop_ = res4py.linear_operators.MatrixLinearOperator(Apetsc1, ksp)
     linop1 = res4py.linear_operators.LowRankUpdatedLinearOperator(
-        comm, linop_, U, S, V
+        linop_, U, S, V
     )
-    linop2 = res4py.linear_operators.MatrixLinearOperator(comm, Apetsc2)
-    linop3 = res4py.linear_operators.MatrixLinearOperator(comm, Apetsc3)
-    linop4 = res4py.linear_operators.MatrixLinearOperator(comm, Apetsc4)
+    linop2 = res4py.linear_operators.MatrixLinearOperator(Apetsc2)
+    linop3 = res4py.linear_operators.MatrixLinearOperator(Apetsc3)
+    linop4 = res4py.linear_operators.MatrixLinearOperator(Apetsc4)
 
     A = sp.linalg.inv(Apython1) @ Apython2 @ Apython3.conj().T @ Apython4
     linops = [linop1, linop2, linop3, linop4]
@@ -111,9 +109,7 @@ def test_product_on_bvs(comm, square_matrix_size):
         linop3.apply_hermitian_transpose,
         linop4.apply,
     ]
-    linop = res4py.linear_operators.ProductLinearOperator(
-        comm, linops, actions
-    )
+    linop = res4py.linear_operators.ProductLinearOperator(linops, actions)
 
     s = 5
     X, Xpython = pytest_utils.generate_random_bv(comm, (A.shape[-1], s))

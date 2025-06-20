@@ -7,7 +7,7 @@ def test_randomized_svd(comm, rectangular_random_matrix):
     """Test randomized SVD with different matrix sizes based on test level."""
     Apetsc, Apython = rectangular_random_matrix
     krylov_dim = np.min([30, np.min(Apython.shape)])
-    linop = res4py.linear_operators.MatrixLinearOperator(comm, Apetsc)
+    linop = res4py.linear_operators.MatrixLinearOperator(Apetsc)
     n_cycles = 2
     r = np.min([3, krylov_dim])
     _, S, _ = res4py.linalg.randomized_svd(

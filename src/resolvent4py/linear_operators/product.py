@@ -39,7 +39,6 @@ class ProductLinearOperator(LinearOperator):
 
     def __init__(
         self: "ProductLinearOperator",
-        comm: PETSc.Comm,
         linops: typing.List[LinearOperator],
         linops_actions: typing.List[
             typing.Callable[[PETSc.Vec, typing.Optional[PETSc.Vec]], PETSc.Vec]
@@ -107,17 +106,19 @@ class ProductLinearOperator(LinearOperator):
         L1 = getattr(self, self.names[0])
         Ln = getattr(self, self.names[-1])
         dimr = (
-            Ln._dimensions[0]
+            Ln.get_dimensions()[0]
             if self.actions[-1] == Ln.apply or self.actions[-1] == Ln.solve
-            else Ln._dimensions[-1]
+            else Ln.get_dimensions()[-1]
         )
         dimc = (
-            L1._dimensions[-1]
+            L1.get_dimensions()[-1]
             if self.actions[0] == L1.apply or self.actions[0] == L1.solve
-            else Ln._dimensions[0]
+            else Ln.get_dimensions()[0]
         )
         dims = (dimr, dimc)
-        super().__init__(comm, "ProductLinearOperator", dims, nblocks)
+        super().__init__(
+            linops[0].get_comm(), "ProductLinearOperator", dims, nblocks
+        )
 
     def create_intermediate_vectors(self: "ProductLinearOperator") -> None:
         self.intermediate_vecs = []
@@ -164,11 +165,11 @@ class ProductLinearOperator(LinearOperator):
         intermediate_bvs = []
         for j in range(self.nlops - 1):
             L = getattr(self, self.names[j])
-            X = SLEPc.BV().create(self._comm)
+            X = SLEPc.BV().create(self.get_comm())
             sz = (
-                L._dimensions[0]
+                L.get_dimensions()[0]
                 if self.actions[j] == L.apply or self.actions[j] == L.solve
-                else L._dimensions[-1]
+                else L.get_dimensions()[-1]
             )
             X.setSizes(sz, m)
             X.setType("mat")
@@ -197,11 +198,11 @@ class ProductLinearOperator(LinearOperator):
         intermediate_bvs = []
         for j in range(self.nlops - 1):
             L = getattr(self, self.names[j])
-            X = SLEPc.BV().create(self._comm)
+            X = SLEPc.BV().create(self.get_comm())
             sz = (
-                L._dimensions[-1]
+                L.get_dimensions()[-1]
                 if self.actions[j] == L.apply or self.actions[j] == L.solve
-                else L._dimensions[0]
+                else L.get_dimensions()[0]
             )
             X.setSizes(sz, m)
             X.setType("mat")

@@ -38,10 +38,10 @@ class LinearOperator(metaclass=abc.ABCMeta):
         self._name = name
         self._dimensions = dimensions
         self._nblocks = nblocks
-        self._real = self.check_if_real_valued()
-        self._block_cc = (
+        self._real_flag = self.check_if_real_valued()
+        self._block_cc_flag = (
             self.check_if_complex_conjugate_structure()
-            if self._nblocks != None
+            if self.get_nblocks() != None
             else None
         )
 
@@ -79,13 +79,31 @@ class LinearOperator(metaclass=abc.ABCMeta):
         """
         return self._nblocks
 
+    def get_real_flag(self: "LinearOperator") -> Union[bool, None]:
+        r"""
+        :code:`True` if the operator is real-valued, :code:`False`
+        otherwise.
+
+        :rtype: Union[bool, None]
+        """
+        return self._real_flag
+
+    def get_block_cc_flag(self: "LinearOperator") -> Union[bool, None]:
+        r"""
+        :code:`True` if the operator has complex-conjugate block structure
+        (like in the harmonic-balancing operator). :code:`False` otherwise.
+
+        :rtype: Union[bool, None]
+        """
+        return self._block_cc_flag
+
     def create_right_vector(self: "LinearOperator") -> PETSc.Vec:
         r"""
         :return: a PETSc vector that :math:`L` can be multiplied against
         :rtype: PETSc.Vec
         """
-        vec = PETSc.Vec().create(comm=self._comm)
-        vec.setSizes(self._dimensions[-1])
+        vec = PETSc.Vec().create(comm=self.get_comm())
+        vec.setSizes(self.get_dimensions()[-1])
         vec.setType("standard")
         return vec
 
@@ -97,8 +115,8 @@ class LinearOperator(metaclass=abc.ABCMeta):
         :return: a SLEPc BV that :math:`L` can be multiplied against
         :rtype: SLEPc.BV
         """
-        bv = SLEPc.BV().create(comm=self._comm)
-        bv.setSizes(self._dimensions[-1], ncols)
+        bv = SLEPc.BV().create(comm=self.get_comm())
+        bv.setSizes(self.get_dimensions()[-1], ncols)
         bv.setType("mat")
         return bv
 
@@ -107,8 +125,8 @@ class LinearOperator(metaclass=abc.ABCMeta):
         :return: a PETSc vector where :math:`Lx` can be stored into
         :rtype: PETSc.Vec
         """
-        vec = PETSc.Vec().create(comm=self._comm)
-        vec.setSizes(self._dimensions[0])
+        vec = PETSc.Vec().create(comm=self.get_comm())
+        vec.setSizes(self.get_dimensions()[0])
         vec.setType("standard")
         return vec
 
@@ -120,8 +138,8 @@ class LinearOperator(metaclass=abc.ABCMeta):
         :return: a SLEPc BV where :math:`LX` can be stored into
         :rtype: SLEPc.BV
         """
-        bv = SLEPc.BV().create(comm=self._comm)
-        bv.setSizes(self._dimensions[0], ncols)
+        bv = SLEPc.BV().create(comm=self.get_comm())
+        bv.setSizes(self.get_dimensions()[0], ncols)
         bv.setType("mat")
         return bv
 
@@ -131,12 +149,14 @@ class LinearOperator(metaclass=abc.ABCMeta):
             :code:`False` otherwise
         :rtype: bool
         """
-        sizes = self._dimensions[-1]
-        x = generate_random_petsc_vector(self._comm, sizes)
+        sizes = self.get_dimensions()[-1]
+        x = generate_random_petsc_vector(self.get_comm(), sizes)
         Lx = self.apply(x)
         Lxai = Lx.getArray().imag
         norm = np.sqrt(
-            sum(self._comm.tompi4py().allgather(np.linalg.norm(Lxai) ** 2))
+            sum(
+                self.get_comm().tompi4py().allgather(np.linalg.norm(Lxai) ** 2)
+            )
         )
         result = True if norm <= 1e-14 else False
         x.destroy()
@@ -159,9 +179,11 @@ class LinearOperator(metaclass=abc.ABCMeta):
             structure, :code:`False` otherwise.
         :rtype: bool
         """
-        x = generate_random_petsc_vector(self._comm, self._dimensions[-1])
-        enforce_complex_conjugacy(self._comm, x, self._nblocks)
-        cc_x = check_complex_conjugacy(self._comm, x, self._nblocks)
+        x = generate_random_petsc_vector(
+            self.get_comm(), self.get_dimensions()[-1]
+        )
+        enforce_complex_conjugacy(self.get_comm(), x, self.get_nblocks())
+        cc_x = check_complex_conjugacy(self.get_comm(), x, self.get_nblocks())
         if cc_x == False:
             raise ValueError(
                 f"Error from {self.get_name()}.check_if_complex_conjugate"
@@ -169,7 +191,9 @@ class LinearOperator(metaclass=abc.ABCMeta):
                 f"appropriately."
             )
         Lx = self.apply(x)
-        result = check_complex_conjugacy(self._comm, Lx, self._nblocks)
+        result = check_complex_conjugacy(
+            self.get_comm(), Lx, self.get_nblocks()
+        )
         x.destroy()
         Lx.destroy()
         return result

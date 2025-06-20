@@ -18,8 +18,6 @@ class LowRankLinearOperator(LinearOperator):
     where :math:`U`, :math:`\Sigma` and :math:`V` are matrices of
     conformal sizes (and :math:`\Sigma` is not necessarily diagonal).
 
-    :param comm: MPI communicator :code:`PETSc.COMM_WORLD`
-    :type comm: PETSc.Comm
     :param U: a tall and skinny matrix
     :type U: SLEPc.BV
     :param Sigma: 2D numpy array
@@ -32,7 +30,6 @@ class LowRankLinearOperator(LinearOperator):
 
     def __init__(
         self: "LowRankLinearOperator",
-        comm: PETSc.Comm,
         U: SLEPc.BV,
         Sigma: np.ndarray,
         V: SLEPc.BV,
@@ -42,7 +39,9 @@ class LowRankLinearOperator(LinearOperator):
         self.Sigma = Sigma
         self.V = V
         dimensions = (U.getSizes()[0], V.getSizes()[0])
-        super().__init__(comm, "LowRankLinearOperator", dimensions, nblocks)
+        super().__init__(
+            U.getComm(), "LowRankLinearOperator", dimensions, nblocks
+        )
 
     def apply(self, x, y=None):
         y = self.create_left_vector() if y == None else y

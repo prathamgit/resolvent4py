@@ -12,7 +12,6 @@ from petsc4py import PETSc
 from .miscellaneous import petscprint
 from .random import generate_random_petsc_vector
 
-
 def create_mumps_solver(comm: PETSc.Comm, A: PETSc.Mat) -> PETSc.KSP:
     r"""
     Compute an LU factorization of the matrix A using
@@ -67,9 +66,15 @@ def check_lu_factorization(
             f"MUMPS factorization failed with INFO(1) = {Infog1}  "
             f"and INFO(2) = {Infog2}'"
         )
+    # b2 = b.duplicate()
+    # A.mult(x, b2)
+    # b2.axpy(-1.0, b)
+    # error = b2.norm() / b.norm()
+    # if error > 1e-10:
+    #     raise ValueError(f"MUMPS factorization failed. Error = {error}.")
+    # b2.destroy()
     x.destroy()
     b.destroy()
-
 
 def create_gmres_bjacobi_solver(
     comm: PETSc.Comm,

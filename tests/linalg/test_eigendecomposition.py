@@ -16,7 +16,7 @@ def test_eigendecomposition(comm, square_random_matrix):
     Id.convert(PETSc.Mat.Type.MPIAIJ)
     Id.axpy(-1.0, Apetsc)
     ksp = res4py.create_mumps_solver(comm, Id)
-    linop = res4py.linear_operators.MatrixLinearOperator(comm, Id, ksp)
+    linop = res4py.linear_operators.MatrixLinearOperator(Id, ksp)
     krylov_dim = linop.get_dimensions()[0][-1] - 1
     r = np.min([r, krylov_dim - 1])
     lambda_fun = lambda x: 1j * omega - 1 / x
