@@ -12,7 +12,7 @@ def test_low_rank_on_vectors(comm, rectangular_matrix_size):
     S = np.random.randn(rr, rc) + 1j * np.random.randn(rr, rc)
     S = comm.tompi4py().bcast(S, root=0)
     A = Upython @ S @ Vpython.conj().T
-    linop = res4py.linear_operators.LowRankLinearOperator(comm, U, S, V, None)
+    linop = res4py.linear_operators.LowRankLinearOperator(U, S, V, None)
 
     x, xpython = pytest_utils.generate_random_vector(comm, Nc)
     y = linop.create_left_vector()
@@ -52,7 +52,7 @@ def test_low_rank_on_bvs(comm, rectangular_matrix_size):
     S = np.random.randn(rr, rc) + 1j * np.random.randn(rr, rc)
     S = comm.tompi4py().bcast(S, root=0)
     A = Upython @ S @ Vpython.conj().T
-    linop = res4py.linear_operators.LowRankLinearOperator(comm, U, S, V, None)
+    linop = res4py.linear_operators.LowRankLinearOperator(U, S, V, None)
 
     s = 5
     X, Xpython = pytest_utils.generate_random_bv(comm, (Nc, s))

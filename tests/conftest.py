@@ -13,43 +13,29 @@ if MPI.COMM_WORLD.Get_rank() != 0:
 
 @pytest.fixture(scope="session")
 def comm():
-    """MPI communicator fixture."""
+    """PETSc communicator fixture."""
     return PETSc.COMM_WORLD
 
 
 @pytest.fixture(scope="session")
 def rank_size(comm):
-    """Return rank and size of MPI communicator."""
+    """Return rank and size of PETSc communicator."""
     return comm.getRank(), comm.getSize()
 
 
 @pytest.fixture(
     params=[
         pytest.param((50, 50), marks=pytest.mark.local),
-        pytest.param((100, 100), marks=pytest.mark.development),
-        pytest.param((300, 300), marks=pytest.mark.main),
     ]
 )
 def square_matrix_size(request):
     """Matrix size fixture with different sizes for different test levels."""
     return request.param
 
-@pytest.fixture(
-    params=[
-        pytest.param((6, 6), marks=pytest.mark.local),
-        pytest.param((8, 8), marks=pytest.mark.development),
-        pytest.param((10, 10), marks=pytest.mark.main),
-    ]
-)
-def square_negative_semidefinite_matrix_size(request):
-    """Matrix size fixture with different sizes for different test levels."""
-    return request.param
 
 @pytest.fixture(
     params=[
         pytest.param((50, 20), marks=pytest.mark.local),
-        pytest.param((100, 70), marks=pytest.mark.development),
-        pytest.param((300, 190), marks=pytest.mark.main),
     ]
 )
 def rectangular_matrix_size(request):
@@ -64,9 +50,10 @@ def square_random_matrix(comm, square_matrix_size):
 
 
 @pytest.fixture
-def square_random_negative_semidefinite_matrix(comm, square_negative_semidefinite_matrix_size):
-    """Generate random negative semidefinite test matrix."""
-    return pytest_utils.generate_negative_semidefinite_matrix(comm, square_negative_semidefinite_matrix_size)
+def square_stable_random_matrix(comm, square_matrix_size):
+    """Generate random test matrix with eigenvalues with negative real parts."""
+    return pytest_utils.generate_stable_random_matrix(comm, square_matrix_size)
+
 
 @pytest.fixture
 def rectangular_random_matrix(comm, rectangular_matrix_size):

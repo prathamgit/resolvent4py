@@ -21,15 +21,12 @@ from .matrix import convert_coo_to_csr
 
 
 def read_vector(
-    comm: PETSc.Comm,
     filename: str,
     sizes: typing.Optional[typing.Tuple[int, int]] = None,
 ) -> PETSc.Vec:
     r"""
     Read PETSc vector from file
 
-    :param comm: MPI communicator (PETSc.COMM_WORLD or PETSc.COMM_SELF)
-    :type comm: PETSc.Comm
     :param filename: name of the file that holds the vector
     :type filename: str
     :param sizes: :code:`(local size, global size)`
@@ -37,6 +34,7 @@ def read_vector(
 
     :rtype: PETSc.Vec
     """
+    comm = PETSc.COMM_WORLD
     viewer = PETSc.Viewer().createMPIIO(filename, "r", comm=comm)
     vec = PETSc.Vec().create(comm)
     vec.setSizes(sizes) if sizes != None else None
@@ -46,15 +44,12 @@ def read_vector(
 
 
 def read_coo_matrix(
-    comm: PETSc.Comm,
     filenames: typing.Tuple[str, str, str],
     sizes: typing.Tuple[typing.Tuple[int, int], typing.Tuple[int, int]],
 ) -> PETSc.Mat:
     r"""
     Read COO matrix from file
 
-    :param comm: MPI communicator (PETSc.COMM_WORLD or PETSc.COMM_SELF)
-    :type comm: PETSc.Comm
     :param filenames: names of the files that hold the rows, columns and values
         of the sparse matrix (e.g., :code:`(rows, cols, values)`)
     :type filenames: Tuple[str, str, str]
@@ -65,9 +60,9 @@ def read_coo_matrix(
     """
     # Read COO vectors
     fname_rows, fname_cols, fname_vals = filenames
-    rowsvec = read_vector(comm, fname_rows)
-    colsvec = read_vector(comm, fname_cols)
-    valsvec = read_vector(comm, fname_vals)
+    rowsvec = read_vector(fname_rows)
+    colsvec = read_vector(fname_cols)
+    valsvec = read_vector(fname_vals)
     rows = np.asarray(rowsvec.getArray().real, dtype=PETSc.IntType)
     cols = np.asarray(colsvec.getArray().real, dtype=PETSc.IntType)
     vals = valsvec.getArray()
@@ -77,8 +72,8 @@ def read_coo_matrix(
     cols = np.delete(cols, idces)
     vals = np.delete(vals, idces)
     # Convert COO to CSR and create the sparse matrix
-    rows_ptr, cols, vals = convert_coo_to_csr(comm, [rows, cols, vals], sizes)
-    M = PETSc.Mat().createAIJ(sizes, comm=comm)
+    rows_ptr, cols, vals = convert_coo_to_csr([rows, cols, vals], sizes)
+    M = PETSc.Mat().createAIJ(sizes, comm=PETSc.COMM_WORLD)
     M.setPreallocationCSR((rows_ptr, cols))
     M.setValuesCSR(rows_ptr, cols, vals, True)
     M.assemble(False)
@@ -89,7 +84,6 @@ def read_coo_matrix(
 
 
 def read_harmonic_balanced_matrix(
-    comm: PETSc.Comm,
     filenames_lst: typing.List[typing.Tuple[str, str, str]],
     real_bflow: bool,
     block_sizes: typing.Tuple[typing.Tuple[int, int], typing.Tuple[int, int]],
@@ -112,8 +106,7 @@ def read_harmonic_balanced_matrix(
         & & & \ddots & \ddots & \ddots & \ddots \\
         \end{bmatrix}
     
-    :param comm: MPI communicator (PETSc.COMM_WORLD)
-    :type comm: PETSc.Comm
+
     :param filenames_lst: list of tuples, with each tuple of the form
         :code:`(rows_j.dat, cols_j.dat, vals_j.dat)` containing the COO arrays
         of the matrix :math:`A_j`
@@ -139,9 +132,9 @@ def read_harmonic_balanced_matrix(
     rows_lst, cols_lst, vals_lst = [], [], []
     for filenames in filenames_lst:
         fname_rows, fname_cols, fname_vals = filenames
-        rowsvec = read_vector(comm, fname_rows)
-        colsvec = read_vector(comm, fname_cols)
-        valsvec = read_vector(comm, fname_vals)
+        rowsvec = read_vector(fname_rows)
+        colsvec = read_vector(fname_cols)
+        valsvec = read_vector(fname_vals)
         rowsvec_arr = np.asarray(
             rowsvec.getArray().real, dtype=PETSc.IntType
         ).copy()
@@ -192,10 +185,8 @@ def read_harmonic_balanced_matrix(
     cols = np.delete(cols, idces)
     vals = np.delete(vals, idces)
     # Convert COO to CSR and create the sparse matrix
-    rows_ptr, cols, vals = convert_coo_to_csr(
-        comm, [rows, cols, vals], full_sizes
-    )
-    M = PETSc.Mat().createAIJ(full_sizes, comm=comm)
+    rows_ptr, cols, vals = convert_coo_to_csr([rows, cols, vals], full_sizes)
+    M = PETSc.Mat().createAIJ(full_sizes, comm=PETSc.COMM_WORLD)
     M.setPreallocationCSR((rows_ptr, cols))
     M.setValuesCSR(rows_ptr, cols, vals, True)
     M.assemble(False)
@@ -204,15 +195,12 @@ def read_harmonic_balanced_matrix(
 
 
 def read_dense_matrix(
-    comm: PETSc.Comm,
     filename: str,
     sizes: typing.Tuple[typing.Tuple[int, int], typing.Tuple[int, int]],
 ) -> PETSc.Mat:
     r"""
     Read dense PETSc matrix from file.
 
-    :param comm: MPI communicator (PETSc.COMM_WORLD or PETSc.COMM_SELF)
-    :type comm: PETSc.Comm
     :param filename: name of the file that holds the matrix
     :type filename: str
     :param sizes: :code:`((local rows, global rows), (local cols, global cols))`
@@ -220,6 +208,7 @@ def read_dense_matrix(
 
     :rtype: PETSc.Mat
     """
+    comm = PETSc.COMM_WORLD
     viewer = PETSc.Viewer().createMPIIO(filename, "r", comm=comm)
     M = PETSc.Mat().createDense(sizes, comm=comm)
     M.load(viewer)
@@ -228,15 +217,12 @@ def read_dense_matrix(
 
 
 def read_bv(
-    comm: PETSc.Comm,
     filename: str,
     sizes: typing.Tuple[typing.Tuple[int, int], int],
 ) -> SLEPc.BV:
     r"""
     Read dense matrix from file and store as a SLEPc BV
 
-    :param comm: MPI communicator (PETSc.COMM_WORLD or PETSc.COMM_SELF)
-    :type comm: PETSc.Comm
     :param filename: name of the file that holds the matrix
     :type filename: str
     :param sizes: :code:`((local rows, global rows), global columns)`
@@ -246,7 +232,7 @@ def read_bv(
     """
     ncols = sizes[-1]
     sizes_mat = (sizes[0], (compute_local_size(ncols), ncols))
-    Mm = read_dense_matrix(comm, filename, sizes_mat)
+    Mm = read_dense_matrix(filename, sizes_mat)
     M = SLEPc.BV().createFromMat(Mm)
     M.setType("mat")
     Mm.destroy()
@@ -254,7 +240,6 @@ def read_bv(
 
 
 def read_harmonic_balanced_bv(
-    comm: PETSc.Comm,
     filenames_lst: typing.List[str],
     real_bflow: bool,
     block_sizes: typing.Tuple[typing.Tuple[int, int], int],
@@ -302,7 +287,7 @@ def read_harmonic_balanced_bv(
     # Read list of BVs
     bvs_lst = []
     for filename in filenames_lst:
-        bv = read_bv(comm, filename, block_sizes)
+        bv = read_bv(filename, block_sizes)
         bvs_lst.append(bv.copy())
         bv.destroy()
 
@@ -328,7 +313,7 @@ def read_harmonic_balanced_bv(
     bvs_lst[0].restoreMat(bv_mat)
     rows = np.arange(r0, r1, dtype=PETSc.IntType)
     cols = np.arange(Ncb, dtype=PETSc.IntType)
-    M = SLEPc.BV().create(comm)
+    M = SLEPc.BV().create(PETSc.COMM_WORLD)
     M.setSizes(full_sizes[0], full_sizes[-1])
     M.setType("mat")
     Mmat = M.getMat()
@@ -350,7 +335,6 @@ def read_harmonic_balanced_bv(
 
 
 def read_harmonic_balanced_vector(
-    comm: PETSc.Comm,
     filenames_lst: typing.List[str],
     real_bflow: bool,
     block_sizes: typing.Tuple[int, int],
@@ -367,8 +351,6 @@ def read_harmonic_balanced_vector(
             \vdots \\ v_{-1} \\ v_0 \\ v_{1} \\ \vdots
         \end{bmatrix}.
 
-    :param comm: MPI Communicator
-    :type comm: PETSc.Comm
     :param filenames_lst: list of names of files where the Fourier modes
         :math:`v_j` are stored as PETSc Vec
     :type filenames_lst: List[str]
@@ -389,7 +371,7 @@ def read_harmonic_balanced_vector(
     """
     vec_lst = []
     for filename in filenames_lst:
-        vec = read_vector(comm, filename, block_sizes)
+        vec = read_vector(filename, block_sizes)
         vec_lst.append(vec.copy())
         vec.destroy()
 
@@ -427,21 +409,18 @@ def read_harmonic_balanced_vector(
 
 
 def write_to_file(
-    comm: PETSc.Comm,
     filename: str,
     object: typing.Union[PETSc.Mat, PETSc.Vec, SLEPc.BV],
 ) -> None:
     r"""
     Write PETSc/SLEPc object (PETSc.Mat, PETSc.Vec or SLEPc.BV) to file.
 
-    :param comm: MPI communicator (PETSc.COMM_WORLD or PETSc.COMM_SELF)
-    :type comm: PETSc.Comm
     :param filename: name of the file to store the object
     :type filename: str
     :param object: any PETSc matrix or vector, or SLEPc BV
     :type object: Union[PETSc.Mat, PETSc.Vec, SLEPc.BV]
     """
-    viewer = PETSc.Viewer().createBinary(filename, "w", comm=comm)
+    viewer = PETSc.Viewer().createBinary(filename, "w", comm=object.getComm())
     if isinstance(object, SLEPc.BV):
         mat = object.getMat()
         mat.view(viewer)

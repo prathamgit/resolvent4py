@@ -1,8 +1,51 @@
-__all__ = ["enforce_complex_conjugacy", "check_complex_conjugacy"]
+__all__ = [
+    "enforce_complex_conjugacy",
+    "check_complex_conjugacy",
+    "vec_real",
+    "vec_imag",
+]
 
 import numpy as np
 import typing
 from petsc4py import PETSc
+
+
+def vec_real(
+    x: PETSc.Vec, inplace: typing.Optional[bool] = False
+) -> PETSc.Vec:
+    r"""
+    Returns the real part :math:`\text{Re}(x)` of the PETSc Vec.
+
+    :type x: PETSc.Vec
+    :param inplace: in-place if :code:`True`, else the result is stored in a
+        new PETSc.Vec
+    :type inplace: Optional[bool], default is False
+
+    :rtype: PETSc.Vec
+    """
+    y = x if inplace else x.copy()
+    ya = y.getArray()
+    ya[:] = ya.real
+    return y
+
+
+def vec_imag(
+    x: PETSc.Vec, inplace: typing.Optional[bool] = False
+) -> PETSc.Vec:
+    r"""
+    Returns the imaginary part :math:`\text{Im}(x)` of the PETSc Vec.
+
+    :type x: PETSc.Vec
+    :param inplace: in-place if :code:`True`, else the result is stored in a
+        new PETSc.Vec
+    :type inplace: Optional[bool], default is False
+
+    :rtype: PETSc.Vec
+    """
+    y = x if inplace else x.copy()
+    ya = y.getArray()
+    ya[:] = ya.imag
+    return y
 
 
 def enforce_complex_conjugacy(

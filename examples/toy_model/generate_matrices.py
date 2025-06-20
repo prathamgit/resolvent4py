@@ -118,21 +118,21 @@ for j in range(Ashat.shape[-1]):
         vec = PETSc.Vec().createWithArray(
             array, len(array), None, PETSc.COMM_SELF
         )
-        res4py.write_to_file(comm, fname, vec)
+        res4py.write_to_file(fname, vec)
         vec.destroy()
-    
+
     qj = Qhat[:, j]
     vec = PETSc.Vec().createWithArray(qj, 3, None, PETSc.COMM_SELF)
-    res4py.write_to_file(comm, save_path + "Q_%02d.dat" % j, vec)
+    res4py.write_to_file(save_path + "Q_%02d.dat" % j, vec)
     vec.destroy()
 
     jom = j * omega * 1j
     vec = PETSc.Vec().createWithArray(jom * qj, 3, None, PETSc.COMM_SELF)
-    res4py.write_to_file(comm, save_path + "dQ_%02d.dat" % j, vec)
+    res4py.write_to_file(save_path + "dQ_%02d.dat" % j, vec)
     vec.destroy()
 
     Aj = Aj.todense()
     Aj_mat = PETSc.Mat().createDense((3, 3), None, Aj, PETSc.COMM_SELF)
-    res4py.write_to_file(comm, save_path + "Aj_%02d.dat" % j, Aj_mat)
+    res4py.write_to_file(save_path + "Aj_%02d.dat" % j, Aj_mat)
 
 np.save(save_path + "bflow_freqs.npy", freqs)

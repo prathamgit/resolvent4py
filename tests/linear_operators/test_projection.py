@@ -12,12 +12,12 @@ def test_projection_on_vectors(comm, square_matrix_size):
     U, Upython = pytest_utils.generate_random_bv(comm, (N, r))
     V, Vpython = pytest_utils.generate_random_bv(comm, (N, r))
     S = sp.linalg.inv(Vpython.conj().T @ Upython)
-    
+
     complements = [False, True]
     P = Upython @ S @ Vpython.conj().T
     Apython = [P, np.eye(N) - P]
     for k, compl in enumerate(complements):
-        linop = res4py.linear_operators.ProjectionLinearOperator(comm, U, V, compl)
+        linop = res4py.linear_operators.ProjectionLinearOperator(U, V, compl)
         x, xpython = pytest_utils.generate_random_vector(comm, N)
         actions_python = [Apython[k].dot, Apython[k].conj().T.dot]
         actions_petsc = [linop.apply, linop.apply_hermitian_transpose]
@@ -49,7 +49,7 @@ def test_projection_on_bvs(comm, square_matrix_size):
     P = Upython @ S @ Vpython.conj().T
     Apython = [P, np.eye(N) - P]
     for k, compl in enumerate(complements):
-        linop = res4py.linear_operators.ProjectionLinearOperator(comm, U, V, compl)
+        linop = res4py.linear_operators.ProjectionLinearOperator(U, V, compl)
         X, Xpython = pytest_utils.generate_random_bv(comm, (N, 7))
         actions_python = [Apython[k].dot, Apython[k].conj().T.dot]
         actions_petsc = [linop.apply_mat, linop.apply_hermitian_transpose_mat]

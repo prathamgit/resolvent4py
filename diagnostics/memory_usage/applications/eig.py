@@ -49,8 +49,8 @@ sys.stdout = sys.__stdout__ if rank == 0 else open(os.devnull, "w")
 N = 3000
 Nl = res4py.compute_local_size(N)
 sizes = ((Nl, N), (Nl, N))
-A = res4py.generate_random_petsc_sparse_matrix(comm, sizes, True)
-ksp = res4py.create_mumps_solver(comm, A)
+A = res4py.generate_random_petsc_sparse_matrix(sizes, True)
+ksp = res4py.create_mumps_solver(A)
 op = res4py.MatrixLinearOperator(comm, A, ksp)
 
 niter = 60

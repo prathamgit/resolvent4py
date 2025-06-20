@@ -9,11 +9,11 @@ by computing the singular value decomposition (SVD) of the resolvent operator
 
     R(i\omega) = \left(i\omega I - A\right)^{-1}
 
-with :math:`\omega = 0.648` the natural frequency of the linearized CGL 
+with :math:`\omega = 0.648` the natural frequency of the linearized CGL
 equation. This script demonstrates the following:
 
 - LU decomposition using :func:`~resolvent4py.utils.ksp.create_mumps_solver`
-- Resolvent analysis in the frequency domain using 
+- Resolvent analysis in the frequency domain using
   :func:`~resolvent4py.linalg.randomized_svd.randomized_svd`
 
 """
@@ -50,7 +50,7 @@ names = [
     load_path + "cols.dat",
     load_path + "vals.dat",
 ]
-A = res4py.read_coo_matrix(comm, names, sizes)
+A = res4py.read_coo_matrix(names, sizes)
 
 # Compute the SVD of the resolvent operator R = inv(1j*omega*I - A) using
 # the randomized SVD algorithm
@@ -59,19 +59,18 @@ s = -1j * 0.648
 Rinv = res4py.create_AIJ_identity(comm, sizes)
 Rinv.scale(s)
 Rinv.axpy(-1.0, A)
-ksp = res4py.create_mumps_solver(comm, Rinv)
-res4py.check_lu_factorization(comm, Rinv, ksp)
-L = res4py.linear_operators.MatrixLinearOperator(comm, Rinv, ksp)
+ksp = res4py.create_mumps_solver(Rinv)
+res4py.check_lu_factorization(Rinv, ksp)
+L = res4py.linear_operators.MatrixLinearOperator(Rinv, ksp)
 
 # Compute the svd
 res4py.petscprint(comm, "Running randomized SVD...")
-n_rand = 40
-n_loops = 3
-n_svals = 10
+n_rand = 10
+n_loops = 1
+n_svals = 2
 U, S, V = res4py.linalg.randomized_svd(
     L, L.solve_mat, n_rand, n_loops, n_svals
 )
-
 # Check convergence
 res4py.linalg.check_randomized_svd_convergence(L.solve, U, S, V)
 
@@ -92,7 +91,6 @@ system = cgl.CGL(x, nu, gamma, mu0, mu2, sigma)
 
 
 if comm.getRank() == 0:
-
     save_path = "results/"
     os.makedirs(save_path) if not os.path.exists(save_path) else None
 

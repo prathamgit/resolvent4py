@@ -26,11 +26,13 @@ def randomized_svd(
     r"""
     Compute the singular value decomposition (SVD) of the linear operator 
     specified by :code:`L` and :code:`action` using a randomized SVD algorithm.
+    (See [Halko2011]_.)
     For example, with :code:`L.solve_mat` we compute 
 
     .. math::
 
         L^{-1} = U \Sigma V^*.
+
     
     :param L: instance of the :class:`.LinearOperator` class
     :type L: :class:`.LinearOperator`
@@ -39,17 +41,23 @@ def randomized_svd(
     :type action: Callable[[SLEPc.BV, SLEPc.BV], SLEPc.BV]
     :param n_rand: number of random vectors
     :type n_rand: int
-    :param n_loops: number of randomized svd iterations
+    :param n_loops: number of randomized svd power iterations 
+        (see [Ribeiro2020]_ for additional details on this parameter)
     :type n_loops: int
     :param n_svals: number of singular triplets to return
     :type n_svals: int
+    
+    :return: leading :code:`n_svals` left singular vectors, 
+        singular values and right singular vectors
+    :rtype: Tuple[SLEPc.BV, np.ndarray, SLEPc.BV]
 
-    :return: a tuple :math:`(U,\,\Sigma,\, V)` with the leading 
-        :code:`n_svals` singular values and corresponding left and \
-        right singular vectors
-    :rtype: (SLEPc.BV with :code:`n_svals` columns, 
-        numpy.ndarray of size :code:`n_svals x n_svals`, 
-        SLEPc.BV with :code:`n_svals` columns)
+    References
+    ----------
+    .. [Halko2011] Halko et al., *Finding Structure With Randomness: 
+        Probabilistic Algorithms For Constructing Approximate Matrix 
+        Decompositions*, SIAM Review, 2011
+    .. [Ribeiro2020] Ribeiro et al., *Randomized resolvent analysis*, 
+        Physical Review Fluids, 2020
     """
     if action != L.apply_mat and action != L.solve_mat:
         raise ValueError(f"action must be L.apply_mat or L.solve_mat.")
@@ -59,31 +67,38 @@ def randomized_svd(
         else L.solve_hermitian_transpose_mat
     )
     # Assemble random BV (this will be multiplied against L^*)
-    rowsizes = L._dimensions[0]
-    X = SLEPc.BV().create(comm=L._comm)
+    rowsizes = L.get_dimensions()[0]
+    # Set seed
+    rank = L.get_comm().getRank()
+    rand = PETSc.Random().create(comm=L.get_comm())
+    rand.setType(PETSc.Random.Type.RAND)
+    rand.setSeed(round(np.random.randint(1000, 100000) + rank))
+    X = SLEPc.BV().create(comm=L.get_comm())
     X.setSizes(rowsizes, n_rand)
     X.setType("mat")
+    X.setRandomContext(rand)
     X.setRandomNormal()
+    rand.destroy()
     for j in range(n_rand):
         xj = X.getColumn(j)
-        if L._real:
+        if L.get_real_flag():
             row_offset = xj.getOwnershipRange()[0]
             rows = np.arange(rowsizes[0], dtype=PETSc.IntType) + row_offset
             xj.setValues(rows, xj.getArray().real)
             xj.assemble()
-        if L._block_cc:
-            enforce_complex_conjugacy(L._comm, xj, L._nblocks)
+        if L.get_block_cc_flag():
+            enforce_complex_conjugacy(L.get_comm(), xj, L.get_nblocks())
         X.restoreColumn(j, xj)
     X.orthogonalize(None)
     # Perform randomized SVD loop
-    Qadj = SLEPc.BV().create(comm=L._comm)
-    Qadj.setSizes(L._dimensions[-1], n_rand)
+    Qadj = SLEPc.BV().create(comm=L.get_comm())
+    Qadj.setSizes(L.get_dimensions()[-1], n_rand)
     Qadj.setType("mat")
     Qadj = action_adj(X, Qadj)
     Qadj.orthogonalize(None)
     X.destroy()
-    Qfwd = SLEPc.BV().create(comm=L._comm)
-    Qfwd.setSizes(L._dimensions[0], n_rand)
+    Qfwd = SLEPc.BV().create(comm=L.get_comm())
+    Qfwd.setSizes(L.get_dimensions()[0], n_rand)
     Qfwd.setType("mat")
     R = create_dense_matrix(PETSc.COMM_SELF, (n_rand, n_rand))
     for j in range(n_loops):
@@ -98,8 +113,12 @@ def randomized_svd(
     s = s[:n_svals]
     u = u[:, :n_svals]
     v = v[:, :n_svals]
-    u = PETSc.Mat().createDense((n_rand, n_svals), None, u, comm=PETSc.COMM_SELF)
-    v = PETSc.Mat().createDense((n_rand, n_svals), None, v, comm=PETSc.COMM_SELF)
+    u = PETSc.Mat().createDense(
+        (n_rand, n_svals), None, u, comm=PETSc.COMM_SELF
+    )
+    v = PETSc.Mat().createDense(
+        (n_rand, n_svals), None, v, comm=PETSc.COMM_SELF
+    )
     Qfwd.multInPlace(v, 0, n_svals)
     Qfwd.setActiveColumns(0, n_svals)
     Qfwd.resize(n_svals, copy=True)
