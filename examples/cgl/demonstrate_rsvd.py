@@ -50,7 +50,7 @@ names = [
     load_path + "cols.dat",
     load_path + "vals.dat",
 ]
-A = res4py.read_coo_matrix(comm, names, sizes)
+A = res4py.read_coo_matrix(names, sizes)
 
 # Compute the SVD of the resolvent operator R = inv(1j*omega*I - A) using
 # the randomized SVD algorithm
@@ -59,8 +59,8 @@ s = -1j * 0.648
 Rinv = res4py.create_AIJ_identity(comm, sizes)
 Rinv.scale(s)
 Rinv.axpy(-1.0, A)
-ksp = res4py.create_mumps_solver(comm, Rinv)
-res4py.check_lu_factorization(comm, Rinv, ksp)
+ksp = res4py.create_mumps_solver(Rinv)
+res4py.check_lu_factorization(Rinv, ksp)
 L = res4py.linear_operators.MatrixLinearOperator(Rinv, ksp)
 
 # Compute the svd

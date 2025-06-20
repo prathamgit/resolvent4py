@@ -26,11 +26,13 @@ def randomized_svd(
     r"""
     Compute the singular value decomposition (SVD) of the linear operator 
     specified by :code:`L` and :code:`action` using a randomized SVD algorithm.
+    (See [Halko2011]_.)
     For example, with :code:`L.solve_mat` we compute 
 
     .. math::
 
         L^{-1} = U \Sigma V^*.
+
     
     :param L: instance of the :class:`.LinearOperator` class
     :type L: :class:`.LinearOperator`
@@ -39,17 +41,23 @@ def randomized_svd(
     :type action: Callable[[SLEPc.BV, SLEPc.BV], SLEPc.BV]
     :param n_rand: number of random vectors
     :type n_rand: int
-    :param n_loops: number of randomized svd iterations
+    :param n_loops: number of randomized svd power iterations 
+        (see [Ribeiro2020]_ for additional details on this parameter)
     :type n_loops: int
     :param n_svals: number of singular triplets to return
     :type n_svals: int
 
-    :return: a tuple :math:`(U,\,\Sigma,\, V)` with the leading 
-        :code:`n_svals` singular values and corresponding left and \
-        right singular vectors
-    :rtype: (SLEPc.BV with :code:`n_svals` columns, 
-        numpy.ndarray of size :code:`n_svals x n_svals`, 
-        SLEPc.BV with :code:`n_svals` columns)
+    :return: leading :code:`n_svals` left singular vectors, 
+        singular values and right singular vectors
+    :rtype: Tuple[SLEPc.BV, np.ndarray, SLEPc.BV]
+
+    References
+    ----------
+    .. [Halko2011] Halko et al., *Finding Structure With Randomness: 
+        Probabilistic Algorithms For Constructing Approximate Matrix 
+        Decompositions*, SIAM Review, 2011
+    .. [Ribeiro2020] Ribeiro et al., *Randomized resolvent analysis*, 
+        Physical Review Fluids, 2020
     """
     if action != L.apply_mat and action != L.solve_mat:
         raise ValueError(f"action must be L.apply_mat or L.solve_mat.")

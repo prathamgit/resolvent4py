@@ -13,7 +13,6 @@ from petsc4py import PETSc
 from typing import Optional
 
 from .miscellaneous import get_mpi_type
-from .comms import scatter_array_from_root_to_all
 
 
 def create_dense_matrix(
@@ -22,7 +21,8 @@ def create_dense_matrix(
     r"""
     Create dense matrix
 
-    :param comm: MPI communicator
+    :param comm: PETSc communicator
+    :type comm: PETSc.Comm
     :param sizes: tuple[tuple[int, int], tuple[int, int]]
 
     :rtype: PETSc.Mat.Type.DENSE
@@ -90,13 +90,11 @@ def mat_solve_hermitian_transpose(
 
 
 def hermitian_transpose(
-    comm: PETSc.Comm, Mat: PETSc.Mat, in_place=False, MatHT=None
+    Mat: PETSc.Mat, in_place=False, MatHT=None
 ) -> PETSc.Mat:
     r"""
     Return the hermitian transpose of the matrix :code:`Mat`.
 
-    :param comm: MPI communicator
-    :type comm: PETSc.Comm
     :param Mat: PETSc matrix
     :type Mat: PETSc.Mat
     :param in_place: in-place transposition if :code:`True` and
@@ -109,7 +107,7 @@ def hermitian_transpose(
     if in_place == False:
         if MatHT == None:
             sizes = Mat.getSizes()
-            MatHT = PETSc.Mat().create(comm)
+            MatHT = PETSc.Mat().create(comm=Mat.getComm())
             MatHT.setType(Mat.getType())
             MatHT.setSizes((sizes[-1], sizes[0]))
             MatHT.setUp()
@@ -122,7 +120,6 @@ def hermitian_transpose(
 
 
 def convert_coo_to_csr(
-    comm: PETSc.Comm,
     arrays: tuple[np.array, np.array, np.array],
     sizes: tuple[tuple[int, int], tuple[int, int]],
 ) -> tuple[np.array, np.array, np.array]:
@@ -132,8 +129,6 @@ def convert_coo_to_csr(
     (Petsc4py currently does not support COO matrix assembly, hence the need
     to convert.)
 
-    :param comm: MPI communicator (only PETSc.COMM_WORLD is supported for now)
-    :type comm: PETSc.Comm
     :param arrays: a list of numpy arrays (e.g., arrays = [rows,cols,vals])
     :type array: tuple[np.array, np.array, np.array]
     :param sizes: see `MatSizeSpec <MatSizeSpec_>`_
@@ -143,7 +138,7 @@ def convert_coo_to_csr(
         matrix assembly
     :rtype: tuple[np.array, np.array, np.array]
     """
-    comm = comm.tompi4py()
+    comm = MPI.COMM_WORLD
     rank = comm.Get_rank()
     pool = np.arange(comm.Get_size())
     rows, cols, vals = arrays
@@ -218,17 +213,15 @@ def convert_coo_to_csr(
 
 
 def assemble_harmonic_resolvent_generator(
-    comm: PETSc.Comm, A: PETSc.Mat, freqs: np.array
+    A: PETSc.Mat, freqs: np.array
 ) -> PETSc.Mat:
     r"""
     Assemble :math:`T = -M + A`, where :math:`A` is the output of
-    :func:`src.resolvent4py.utils.io.read_harmonic_balanced_matrix`
+    :func:`resolvent4py.utils.io.read_harmonic_balanced_matrix`
     and :math:`M` is a block
     diagonal matrix with block :math:`k` given by :math:`M_k = i k \omega I`
     and :math:`k\omega` is the :math:`k` th entry of :code:`freqs`.
 
-    :param comm: MPI Communicator
-    :type comm: PETSc.Comm
     :param A: assembled PETSc matrix
     :type A: PETSc.Mat
     :param freqs: array :math:`\omega\left(\ldots, -1, 0, 1, \ldots\right)`
@@ -249,11 +242,9 @@ def assemble_harmonic_resolvent_generator(
 
     rows = np.asarray(rows_lst, dtype=PETSc.IntType)
     vals = np.asarray(vals_lst, dtype=np.complex128)
-
-    rows_ptr, cols, vals = convert_coo_to_csr(
-        comm, [rows, rows, vals], A.getSizes()
-    )
-    M = PETSc.Mat().create(comm)
+    
+    rows_ptr, cols, vals = convert_coo_to_csr([rows, rows, vals], A.getSizes())
+    M = PETSc.Mat().create(A.getComm())
     M.setSizes(A.getSizes())
     M.setPreallocationCSR((rows_ptr, cols))
     M.setValuesCSR(rows_ptr, cols, vals, True)

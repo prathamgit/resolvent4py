@@ -41,7 +41,7 @@ def arnoldi_iteration(
     :type action: Callable[[PETSc.Vec, PETSc.Vec], PETSc.Vec]
     :param krylov_dim: dimension of the Arnoldi Krylov subspace
     :type krylov_dim: int
-
+    
     :return: tuple with an orthonormal basis for the Krylov subspace
         and the Hessenberg matrix
     :rtype: (`BV`_ with :code:`krylov_dim` columns, \
@@ -61,7 +61,7 @@ def arnoldi_iteration(
     Q.setType("mat")
     H = np.zeros((krylov_dim, krylov_dim), dtype=np.complex128)
     complex = False if L.get_real_flag() else True
-    q = generate_random_petsc_vector(comm, sizes, complex)
+    q = generate_random_petsc_vector(sizes, complex)
     enforce_complex_conjugacy(comm, q, nblocks) if block_cc == True else None
     q.scale(1.0 / q.norm())
     Q.insertVec(0, q)

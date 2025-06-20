@@ -33,7 +33,7 @@ class LowRankLinearOperator(LinearOperator):
         U: SLEPc.BV,
         Sigma: np.ndarray,
         V: SLEPc.BV,
-        nblocks: typing.Optional[int] = None,
+        nblocks: typing.Optional[typing.Union[int, None]] = None,
     ) -> None:
         self.U = U
         self.Sigma = Sigma

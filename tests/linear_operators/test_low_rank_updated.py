@@ -15,7 +15,7 @@ def test_low_rank_updated_on_vectors(comm, square_random_matrix):
     S = np.random.randn(rr, rc) + 1j * np.random.randn(rr, rc)
     S = comm.tompi4py().bcast(S, root=0)
     Apython += Upython @ S @ Vpython.conj().T
-    ksp = res4py.create_mumps_solver(comm, Apetsc)
+    ksp = res4py.create_mumps_solver(Apetsc)
     linop1 = res4py.linear_operators.MatrixLinearOperator(Apetsc, ksp)
     linop = res4py.linear_operators.LowRankUpdatedLinearOperator(
         linop1, U, S, V
@@ -61,7 +61,7 @@ def test_low_rank_updated_on_bvs(comm, square_random_matrix):
     S = np.random.randn(rr, rc) + 1j * np.random.randn(rr, rc)
     S = comm.tompi4py().bcast(S, root=0)
     Apython += Upython @ S @ Vpython.conj().T
-    ksp = res4py.create_mumps_solver(comm, Apetsc)
+    ksp = res4py.create_mumps_solver(Apetsc)
     linop1 = res4py.linear_operators.MatrixLinearOperator(Apetsc, ksp)
     linop = res4py.linear_operators.LowRankUpdatedLinearOperator(
         linop1, U, S, V

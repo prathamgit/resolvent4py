@@ -22,7 +22,7 @@ class MatrixLinearOperator(LinearOperator):
     :type ksp: Optional[Union[PETSc.KSP, None]], defaults to None
     :param nblocks: number of blocks (if the linear operator has block
         structure). This must be an odd number.
-    :type nblocks: Optional[Union[int, None]], defaults to None
+    :type nblocks: Optional[Union[int, None]], default is None
     """
 
     def __init__(

@@ -43,7 +43,7 @@ names = [
     load_path + "cols.dat",
     load_path + "vals.dat",
 ]
-A = res4py.read_coo_matrix(comm, names, sizes)
+A = res4py.read_coo_matrix(names, sizes)
 
 # Compute the eigendecomposition of L using shift and invert about s.
 # We need to define a matrix M = sI - A, compute its lu decomposition,
@@ -53,8 +53,8 @@ s = 0.0
 M = res4py.create_AIJ_identity(comm, sizes)
 M.scale(s)
 M.axpy(-1.0, A)
-ksp = res4py.create_mumps_solver(comm, M)
-res4py.check_lu_factorization(comm, M, ksp)
+ksp = res4py.create_mumps_solver(M)
+res4py.check_lu_factorization(M, ksp)
 L = res4py.linear_operators.MatrixLinearOperator(M, ksp)
 
 # Compute the eigendecomp.

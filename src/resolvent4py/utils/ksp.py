@@ -12,21 +12,17 @@ from petsc4py import PETSc
 from .miscellaneous import petscprint
 from .random import generate_random_petsc_vector
 
-def create_mumps_solver(comm: PETSc.Comm, A: PETSc.Mat) -> PETSc.KSP:
+def create_mumps_solver(A: PETSc.Mat) -> PETSc.KSP:
     r"""
-    Compute an LU factorization of the matrix A using
-    `MUMPS <https://mumps-solver.org/index.php?page=doc>`
-
-    :param comm: MPI communicator (one of :code:`PETSc.COMM_WORLD` or
-        :code:`PETSc.COMM_SELF`)
-    :type comm: PETSc.Comm
+    Compute an LU factorization of the matrix A using MUMPS.
+    
     :param A: PETSc matrix
     :type A: PETSc.Mat
 
     :return ksp: PETSc KSP solver
     :rtype ksp: PETSc.KSP
     """
-    ksp = PETSc.KSP().create(comm=comm)
+    ksp = PETSc.KSP().create(comm=A.getComm())
     ksp.setOperators(A)
     ksp.setType("preonly")
     ksp.setUp()
@@ -38,23 +34,18 @@ def create_mumps_solver(comm: PETSc.Comm, A: PETSc.Mat) -> PETSc.KSP:
     return ksp
 
 
-def check_lu_factorization(
-    comm: PETSc.Comm, A: PETSc.Mat, ksp: PETSc.KSP
-) -> None:
+def check_lu_factorization(A: PETSc.Mat, ksp: PETSc.KSP) -> None:
     r"""
     Check that the LU factorization computed in :func:`.create_mumps_solver`
     has succeeded.
 
-    :param comm: MPI communicator (one of :code:`PETSc.COMM_WORLD` or
-        :code:`PETSc.COMM_SELF`)
-    :type comm: PETSc.Comm
     :param A: PETSc matrix
     :type A: PETSc.Mat
     :param ksp: PETSc KSP solver
     :type ksp: PETSc.KSP
     """
     sizes = A.getSizes()[0]
-    b = generate_random_petsc_vector(comm, sizes)
+    b = generate_random_petsc_vector(sizes)
     x = b.duplicate()
     ksp.solve(b, x)
     pc = ksp.getPC()
@@ -66,18 +57,10 @@ def check_lu_factorization(
             f"MUMPS factorization failed with INFO(1) = {Infog1}  "
             f"and INFO(2) = {Infog2}'"
         )
-    # b2 = b.duplicate()
-    # A.mult(x, b2)
-    # b2.axpy(-1.0, b)
-    # error = b2.norm() / b.norm()
-    # if error > 1e-10:
-    #     raise ValueError(f"MUMPS factorization failed. Error = {error}.")
-    # b2.destroy()
     x.destroy()
     b.destroy()
 
 def create_gmres_bjacobi_solver(
-    comm: PETSc.Comm,
     A: PETSc.Mat,
     nblocks: int,
     rtol: typing.Optional[float] = 1e-10,
@@ -87,9 +70,6 @@ def create_gmres_bjacobi_solver(
     r"""
     Create GMRES solver with block-jacobi preconditioner.
 
-    :param comm: MPI communicator (one of :code:`PETSc.COMM_WORLD` or
-        :code:`PETSc.COMM_SELF`)
-    :type comm: PETSc.Comm
     :param A: PETSc matrix
     :type A: PETSc.Mat
     :param nblocks: number of blocks for the block jacobi preconditioner
@@ -106,6 +86,7 @@ def create_gmres_bjacobi_solver(
     :rtype ksp: PETSc.KSP
     """
 
+    comm = A.getComm()
     monitor_fun = None
     if monitor:
 
@@ -132,24 +113,18 @@ def create_gmres_bjacobi_solver(
 
     return ksp
 
-
-def check_gmres_bjacobi_solver(
-    comm: PETSc.Comm, A: PETSc.Mat, ksp: PETSc.KSP
-) -> None:
+def check_gmres_bjacobi_solver(A: PETSc.Mat, ksp: PETSc.KSP) -> None:
     r"""
     Check that the solver computed in :func:`.create_gmres_bjacobi_solver`
     has succeeded.
 
-    :param comm: MPI communicator (one of :code:`PETSc.COMM_WORLD` or
-        :code:`PETSc.COMM_SELF`)
-    :type comm: PETSc.Comm
     :param A: PETSc matrix
     :type A: PETSc.Mat
     :param ksp: PETSc KSP solver
     :type ksp: PETSc.KSP
     """
     sizes = A.getSizes()[0]
-    b = generate_random_petsc_vector(comm, sizes)
+    b = generate_random_petsc_vector(sizes)
     x = b.duplicate()
     ksp.solve(b, x)
     x.destroy()

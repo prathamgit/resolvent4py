@@ -33,7 +33,7 @@ fnames = ["rows.dat", "cols.dat", "vals.dat"]
 for i, array in enumerate(arrays):
     fname = save_path + fnames[i]
     vec = PETSc.Vec().createWithArray(array, len(array), None, PETSc.COMM_SELF)
-    res4py.write_to_file(comm, fname, vec)
+    res4py.write_to_file(fname, vec)
 
 # Generate input and output matrices B and C as in Chen & Rowley, 2011
 B = system.assemble_input_operators([-0.75, 0.75])
@@ -44,5 +44,5 @@ sizesC = ((system.nx, system.nx), (C.shape[-1], C.shape[-1]))
 Bmat = PETSc.Mat().createDense(sizesB, None, B, comm)
 Cmat = PETSc.Mat().createDense(sizesC, None, C, comm)
 
-res4py.write_to_file(comm, save_path + "B.dat", Bmat)
-res4py.write_to_file(comm, save_path + "C.dat", Cmat)
+res4py.write_to_file(save_path + "B.dat", Bmat)
+res4py.write_to_file(save_path + "C.dat", Cmat)

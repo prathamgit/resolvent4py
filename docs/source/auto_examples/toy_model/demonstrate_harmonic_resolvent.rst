@@ -67,7 +67,7 @@ In particular, we demonstrate the following:
   Floquet exponents associated with the underlying time-periodic linear system
   (see :cite:`Wereley91`).
 
-.. GENERATED FROM PYTHON SOURCE LINES 52-204
+.. GENERATED FROM PYTHON SOURCE LINES 52-201
 
 .. code-block:: Python
 
@@ -115,32 +115,29 @@ In particular, we demonstrate the following:
     n = 3
     nl = res4py.compute_local_size(n)
     A = res4py.read_harmonic_balanced_matrix(
-        comm,
         fnames_lst,
         True,
         ((nl, n), (nl, n)),
         ((Nl, N), (Nl, N)),
     )
-    T = res4py.assemble_harmonic_resolvent_generator(comm, A, perts_freqs)
+    T = res4py.assemble_harmonic_resolvent_generator(A, perts_freqs)
     T.scale(-1.0)
     # Perturb the generator to avoid numerical singularities
     Id = res4py.create_AIJ_identity(comm, T.getSizes())
     Id.scale(1e-7)
     T.axpy(1.0, Id)
     Id.destroy()
-    ksp = res4py.create_mumps_solver(comm, T)
-    res4py.check_lu_factorization(comm, T, ksp)
+    ksp = res4py.create_mumps_solver(T)
+    res4py.check_lu_factorization(T, ksp)
 
-    Top = res4py.linear_operators.MatrixLinearOperator(comm, T, ksp, nblocks)
+    Top = res4py.linear_operators.MatrixLinearOperator(T, ksp, nblocks)
 
     # ------------------------------------------------------------------------------
     # -------- Read base-flow time-derivative and define projection operators ------
     # -------- to remove the phase-shift direction ---------------------------------
     # ------------------------------------------------------------------------------
     fnames_lst = [(save_path + "dQ_%02d.dat" % j) for j in range(len(bflow_freqs))]
-    dQ = res4py.read_harmonic_balanced_vector(
-        comm, fnames_lst, True, (nl, n), (Nl, N)
-    )
+    dQ = res4py.read_harmonic_balanced_vector(fnames_lst, True, (nl, n), (Nl, N))
     dQ.scale(1 / dQ.norm())
     w = Top.solve_hermitian_transpose(dQ)
     w.scale(1 / w.norm())
@@ -153,16 +150,16 @@ In particular, we demonstrate the following:
     Psi.insertVec(0, w)
 
     Pd = res4py.linear_operators.ProjectionLinearOperator(
-        comm, Psi, Psi, True, nblocks
+        Psi, Psi, True, nblocks
     )
     Pr = res4py.linear_operators.ProjectionLinearOperator(
-        comm, Phi, Phi, True, nblocks
+        Phi, Phi, True, nblocks
     )
 
     lops = [Pr, Top, Pd]
     lops_actions = [Pr.apply, Top.solve, Pd.apply]
     Linop = res4py.linear_operators.ProductLinearOperator(
-        comm, lops, lops_actions, nblocks
+        lops, lops_actions, nblocks
     )
 
 
@@ -195,12 +192,12 @@ In particular, we demonstrate the following:
 
 
     P = res4py.linear_operators.ProjectionLinearOperator(
-        comm, Phi, Psi, True, nblocks
+        Phi, Psi, True, nblocks
     )
     lops = [P, Top, P]
     lops_actions = [P.apply, Top.solve, P.apply]
     Linop = res4py.linear_operators.ProductLinearOperator(
-        comm, lops, lops_actions, nblocks
+        lops, lops_actions, nblocks
     )
 
     D, _ = res4py.linalg.eig(Linop, Linop.apply, N - 3, 30, lambda x: -1 / x)

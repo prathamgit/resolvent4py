@@ -8,8 +8,8 @@ from .. import pytest_utils
 def test_matrix_on_vectors(comm, square_random_matrix):
     r"""Test MatrixLinearOperator on vectors"""
     Apetsc, Apython = square_random_matrix
-    ksp = res4py.create_mumps_solver(comm, Apetsc)
-    res4py.check_lu_factorization(comm, Apetsc, ksp)
+    ksp = res4py.create_mumps_solver(Apetsc)
+    res4py.check_lu_factorization(Apetsc, ksp)
     linop = res4py.linear_operators.MatrixLinearOperator(Apetsc, ksp)
     x, xpython = pytest_utils.generate_random_vector(comm, Apython.shape[-1])
 
@@ -44,7 +44,7 @@ def test_matrix_on_vectors(comm, square_random_matrix):
 def test_matrix_on_bvs(comm, square_random_matrix):
     r"""Test MatrixLinearOperator on BVs"""
     Apetsc, Apython = square_random_matrix
-    ksp = res4py.create_mumps_solver(comm, Apetsc)
+    ksp = res4py.create_mumps_solver(Apetsc)
     linop = res4py.linear_operators.MatrixLinearOperator(Apetsc, ksp)
     X, Xpython = pytest_utils.generate_random_bv(comm, (Apython.shape[0], 5))
 

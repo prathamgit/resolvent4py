@@ -48,8 +48,8 @@ class LowRankUpdatedLinearOperator(LinearOperator):
         :code:`A.solve()` is enabled and the argument :code:`woodbury_factors`
         is :code:`None`, the factors :math:`X`, :math:`D` and :math:`Y` are
         computed at initialization
-    :type woodbury_factors: Optional[Tuple[SLEPc.BV, numpy.ndarray,
-        SLEPc.BV], None], default is None
+    :type woodbury_factors: Optional[Union[Tuple[SLEPc.BV, numpy.ndarray,
+        SLEPc.BV], None]], default is None
     :param nblocks: number of blocks (if the operator has block structure)
     :type nblocks: Optional[Union[int, None]], default is None
     """
@@ -61,9 +61,9 @@ class LowRankUpdatedLinearOperator(LinearOperator):
         K: np.ndarray,
         C: SLEPc.BV,
         woodbury_factors: typing.Optional[
-            typing.Tuple[SLEPc.BV, np.ndarray, SLEPc.BV]
+            typing.Union[typing.Tuple[SLEPc.BV, np.ndarray, SLEPc.BV], None]
         ] = None,
-        nblocks: typing.Optional[int] = None,
+        nblocks: typing.Optional[typing.Union[int, None]] = None,
     ) -> None:
         comm = A.get_comm()
         self.A = A
@@ -135,8 +135,8 @@ class LowRankUpdatedLinearOperator(LinearOperator):
 
         :rtype: SLEPc.BV
         """
-        X = SLEPc.BV().create(self._comm)
-        X.setSizes(self._dimensions[0], m)
+        X = SLEPc.BV().create(self.get_comm())
+        X.setSizes(self.get_dimensions()[0], m)
         X.setType("mat")
         return X
 
@@ -157,8 +157,8 @@ class LowRankUpdatedLinearOperator(LinearOperator):
 
         :rtype: SLEPc.BV
         """
-        X = SLEPc.BV().create(self._comm)
-        X.setSizes(self._dimensions[-1], m)
+        X = SLEPc.BV().create(self.get_comm())
+        X.setSizes(self.get_dimensions()[-1], m)
         X.setType("mat")
         return X
 
@@ -173,7 +173,7 @@ class LowRankUpdatedLinearOperator(LinearOperator):
         y = self.L.apply_hermitian_transpose(x, y)
         y.axpy(1.0, self.ATx)
         return y
-
+    
     def apply_mat(self, X, Y=None, Z=None):
         destroy = False
         if Z == None:

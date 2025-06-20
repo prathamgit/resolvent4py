@@ -11,7 +11,7 @@ Randomized SVD
 .. automodule:: resolvent4py.linalg.randomized_svd
    :members:
 
-Randomized Time Stepping SVD
-----------------------------
-.. automodule:: resolvent4py.linalg.randomized_time_stepping_svd
+Resolvent Analysis via Time Stepping
+------------------------------------
+.. automodule:: resolvent4py.linalg.resolvent_analysis_time_stepping
    :members:

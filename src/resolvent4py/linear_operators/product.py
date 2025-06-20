@@ -19,13 +19,11 @@ class ProductLinearOperator(LinearOperator):
     :code:`linops_actions = (L2.solve, L1.apply_hermitian_transpose)`
     we define a linear operator
 
-    .. math:
+    .. math::
 
         L = L_2^{-1}L_1^*.
 
-
-    :param comm: MPI communicator :code:`PETSc.COMM_WORLD`
-    :type comm: PETSc.Comm
+    
     :param linops: list of linear operators (see example above).
     :type linops: List[LinearOperator]
     :param linops_actions: list of actions (see example above). Must be one of

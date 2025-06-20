@@ -24,7 +24,7 @@ class LinearOperator(metaclass=abc.ABCMeta):
     :type dimensions: tuple[tuple[int, int], tuple[int, int]]
     :param nblocks: number of blocks (if the linear operator has block \
         structure)
-    :type nblocks: Optional[int], default is None
+    :type nblocks: Optional[Unions[int, None]], default is None
     """
 
     def __init__(
@@ -32,7 +32,7 @@ class LinearOperator(metaclass=abc.ABCMeta):
         comm: PETSc.Comm,
         name: str,
         dimensions: tuple[tuple[int, int], tuple[int, int]],
-        nblocks: Optional[int] = None,
+        nblocks: Optional[Union[int, None]] = None,
     ) -> None:
         self._comm = comm
         self._name = name
@@ -44,7 +44,7 @@ class LinearOperator(metaclass=abc.ABCMeta):
             if self.get_nblocks() != None
             else None
         )
-
+    
     def get_comm(self: "LinearOperator") -> PETSc.Comm:
         r"""
         The MPI communicator
@@ -79,19 +79,21 @@ class LinearOperator(metaclass=abc.ABCMeta):
         """
         return self._nblocks
 
-    def get_real_flag(self: "LinearOperator") -> Union[bool, None]:
+    def get_real_flag(self: "LinearOperator") -> bool:
         r"""
         :code:`True` if the operator is real-valued, :code:`False`
         otherwise.
 
-        :rtype: Union[bool, None]
+        :rtype: bool
         """
         return self._real_flag
 
     def get_block_cc_flag(self: "LinearOperator") -> Union[bool, None]:
         r"""
-        :code:`True` if the operator has complex-conjugate block structure
-        (like in the harmonic-balancing operator). :code:`False` otherwise.
+        Returns :code:`True` if the operator has complex-conjugate block 
+        structure (like in the harmonic-balancing operator). :code:`False` if 
+        the operator does not have complex-conjugate block structure,
+        :code:`None` if :code:`.get_nblocks` returns :code:`None`.
 
         :rtype: Union[bool, None]
         """
@@ -150,7 +152,7 @@ class LinearOperator(metaclass=abc.ABCMeta):
         :rtype: bool
         """
         sizes = self.get_dimensions()[-1]
-        x = generate_random_petsc_vector(self.get_comm(), sizes)
+        x = generate_random_petsc_vector(sizes)
         Lx = self.apply(x)
         Lxai = Lx.getArray().imag
         norm = np.sqrt(
@@ -179,9 +181,7 @@ class LinearOperator(metaclass=abc.ABCMeta):
             structure, :code:`False` otherwise.
         :rtype: bool
         """
-        x = generate_random_petsc_vector(
-            self.get_comm(), self.get_dimensions()[-1]
-        )
+        x = generate_random_petsc_vector(self.get_dimensions()[-1])
         enforce_complex_conjugacy(self.get_comm(), x, self.get_nblocks())
         cc_x = check_complex_conjugacy(self.get_comm(), x, self.get_nblocks())
         if cc_x == False:

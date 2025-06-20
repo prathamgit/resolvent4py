@@ -43,7 +43,7 @@ def L_generator(omega, A):
     Rinv = res4py.create_AIJ_identity(comm, A.getSizes())
     Rinv.scale(1j * omega)
     Rinv.axpy(-1.0, A)
-    ksp = res4py.create_mumps_solver(comm, Rinv)
+    ksp = res4py.create_mumps_solver(Rinv)
     L = res4py.linear_operators.MatrixLinearOperator(Rinv, ksp)
     return (L, L.solve_mat, (L.destroy,))
 
@@ -61,9 +61,9 @@ names = [
     load_path + "cols.dat",
     load_path + "vals.dat",
 ]
-A = res4py.read_coo_matrix(comm, names, sizes)
-B = res4py.read_bv(comm, load_path + "B.dat", (A.getSizes()[0], 2))
-C = res4py.read_bv(comm, load_path + "C.dat", (A.getSizes()[0], 3))
+A = res4py.read_coo_matrix(names, sizes)
+B = res4py.read_bv(load_path + "B.dat", (A.getSizes()[0], 2))
+C = res4py.read_bv(load_path + "C.dat", (A.getSizes()[0], 3))
 
 domega = 0.648 / 2
 omegas = np.arange(-30, 30, domega)
