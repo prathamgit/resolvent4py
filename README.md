@@ -40,6 +40,9 @@ to the user through the `resolvent4py` namespace are:
 - Support for MPI communications using `mpi4py`
 - Support for manipulation of PETSc matrices/vector and SLEPc BVs
 
+## Documentation
+
+Click [here](https://albertopadovan.github.io/resolvent4py/).
 
 ## Dependencies
 
