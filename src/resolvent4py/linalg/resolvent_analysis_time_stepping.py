@@ -127,10 +127,13 @@ def _action(
                 error = 100 * x0.norm() / x.norm()
                 x.copy(x0)
                 if verbose > 1:
-                    str = "Deviation from periodicity at period %d/%d = %1.5e" % (
-                        period,
-                        n_periods,
-                        error,
+                    str = (
+                        "Deviation from periodicity at period %d/%d = %1.5e"
+                        % (
+                            period,
+                            n_periods,
+                            error,
+                        )
                     )
                     petscprint(PETSc.COMM_WORLD, str)
                 if (
@@ -184,18 +187,18 @@ def resolvent_analysis_rsvd_dt(
 ) -> typing.Tuple[SLEPc.BV, np.ndarray, SLEPc.BV]:
     r"""
     Perform resolvent analysis using randomized linear algebra and time
-    stepping. 
+    stepping.
     In particular, it can be shown that
 
     .. math::
 
         x_\omega e^{i\omega t} = \left(i\omega I - A\right)^{-1}f_\omega
-            e^{i\omega t} 
+            e^{i\omega t}
             \to \int_0^t e^{A(t-\tau)}f_\omega e^{i\omega\tau} d\tau
 
-    for sufficiently long time :math:`t \gg 1` and for any complex-valued 
+    for sufficiently long time :math:`t \gg 1` and for any complex-valued
     forcing :math:`f(t) = f_\omega e^{i\omega t}` (assuming that :math:`A` is
-    stable). 
+    stable).
     Computing the integral on the right-hand side can be done by integrating
 
     .. math::
@@ -203,8 +206,8 @@ def resolvent_analysis_rsvd_dt(
         \frac{d}{dt}x(t) = Ax(t) + f(t)
 
     forward in time with initial condition :math:`x(0) = 0`.
-    Thus, the action of the resolvent operator 
-    :math:`R(i\omega) = \left(i\omega I - A\right)^{-1}` on a vector 
+    Thus, the action of the resolvent operator
+    :math:`R(i\omega) = \left(i\omega I - A\right)^{-1}` on a vector
     :math:`f_\omega` can be computed by time-stepping the ODE above.
     For now, time integration is performed explicitly via the
     Adams-Bashforth scheme.
@@ -213,12 +216,12 @@ def resolvent_analysis_rsvd_dt(
     .. note::
 
         This function is meant for systems whose dimension is so large
-        that linear systems of the form 
+        that linear systems of the form
         :math:`(i\omega I - A)x_\omega = f_\omega`
-        cannot be solved easily. Typically, this happens when 
+        cannot be solved easily. Typically, this happens when
         :math:`\text{dim}(x_\omega) \sim O(10^7)` or larger.
         If you have a "small enough" system, then we highly recommend using
-        :func:`.randomized_svd.randomized_svd` instead for the singular 
+        :func:`.randomized_svd.randomized_svd` instead for the singular
         value decomposition of the resolvent.
 
     :param L: linear operator representing :math:`A`
@@ -251,23 +254,23 @@ def resolvent_analysis_rsvd_dt(
         :math:`\lVert x(kT) - x((k-1)T) \rVert < \mathrm{tol}`.
     :type tol: Optional[float], default is :math:`10^{-3}`
 
-    :param verbose: defines verbosity of output to terminal (useful to 
+    :param verbose: defines verbosity of output to terminal (useful to
         monitor progress during time stepping)
     :type verbose: Optional[int], default is 0
 
     :return: left singular vectors, singular values, and right singular vectors
-        of the resolvent operators :math:`R(i\omega)` evaluated at frequencies 
-        :math:`\Omega = \omega\{0, 1, 2, \ldots, n_{\omega}\}` if 
+        of the resolvent operators :math:`R(i\omega)` evaluated at frequencies
+        :math:`\Omega = \omega\{0, 1, 2, \ldots, n_{\omega}\}` if
         the linear operator :math:`A` is real-valued; otherwise at frequencies
         :math:`\Omega = \omega\{0, 1, 2, \ldots, n_{\omega}, -n_{\omega},-(n_{\omega}-1) \ldots, -1\}`
     :rtype: Tuple[List[SLEPc.BV], List[np.ndarray], List[SLEPc.BV]]
 
     References
     ----------
-    .. [Martini2021] Martini et al., *Efficient computation of global 
+    .. [Martini2021] Martini et al., *Efficient computation of global
         resolvent modes*, Journal of Fluid Mechanics, 2021
-    .. [Farghadan2025] Farghadan et al., *Scalable resolvent analysis 
-        for three-dimensional flows*, Journal of Computational Physics, 2025 
+    .. [Farghadan2025] Farghadan et al., *Scalable resolvent analysis
+        for three-dimensional flows*, Journal of Computational Physics, 2025
     """
 
     size = L.get_dimensions()[0]
@@ -320,7 +323,12 @@ def resolvent_analysis_rsvd_dt(
     for j in range(n_loops):
         for k in range(n_rand):
             if verbose > 0:
-                str = 'Loop %d/%d, Random vec. %d/%d (forward action)'%(j+1, n_loops, k+1, n_rand)
+                str = "Loop %d/%d, Random vec. %d/%d (forward action)" % (
+                    j + 1,
+                    n_loops,
+                    k + 1,
+                    n_rand,
+                )
                 petscprint(L.get_comm(), str)
             x.zeroEntries()
             Qfwd_hat_lst[k] = _action(
@@ -343,7 +351,12 @@ def resolvent_analysis_rsvd_dt(
 
         for k in range(n_rand):
             if verbose > 0:
-                str = 'Loop %d/%d, Random vec. %d/%d (adjoint action)'%(j+1, n_loops, k+1, n_rand)
+                str = "Loop %d/%d, Random vec. %d/%d (adjoint action)" % (
+                    j + 1,
+                    n_loops,
+                    k + 1,
+                    n_rand,
+                )
                 petscprint(L.get_comm(), str)
             x.zeroEntries()
             Qadj_hat_lst[k] = _action(

@@ -85,6 +85,7 @@ def bv_imag(X: SLEPc.BV, inplace: typing.Optional[bool] = False) -> SLEPc.BV:
     Y.restoreMat(Ym)
     return Y
 
+
 def bv_slice(
     comm: PETSc.Comm,
     X: SLEPc.BV,

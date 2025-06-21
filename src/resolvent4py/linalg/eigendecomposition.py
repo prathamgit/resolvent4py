@@ -17,6 +17,7 @@ from ..linear_operators import LinearOperator
 from ..utils.miscellaneous import petscprint
 from ..utils.random import generate_random_petsc_vector
 from ..utils.vector import enforce_complex_conjugacy
+from ..utils.matrix import create_dense_matrix
 
 
 def arnoldi_iteration(
@@ -57,9 +58,9 @@ def arnoldi_iteration(
     block_cc = L.get_block_cc_flag()
     # Initialize the Hessenberg matrix and the BV for the Krylov subspace
     Q = SLEPc.BV().create(comm=comm)
-    Q.setSizes(sizes, krylov_dim)
+    Q.setSizes(sizes, krylov_dim + 1)
     Q.setType("mat")
-    H = np.zeros((krylov_dim, krylov_dim), dtype=np.complex128)
+    H = np.zeros((krylov_dim + 1, krylov_dim), dtype=np.complex128)
     complex = False if L.get_real_flag() else True
     q = generate_random_petsc_vector(sizes, complex)
     enforce_complex_conjugacy(comm, q, nblocks) if block_cc == True else None
@@ -73,20 +74,31 @@ def arnoldi_iteration(
     )
     for k in range(1, krylov_dim + 1):
         v = action(q, v)
-        for j in range(k):
-            qj = Q.getColumn(j)
-            H[j, k - 1] = v.dot(qj)
-            v.axpy(-H[j, k - 1], qj)
-            Q.restoreColumn(j, qj)
-        if k < krylov_dim:
-            H[k, k - 1] = v.norm()
-            v.scale(1.0 / H[k, k - 1])
-            Q.insertVec(k, v)
-        q.destroy()
-        q = v.copy()
+        Q.insertVec(k, v)
+        Q.setActiveColumns(0, k + 1)
+        R = create_dense_matrix(PETSc.COMM_SELF, (k + 1, k + 1))
+        Q.orthogonalize(R)
+        Ra = R.getDenseArray()
+        svec = np.sign(np.diag(Ra))
+        if np.sum(svec) != k + 1:
+            # Make sure all the entries of svec = 1
+            # This should be always true in SLEPc
+            Ra *= svec[:, np.newaxis]
+            S = PETSc.Mat().createDense(
+                (k + 1, k + 1), None, np.diag(svec), PETSc.COMM_SELF
+            )
+            S.setUp()
+            Q.multInPlace(S, 0, k + 1)
+            S.destroy()
+        H[: (k + 1), k - 1] = Ra[:, -1]
+        R.destroy()
+        qk = Q.getColumn(k)
+        qk.copy(q)
+        Q.restoreColumn(k, qk)
     q.destroy()
     v.destroy()
-    return (Q, H)
+    Q.setActiveColumns(0, krylov_dim)
+    return (Q, H[:-1,])
 
 
 def eig(

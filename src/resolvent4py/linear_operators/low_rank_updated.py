@@ -173,7 +173,7 @@ class LowRankUpdatedLinearOperator(LinearOperator):
         y = self.L.apply_hermitian_transpose(x, y)
         y.axpy(1.0, self.ATx)
         return y
-    
+
     def apply_mat(self, X, Y=None, Z=None):
         destroy = False
         if Z == None:

@@ -23,7 +23,7 @@ class ProductLinearOperator(LinearOperator):
 
         L = L_2^{-1}L_1^*.
 
-    
+
     :param linops: list of linear operators (see example above).
     :type linops: List[LinearOperator]
     :param linops_actions: list of actions (see example above). Must be one of

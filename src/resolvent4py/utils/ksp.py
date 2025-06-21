@@ -12,10 +12,11 @@ from petsc4py import PETSc
 from .miscellaneous import petscprint
 from .random import generate_random_petsc_vector
 
+
 def create_mumps_solver(A: PETSc.Mat) -> PETSc.KSP:
     r"""
     Compute an LU factorization of the matrix A using MUMPS.
-    
+
     :param A: PETSc matrix
     :type A: PETSc.Mat
 
@@ -59,6 +60,7 @@ def check_lu_factorization(A: PETSc.Mat, ksp: PETSc.KSP) -> None:
         )
     x.destroy()
     b.destroy()
+
 
 def create_gmres_bjacobi_solver(
     A: PETSc.Mat,
@@ -112,6 +114,7 @@ def create_gmres_bjacobi_solver(
     ksp.setUp()
 
     return ksp
+
 
 def check_gmres_bjacobi_solver(A: PETSc.Mat, ksp: PETSc.KSP) -> None:
     r"""

@@ -44,7 +44,7 @@ class LinearOperator(metaclass=abc.ABCMeta):
             if self.get_nblocks() != None
             else None
         )
-    
+
     def get_comm(self: "LinearOperator") -> PETSc.Comm:
         r"""
         The MPI communicator
@@ -90,8 +90,8 @@ class LinearOperator(metaclass=abc.ABCMeta):
 
     def get_block_cc_flag(self: "LinearOperator") -> Union[bool, None]:
         r"""
-        Returns :code:`True` if the operator has complex-conjugate block 
-        structure (like in the harmonic-balancing operator). :code:`False` if 
+        Returns :code:`True` if the operator has complex-conjugate block
+        structure (like in the harmonic-balancing operator). :code:`False` if
         the operator does not have complex-conjugate block structure,
         :code:`None` if :code:`.get_nblocks` returns :code:`None`.
 

@@ -146,7 +146,7 @@ def scatter_array_from_root_to_all(
         this is computed using the same logic as in the
         :func:`.compute_local_size` routine.
     :type locsize: Optional[int] default to None
-    
+
     :rtype: numpy.array
     """
     comm = MPI.COMM_WORLD

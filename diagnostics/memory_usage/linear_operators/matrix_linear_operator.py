@@ -28,7 +28,7 @@ def run_vec_methods(comm, niter, op, names, methods):
         else:
             x = res4py.generate_random_petsc_vector(op._dimensions[0])
             y = op.create_right_vector()
-        
+
         dmem = np.zeros(niter)
         for i in range(niter):
             mem_before = get_memory_usage(comm)
