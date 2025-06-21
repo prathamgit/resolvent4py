@@ -20,7 +20,7 @@ def test_eigendecomposition(comm, square_random_matrix):
     krylov_dim = linop.get_dimensions()[0][-1] - 1
     r = np.min([r, krylov_dim - 1])
     lambda_fun = lambda x: 1j * omega - 1 / x
-    D, _ = res4py.linalg.eig(linop, linop.solve, krylov_dim, r, lambda_fun)
+    D, _ = res4py.linalg.eig(linop, linop.solve, krylov_dim, r, lambda_fun, 1)
     D = np.diag(D)
 
     ev, _ = sp.linalg.eig(Apython)

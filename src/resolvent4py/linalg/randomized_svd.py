@@ -22,6 +22,7 @@ def randomized_svd(
     n_rand: int,
     n_loops: int,
     n_svals: int,
+    verbose: typing.Optional[int] = 0,
 ) -> typing.Tuple[SLEPc.BV, np.ndarray, SLEPc.BV]:
     r"""
     Compute the singular value decomposition (SVD) of the linear operator
@@ -46,6 +47,10 @@ def randomized_svd(
     :type n_loops: int
     :param n_svals: number of singular triplets to return
     :type n_svals: int
+    :param verbose: defines verbosity of output to terminal (useful to
+        monitor progress during time stepping). = 0 no printout to terminal,
+        = 1 monitor randomized SVD iterations.
+    :type verbose: Optional[int], default is 0
 
     :return: leading :code:`n_svals` left singular vectors,
         singular values and right singular vectors
@@ -59,6 +64,7 @@ def randomized_svd(
     .. [Ribeiro2020] Ribeiro et al., *Randomized resolvent analysis*,
         Physical Review Fluids, 2020
     """
+    comm = L.get_comm()
     if action != L.apply_mat and action != L.solve_mat:
         raise ValueError(f"action must be L.apply_mat or L.solve_mat.")
     action_adj = (
@@ -70,10 +76,10 @@ def randomized_svd(
     rowsizes = L.get_dimensions()[0]
     # Set seed
     rank = L.get_comm().getRank()
-    rand = PETSc.Random().create(comm=L.get_comm())
+    rand = PETSc.Random().create(comm=comm)
     rand.setType(PETSc.Random.Type.RAND)
     rand.setSeed(round(np.random.randint(1000, 100000) + rank))
-    X = SLEPc.BV().create(comm=L.get_comm())
+    X = SLEPc.BV().create(comm=comm)
     X.setSizes(rowsizes, n_rand)
     X.setType("mat")
     X.setRandomContext(rand)
@@ -87,23 +93,29 @@ def randomized_svd(
             xj.setValues(rows, xj.getArray().real)
             xj.assemble()
         if L.get_block_cc_flag():
-            enforce_complex_conjugacy(L.get_comm(), xj, L.get_nblocks())
+            enforce_complex_conjugacy(comm, xj, L.get_nblocks())
         X.restoreColumn(j, xj)
     X.orthogonalize(None)
     # Perform randomized SVD loop
-    Qadj = SLEPc.BV().create(comm=L.get_comm())
+    Qadj = SLEPc.BV().create(comm=comm)
     Qadj.setSizes(L.get_dimensions()[-1], n_rand)
     Qadj.setType("mat")
     Qadj = action_adj(X, Qadj)
     Qadj.orthogonalize(None)
     X.destroy()
-    Qfwd = SLEPc.BV().create(comm=L.get_comm())
+    Qfwd = SLEPc.BV().create(comm=comm)
     Qfwd.setSizes(L.get_dimensions()[0], n_rand)
     Qfwd.setType("mat")
     R = create_dense_matrix(PETSc.COMM_SELF, (n_rand, n_rand))
     for j in range(n_loops):
+        if verbose == 1:
+            str = "Loop %d/%d, forward action"%(j+1, n_loops)
+            petscprint(comm, str)
         Qfwd = action(Qadj, Qfwd)
         Qfwd.orthogonalize(None)
+        if verbose == 1:
+            str = "Loop %d/%d, adjoint action"%(j+1, n_loops)
+            petscprint(comm, str)
         Qadj = action_adj(Qfwd, Qadj)
         Qadj.orthogonalize(R)
     # Compute low-rank SVD

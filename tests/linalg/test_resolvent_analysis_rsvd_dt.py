@@ -190,12 +190,13 @@ def test_resolvent_analysis_time_stepping(comm, square_matrix_size):
         )
 
         L = res4py.linear_operators.MatrixLinearOperator(Apetsc)
-
+        
         n_rand = N
         n_loops = 2
         n_svals = 1
+        tol = 1e-3
         _, Slst, _ = res_ts.resolvent_analysis_rsvd_dt(
-            L, dt, omega, n_omegas, n_periods, n_rand, n_loops, n_svals
+            L, dt, omega, n_omegas, n_periods, n_rand, n_loops, n_svals, tol, 1
         )
 
         _, _, omegas, _ = res_ts._create_time_and_frequency_arrays(
