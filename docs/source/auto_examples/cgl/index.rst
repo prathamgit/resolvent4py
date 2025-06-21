@@ -129,7 +129,7 @@ Scripts
 
 .. raw:: html
 
-      <div class="sphx-glr-thumbnail-title">Resolvent Analysis Demonstration</div>
+      <div class="sphx-glr-thumbnail-title">Resolvent Analysis Demonstration via Time Stepping</div>
     </div>
 
 

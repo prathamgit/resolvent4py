@@ -1,6 +1,6 @@
 r"""
-Resolvent Analysis Demonstration
-================================
+Resolvent Analysis Demonstration via Time Stepping
+==================================================
 
 Given the linear dynamics :math:`d_t q = Aq`, we perform resolvent analysis
 by computing the singular value decomposition (SVD) of the resolvent operator
@@ -12,9 +12,8 @@ by computing the singular value decomposition (SVD) of the resolvent operator
 with :math:`\omega = 0.648` the natural frequency of the linearized CGL
 equation. This script demonstrates the following:
 
-- LU decomposition using :func:`~resolvent4py.utils.ksp.create_mumps_solver`
-- Resolvent analysis in the frequency domain using
-  :func:`~resolvent4py.linalg.randomized_svd.randomized_svd`
+- Resolvent analysis using time-stepping via
+  :func:`~resolvent4py.linalg.resolvent_analysis_time_stepping.resolvent_analysis_rsvd_dt`
 
 """
 
@@ -73,9 +72,12 @@ res4py.petscprint(comm, "Running randomized SVD (time stepping)...")
 res4py.petscprint(comm, "This may take several minutes...")
 n_omegas = 1
 n_periods = 100
+dt = 1e-4
+tol = 1e-3
+verbose = 2
 L = res4py.linear_operators.MatrixLinearOperator(A)
 U, S, V = res4py.linalg.resolvent_analysis_time_stepping.resolvent_analysis_rsvd_dt(
-    L, 1e-4, omega, n_omegas, n_periods, n_rand, n_loops, n_svals, 1e-3
+    L, dt, omega, n_omegas, n_periods, n_rand, n_loops, n_svals, tol, verbose
 )
 St = np.diag(S[-1])
 Ut = U[-1]

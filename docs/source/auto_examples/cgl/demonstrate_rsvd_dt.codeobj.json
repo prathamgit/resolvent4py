@@ -215,22 +215,13 @@
    "name": "read_coo_matrix"
   }
  ],
- "resolvent4py.linalg.randomized_svd.randomized_svd": [
+ "resolvent4py.linalg.resolvent_analysis_time_stepping.resolvent_analysis_rsvd_dt": [
   {
    "is_class": false,
    "is_explicit": true,
-   "module": "resolvent4py.linalg.randomized_svd",
+   "module": "resolvent4py.linalg.resolvent_analysis_time_stepping",
    "module_short": "resolvent4py.linalg",
-   "name": "randomized_svd"
-  }
- ],
- "resolvent4py.utils.ksp.create_mumps_solver": [
-  {
-   "is_class": false,
-   "is_explicit": true,
-   "module": "resolvent4py.utils.ksp",
-   "module_short": "resolvent4py",
-   "name": "create_mumps_solver"
+   "name": "resolvent_analysis_rsvd_dt"
   }
  ]
 }
