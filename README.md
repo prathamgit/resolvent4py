@@ -5,7 +5,6 @@
 [![Code Size](https://img.shields.io/github/languages/code-size/albertopadovan/resolvent4py.svg)](https://github.com/albertopadovan/resolvent4py)
 
 
-
 `resolvent4py` is a parallel Python toolbox to perform 
 analysis, model reduction and control of high-dimensional linear systems. 
 It relies on `mpi4py` for multi-processing parallelism, and it leverages 
@@ -30,9 +29,9 @@ several analyses, including:
 - Right and left eigendecomposition using Arnoldi iteration (with shift and 
   invert)
 - (Randomized) singular value decomposition (SVD)
-- Resolvent analysis via randomized SVD
-- Harmonic resolvent analysis via randomized SVD
-- Balanced truncation for time-invariant linear systems
+- Resolvent analysis via randomized SVD (algebraic and with time stepping)
+- Harmonic resolvent analysis via algebraic randomized SVD
+- Balanced truncation for time-invariant linear systems using frequential Gramians
 
 Additional functionalities (found in `resolvent4py/utils`) and available 
 to the user through the `resolvent4py` namespace are:
@@ -40,7 +39,6 @@ to the user through the `resolvent4py` namespace are:
 - Support for parallel I/O through `petsc4py`
 - Support for MPI communications using `mpi4py`
 - Support for manipulation of PETSc matrices/vector and SLEPc BVs
-- Support for time-stepping of linear ordinary differential equations
 
 
 ## Dependencies
@@ -48,7 +46,6 @@ to the user through the `resolvent4py` namespace are:
 - `numpy`
 - `scipy`
 - `matplotlib`
-- `pymanopt`
 - `sphinx`
 - `sphinx-rtd-theme`
 - `sphinx-gallery`
@@ -57,9 +54,16 @@ to the user through the `resolvent4py` namespace are:
 - `slepc4py`
 - `mpi4py`
 
-## Instructions
+## Installation instructions
 
-### Installing the dependencies
+### Installing PETSc, SLEPc, petsc4py and slepc4py
+
+> **Note**  
+> If you have an existing parallel build of PETSc and SLEPc and their
+> 4py counterparts configured with complex scalars 
+> (i.e., `--with-scalar-type=complex`) and with MUMPS (i.e.,
+> `--download-mumps`) you can skip this subsection and go directly to
+> "Installing `resolvent4py` and building the documentation".
 
 All the dependencies above can be installed straightforwardly with `pip`, 
 except for `petsc4py` and `slepc4py` whose installation is easier if 
@@ -104,7 +108,5 @@ except for `petsc4py` and `slepc4py` whose installation is easier if
     ```
 - Build the documentation and open it with the following commands
     ```bash
-        ./compile_html.sh && open build/html/index.html
+        ./docs/compile_html.sh && open docs/build/html/index.html
     ```
-
-

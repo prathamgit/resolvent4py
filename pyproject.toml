@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "resolvent4py"
-version = "0.1.0"
+version = "1.0"
 description = """\
   A parallel Python-based library for analysis, model reduction and \
   control of large-scale linear systems.\
@@ -14,7 +14,8 @@ license = "MIT"
 license-files = ["LICENSE"]
 keywords = [
   "linear systems", "parallel computing", "MPI", "PETSc", "SLEPc",
-  "resolvent analysis", "model reduction", "control",
+  "resolvent analysis", "harmonic resolvent analysis", 
+  "model reduction", "control",
 ]
 authors = [
     { name = "Alberto Padovan", email = "alberto.padovan.94@gmail.com" },
@@ -23,6 +24,15 @@ authors = [
 ]
 requires-python = ">=3.9"
 readme = { file = "README.md", content-type = "text/markdown" }
+dependencies = ["numpy", "scipy", "matplotlib"]
+
+[project.optional-dependencies]
+docs = [
+  "sphinx",
+  "sphinx-rtd-theme",
+  "sphinx-gallery",
+  "sphinxcontrib-bibtex",
+]
 
 [project.urls]
 Homepage = "https://github.com/albertopadovan/resolvent4py"
@@ -43,8 +53,6 @@ lint.ignore = ["E501"]
 testpaths = ["tests"]
 markers = [
     "local: marks tests as local development tests",
-    "development: marks tests for development branch CI",
-    "main: marks tests for main branch CI",
 ]
 python_files = ["test_*.py"]
 addopts = "-ra -q"
