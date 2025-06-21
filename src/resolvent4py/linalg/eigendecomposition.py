@@ -74,27 +74,15 @@ def arnoldi_iteration(
     )
     for k in range(1, krylov_dim + 1):
         v = action(q, v)
+        for j in range(k):
+            qj = Q.getColumn(j)
+            H[j, k - 1] = v.dot(qj)
+            v.axpy(-H[j, k - 1], qj)
+            Q.restoreColumn(j, qj)
+        H[k, k - 1] = v.norm()
+        v.scale(1.0 / H[k, k - 1])
         Q.insertVec(k, v)
-        Q.setActiveColumns(0, k + 1)
-        R = create_dense_matrix(PETSc.COMM_SELF, (k + 1, k + 1))
-        Q.orthogonalize(R)
-        Ra = R.getDenseArray()
-        svec = np.sign(np.diag(Ra))
-        if np.sum(svec) != k + 1:
-            # Make sure all the entries of svec = 1
-            # This should be always true in SLEPc
-            Ra *= svec[:, np.newaxis]
-            S = PETSc.Mat().createDense(
-                (k + 1, k + 1), None, np.diag(svec), PETSc.COMM_SELF
-            )
-            S.setUp()
-            Q.multInPlace(S, 0, k + 1)
-            S.destroy()
-        H[: (k + 1), k - 1] = Ra[:, -1]
-        R.destroy()
-        qk = Q.getColumn(k)
-        qk.copy(q)
-        Q.restoreColumn(k, qk)
+        v.copy(q)
     q.destroy()
     v.destroy()
     Q.setActiveColumns(0, krylov_dim)
