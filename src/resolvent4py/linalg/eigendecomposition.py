@@ -26,6 +26,7 @@ def arnoldi_iteration(
         [PETSc.Vec, typing.Optional[PETSc.Vec]], PETSc.Vec
     ],
     krylov_dim: int,
+    verbose: typing.Optional[int] = 0,
 ) -> typing.Tuple[SLEPc.BV, np.ndarray]:
     r"""
     Perform the Arnoldi iteration algorithm to compute an 
@@ -42,6 +43,8 @@ def arnoldi_iteration(
     :type action: Callable[[PETSc.Vec, PETSc.Vec], PETSc.Vec]
     :param krylov_dim: dimension of the Arnoldi Krylov subspace
     :type krylov_dim: int
+    :param verbose: 0 = no printout to terminal, 1 = print progress
+    :type verbose: Optional[int], default is 0
     
     :return: tuple with an orthonormal basis for the Krylov subspace
         and the Hessenberg matrix
@@ -73,28 +76,18 @@ def arnoldi_iteration(
         else L.create_right_vector()
     )
     for k in range(1, krylov_dim + 1):
+        if verbose == 1:
+            petscprint(comm, "Arnoldi iteration %d/%d"%(k, krylov_dim))
         v = action(q, v)
+        for j in range(k):
+            qj = Q.getColumn(j)
+            H[j, k - 1] = v.dot(qj)
+            v.axpy(-H[j, k - 1], qj)
+            Q.restoreColumn(j, qj)
+        H[k, k - 1] = v.norm()
+        v.scale(1.0 / H[k, k - 1])
         Q.insertVec(k, v)
-        Q.setActiveColumns(0, k + 1)
-        R = create_dense_matrix(PETSc.COMM_SELF, (k + 1, k + 1))
-        Q.orthogonalize(R)
-        Ra = R.getDenseArray()
-        svec = np.sign(np.diag(Ra))
-        if np.sum(svec) != k + 1:
-            # Make sure all the entries of svec = 1
-            # This should be always true in SLEPc
-            Ra *= svec[:, np.newaxis]
-            S = PETSc.Mat().createDense(
-                (k + 1, k + 1), None, np.diag(svec), PETSc.COMM_SELF
-            )
-            S.setUp()
-            Q.multInPlace(S, 0, k + 1)
-            S.destroy()
-        H[: (k + 1), k - 1] = Ra[:, -1]
-        R.destroy()
-        qk = Q.getColumn(k)
-        qk.copy(q)
-        Q.restoreColumn(k, qk)
+        v.copy(q)
     q.destroy()
     v.destroy()
     Q.setActiveColumns(0, krylov_dim)
@@ -109,6 +102,7 @@ def eig(
     process_evals: typing.Optional[
         typing.Callable[[np.ndarray], np.ndarray]
     ] = None,
+    verbose: typing.Optional[int] = 0,
 ) -> typing.Tuple[np.ndarray, SLEPc.BV]:
     r"""
     Compute the eigendecomposition of the linear operator specified by
@@ -132,12 +126,14 @@ def eig(
         (see description above for an example).
     :type process_evals: Optional[Callable[[np.ndarray], np.ndarray]], default
         is :code:`lambda x: x`
+    :param verbose: 0 = no printout to terminal, 1 = print progress
+    :type verbose: Optional[int], default is 0
 
     :return: tuple with the desired eigenvalues and corresponding eigenvectors
     :rtype: (numpy.ndarray of size :code:`n_evals x n_evals`,
         SLEPc.BV with :code:`n_evals` columns)
     """
-    Q, H = arnoldi_iteration(L, action, krylov_dim)
+    Q, H = arnoldi_iteration(L, action, krylov_dim, verbose)
     evals, evecs = sp.linalg.eig(H)
     idces = np.flipud(np.argsort(np.abs(evals)))[:n_evals]
     evals = evals[idces]

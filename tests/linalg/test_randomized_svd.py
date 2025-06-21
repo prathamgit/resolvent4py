@@ -11,7 +11,7 @@ def test_randomized_svd(comm, rectangular_random_matrix):
     n_cycles = 2
     r = np.min([3, krylov_dim])
     _, S, _ = res4py.linalg.randomized_svd(
-        linop, linop.apply_mat, krylov_dim, n_cycles, r
+        linop, linop.apply_mat, krylov_dim, n_cycles, r, 1
     )
     _, s, _ = sp.linalg.svd(Apython, full_matrices=False)
     error = 100 * np.max((np.diag(S) - s[:r]) / s[:r])

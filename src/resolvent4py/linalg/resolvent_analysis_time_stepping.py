@@ -255,7 +255,9 @@ def resolvent_analysis_rsvd_dt(
     :type tol: Optional[float], default is :math:`10^{-3}`
 
     :param verbose: defines verbosity of output to terminal (useful to
-        monitor progress during time stepping)
+        monitor progress during time stepping). = 0 no printout to terminal,
+        = 1 monitor randomized SVD iterations, = 2 monitor randomized SVD
+        iterations and time-stepping progress.
     :type verbose: Optional[int], default is 0
 
     :return: left singular vectors, singular values, and right singular vectors
@@ -323,7 +325,7 @@ def resolvent_analysis_rsvd_dt(
     for j in range(n_loops):
         for k in range(n_rand):
             if verbose > 0:
-                str = "Loop %d/%d, Random vec. %d/%d (forward action)" % (
+                str = "Loop %d/%d, random vector %d/%d (forward action)" % (
                     j + 1,
                     n_loops,
                     k + 1,
@@ -351,7 +353,7 @@ def resolvent_analysis_rsvd_dt(
 
         for k in range(n_rand):
             if verbose > 0:
-                str = "Loop %d/%d, Random vec. %d/%d (adjoint action)" % (
+                str = "Loop %d/%d, random vector %d/%d (adjoint action)" % (
                     j + 1,
                     n_loops,
                     k + 1,
