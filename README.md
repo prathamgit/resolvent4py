@@ -104,9 +104,13 @@ except for `petsc4py` and `slepc4py` whose installation is easier if
 - Clone the repository into the local directory `resolvent4py`
 - Navigate to the directory `resolvent4py` and run
     ```bash
-        pip install .
+        pip install resolvent4py[docs]
+    ```
+- Navigate to docs folder 
+    ```bash
+        cd docs
     ```
 - Build the documentation and open it with the following commands
     ```bash
-        ./docs/compile_html.sh && open docs/build/html/index.html
+        ./compile_html.sh && open build/html/index.html
     ```
