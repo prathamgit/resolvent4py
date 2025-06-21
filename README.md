@@ -42,21 +42,19 @@ to the user through the `resolvent4py` namespace are:
 
 
 ## Dependencies
+
 - `Python>=3.10`
 - `numpy`
 - `scipy`
 - `matplotlib`
-- `sphinx`
-- `sphinx-rtd-theme`
-- `sphinx-gallery`
-- `sphinxcontrib-bibtex`
-- `petsc4py`
-- `slepc4py`
 - `mpi4py`
+- `petsc4py >= 3.20` (must be installed from source, see below)
+- `slepc4py >= 3.20` (must be installed from source, see below)
+
 
 ## Installation instructions
 
-### Installing PETSc, SLEPc, petsc4py and slepc4py
+### Installing `PETSc`, `SLEPc`, `petsc4py` and `slepc4py`
 
 > **Note**  
 > If you have an existing parallel build of PETSc and SLEPc and their
@@ -99,18 +97,14 @@ except for `petsc4py` and `slepc4py` whose installation is easier if
     python -c "from slepc4py import SLEPc"
     ```
 
-## Installing `resolvent4py` and building the documentation
+## Installing `resolvent4py`
 
-- Clone the repository into the local directory `resolvent4py`
-- Navigate to the directory `resolvent4py` and run
+- Install `resolvent4py` with
     ```bash
-        pip install resolvent4py[docs]
+        pip install resolvent4py
     ```
-- Navigate to docs folder 
+- Alternatively, clone the repository into the local directory `resolvent4py`,
+  navigate to it and run
     ```bash
-        cd docs
-    ```
-- Build the documentation and open it with the following commands
-    ```bash
-        ./compile_html.sh && open build/html/index.html
+        pip install resolvent4py
     ```
