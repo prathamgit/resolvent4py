@@ -15,7 +15,7 @@ numpy_to_mpi_dtype = {
 }
 
 
-def get_mpi_type(dtype: np.dtypes) -> MPI.Datatype:
+def get_mpi_type(dtype: np.dtype) -> MPI.Datatype:
     r"""
     Get the corresponding MPI type for a given numpy data type.
 
