@@ -23,10 +23,10 @@ def get_memory_usage(comm):
 def run_vec_methods(comm, niter, op, names, methods):
     for k, m in enumerate(methods):
         if names[k] == "apply" or names[k] == "solve":
-            x = res4py.generate_random_petsc_vector(comm, op._dimensions[-1])
+            x = res4py.generate_random_petsc_vector(op._dimensions[-1])
             y = op.create_left_vector()
         else:
-            x = res4py.generate_random_petsc_vector(comm, op._dimensions[0])
+            x = res4py.generate_random_petsc_vector(op._dimensions[0])
             y = op.create_right_vector()
 
         dmem = np.zeros(niter)
@@ -86,8 +86,8 @@ sys.stdout = sys.__stdout__ if rank == 0 else open(os.devnull, "w")
 N = 1000
 Nl = res4py.compute_local_size(N)
 sizes = ((Nl, N), (Nl, N))
-A = res4py.generate_random_petsc_sparse_matrix(comm, sizes, True)
-ksp = res4py.create_mumps_solver(comm, A)
+A = res4py.generate_random_petsc_sparse_matrix(sizes, True)
+ksp = res4py.create_mumps_solver(A)
 op = res4py.MatrixLinearOperator(comm, A, ksp)
 
 niter = 30

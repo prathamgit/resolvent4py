@@ -38,7 +38,7 @@ using the algorithm presented in :cite:`dergham2011`.
 - Balanced truncation in the frequency domain using 
   :func:`~resolvent4py.model_reduction.balanced_truncation`
 
-.. GENERATED FROM PYTHON SOURCE LINES 23-80
+.. GENERATED FROM PYTHON SOURCE LINES 23-81
 
 .. code-block:: Python
 
@@ -65,8 +65,8 @@ using the algorithm presented in :cite:`dergham2011`.
         Rinv = res4py.create_AIJ_identity(comm, A.getSizes())
         Rinv.scale(1j * omega)
         Rinv.axpy(-1.0, A)
-        ksp = res4py.create_mumps_solver(comm, Rinv)
-        L = res4py.linear_operators.MatrixLinearOperator(comm, Rinv, ksp)
+        ksp = res4py.create_mumps_solver(Rinv)
+        L = res4py.linear_operators.MatrixLinearOperator(Rinv, ksp)
         return (L, L.solve_mat, (L.destroy,))
 
 
@@ -83,9 +83,9 @@ using the algorithm presented in :cite:`dergham2011`.
         load_path + "cols.dat",
         load_path + "vals.dat",
     ]
-    A = res4py.read_coo_matrix(comm, names, sizes)
-    B = res4py.read_bv(comm, load_path + "B.dat", (A.getSizes()[0], 2))
-    C = res4py.read_bv(comm, load_path + "C.dat", (A.getSizes()[0], 3))
+    A = res4py.read_coo_matrix(names, sizes)
+    B = res4py.read_bv(load_path + "B.dat", (A.getSizes()[0], 2))
+    C = res4py.read_bv(load_path + "C.dat", (A.getSizes()[0], 3))
 
     domega = 0.648 / 2
     omegas = np.arange(-30, 30, domega)
@@ -100,6 +100,7 @@ using the algorithm presented in :cite:`dergham2011`.
 
     res4py.petscprint(comm, "Computing balanced projection...")
     Phi, Psi, S = res4py.model_reduction.compute_balanced_projection(X, Y, 10)
+
 
 .. _sphx_glr_download_auto_examples_cgl_demonstrate_balanced_truncation.py:
 

@@ -13,13 +13,13 @@ if MPI.COMM_WORLD.Get_rank() != 0:
 
 @pytest.fixture(scope="session")
 def comm():
-    """MPI communicator fixture."""
+    """PETSc communicator fixture."""
     return PETSc.COMM_WORLD
 
 
 @pytest.fixture(scope="session")
 def rank_size(comm):
-    """Return rank and size of MPI communicator."""
+    """Return rank and size of PETSc communicator."""
     return comm.getRank(), comm.getSize()
 
 

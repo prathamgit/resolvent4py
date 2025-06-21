@@ -1,4 +1,4 @@
-__all__ = ["rsvd_dt", "_create_time_and_frequency_arrays", "_fft", "_ifft", "_action"]
+__all__ = ["resolvent_analysis_rsvd_dt"]
 
 import typing
 
@@ -12,7 +12,7 @@ from slepc4py import SLEPc
 from ..linear_operators import LinearOperator
 from ..utils.matrix import create_dense_matrix
 from ..utils.miscellaneous import petscprint
-from ..utils.vector import enforce_complex_conjugacy, vec_real
+from ..utils.vector import vec_real
 
 
 def _reorder_list(Qlist: list[SLEPc.BV], Qlist_reordered: list[SLEPc.BV]):
@@ -75,57 +75,6 @@ def _fft(
     return Xhat
 
 
-# def _action(
-#     L: LinearOperator,
-#     Laction: typing.Callable,
-#     tsim: np.array,
-#     tstore: np.array,
-#     omegas: np.array,
-#     x: PETSc.Vec,
-#     Fhat: SLEPc.BV,
-#     Xhat: SLEPc.BV,
-#     X: SLEPc.BV,
-# ):
-#     dt = tsim[1] - tsim[0]
-#     dt_store = tstore[1] - tstore[0]
-#     T = tstore[-1] + dt_store
-#     n_periods = round((tsim[-1] + dt) / T)
-#     n_save = round(dt_store / dt)
-#     idx = np.argmin(np.abs(tsim - (n_periods - 1) * T))
-#     save_idces = idx + np.arange(len(tsim[idx:]))[::n_save]
-
-#     rhs = L.create_left_vector()
-#     rhs_im1 = rhs.copy()
-#     rhs_temp = rhs.copy()
-#     Lx = x.copy()
-
-#     adjoint = True if Laction == L.apply_hermitian_transpose else False
-#     save_idx = 0
-#     for i in range(1, len(tsim)):
-#         rhs = _ifft(Fhat, rhs, omegas, tsim[i - 1], adjoint)
-#         rhs.axpy(1.0, Laction(x, Lx))
-#         if i == 1:
-#             rhs.copy(rhs_im1)
-#         else:
-#             rhs.copy(rhs_temp)
-#             rhs.scale(3 / 2)
-#             rhs.axpy(-1 / 2, rhs_im1)
-#             rhs_temp.copy(rhs_im1)
-#         x.axpy(dt, rhs)
-#         if i in save_idces:
-#             if math.isnan(x.norm()):
-#                 raise ValueError(f"Code blew up at time step {i}")
-#             X.insertVec(save_idx, x)
-#             save_idx += 1
-
-#     Xhat = _fft(X, Xhat, L._real, adjoint)
-#     objs = [rhs, rhs_im1, rhs_temp, Lx]
-#     for obj in objs:
-#         obj.destroy()
-
-#     return Xhat
-
-
 def _action(
     L: LinearOperator,
     Laction: typing.Callable,
@@ -137,6 +86,7 @@ def _action(
     Xhat: SLEPc.BV,
     X: SLEPc.BV,
     tol: typing.Optional[float] = 1e-3,
+    verbose: typing.Optional[int] = 0,
 ):
     dt = tsim[1] - tsim[0]
     dt_store = tstore[1] - tstore[0]
@@ -146,46 +96,26 @@ def _action(
     n_periods = round((tsim[-1] + dt) / T)
 
     rhs = L.create_left_vector()
-    rhs_next = L.create_left_vector()
-    rhs_mid = L.create_left_vector()
-    k1 = L.create_left_vector()
-    k2 = L.create_left_vector()
-    k3 = L.create_left_vector()
-    k4 = L.create_left_vector()
+    rhs_im1 = rhs.copy()
+    rhs_temp = rhs.copy()
     Lx = x.copy()
     x0 = x.copy()
-    tempx = x.copy()
 
     adjoint = True if Laction == L.apply_hermitian_transpose else False
     save_idx = 0
     period = 0
     X.insertVec(0, x)
     for i in range(1, len(tsim)):
-        petscprint(PETSc.COMM_WORLD, f"t = {tsim[i]}")
         rhs = _ifft(Fhat, rhs, omegas, tsim[i - 1], adjoint)
-        rhs_mid = _ifft(Fhat, rhs_mid, omegas, tsim[i-1] + dt/2, adjoint)
-        rhs_next = _ifft(Fhat, rhs_next, omegas, tsim[i - 1] + dt, adjoint)
-
-        rhs.copy(k1)
-        rhs_mid.copy(k2)
-        rhs_mid.copy(k3)
-        rhs_next.copy(k4)
-
-        k1.axpy(1.0, Laction(x, Lx))
-        x.copy(tempx)
-        tempx.axpy(dt/2, k1)
-        k2.axpy(1.0, Laction(tempx, Lx))
-        x.copy(tempx)
-        tempx.axpy(dt/2, k2)
-        k3.axpy(1.0, Laction(tempx, Lx))
-        x.copy(tempx)
-        tempx.axpy(dt, k3)
-        k4.axpy(1.0, Laction(tempx, Lx))
-
-        x.axpy(dt/6, k1)
-        x.axpy(dt/3, k2)
-        x.axpy(dt/3, k3)
-        x.axpy(dt/6, k4)
+        rhs.axpy(1.0, Laction(x, Lx))
+        if i == 1:
+            rhs.copy(rhs_im1)
+        else:
+            rhs.copy(rhs_temp)
+            rhs.scale(3 / 2)
+            rhs.axpy(-1 / 2, rhs_im1)
+            rhs_temp.copy(rhs_im1)
+        x.axpy(dt, rhs)
 
         if np.mod(i, n_save) == 0:
             if math.isnan(x.norm()):
@@ -196,20 +126,24 @@ def _action(
                 x0.axpy(-1.0, x)
                 error = 100 * x0.norm() / x.norm()
                 x.copy(x0)
-                string = "Error = %1.5e [%d / %d] periods" % (
-                    error,
-                    period,
-                    n_periods,
-                )
-                petscprint(PETSc.COMM_WORLD, string)
+                if verbose > 1:
+                    str = (
+                        "Deviation from periodicity at period %d/%d = %1.5e"
+                        % (
+                            period,
+                            n_periods,
+                            error,
+                        )
+                    )
+                    petscprint(PETSc.COMM_WORLD, str)
                 if (
                     error < tol
                 ):  # Reached limit cycle, no need to integrate further
                     break
             X.insertVec(save_idx, x)
 
-    Xhat = _fft(X, Xhat, L._real, adjoint)
-    objs = [rhs, rhs_next, rhs_mid, k1, k2, k3, k4, Lx, tempx, x0]
+    Xhat = _fft(X, Xhat, L.get_real_flag(), adjoint)
+    objs = [rhs, rhs_im1, rhs_temp, Lx, x0]
     for obj in objs:
         obj.destroy()
 
@@ -239,7 +173,7 @@ def _create_time_and_frequency_arrays(
     return tsim, tstore, omegas, len(omegas)
 
 
-def rsvd_dt(
+def resolvent_analysis_rsvd_dt(
     L: LinearOperator,
     dt: float,
     omega: float,
@@ -248,11 +182,101 @@ def rsvd_dt(
     n_rand: int,
     n_loops: int,
     n_svals: int,
+    tol: typing.Optional[float] = 1e-3,
+    verbose: typing.Optional[int] = 0,
 ) -> typing.Tuple[SLEPc.BV, np.ndarray, SLEPc.BV]:
+    r"""
+    Perform resolvent analysis using randomized linear algebra and time
+    stepping.
+    In particular, it can be shown that
+
+    .. math::
+
+        x_\omega e^{i\omega t} = \left(i\omega I - A\right)^{-1}f_\omega
+            e^{i\omega t}
+            \to \int_0^t e^{A(t-\tau)}f_\omega e^{i\omega\tau} d\tau
+
+    for sufficiently long time :math:`t \gg 1` and for any complex-valued
+    forcing :math:`f(t) = f_\omega e^{i\omega t}` (assuming that :math:`A` is
+    stable).
+    Computing the integral on the right-hand side can be done by integrating
+
+    .. math::
+
+        \frac{d}{dt}x(t) = Ax(t) + f(t)
+
+    forward in time with initial condition :math:`x(0) = 0`.
+    Thus, the action of the resolvent operator
+    :math:`R(i\omega) = \left(i\omega I - A\right)^{-1}` on a vector
+    :math:`f_\omega` can be computed by time-stepping the ODE above.
+    For now, time integration is performed explicitly via the
+    Adams-Bashforth scheme.
+    (See [Martini2021]_ and [Farghadan2025]_ for more details.)
+
+    .. note::
+
+        This function is meant for systems whose dimension is so large
+        that linear systems of the form
+        :math:`(i\omega I - A)x_\omega = f_\omega`
+        cannot be solved easily. Typically, this happens when
+        :math:`\text{dim}(x_\omega) \sim O(10^7)` or larger.
+        If you have a "small enough" system, then we highly recommend using
+        :func:`.randomized_svd.randomized_svd` instead for the singular
+        value decomposition of the resolvent.
+
+    :param L: linear operator representing :math:`A`
+    :type L: LinearOperator
+
+    :param dt: target time step :math:`\Delta t` to integrate the ODE
+    :type dt: float
+
+    :param omega: fundamental frequency :math:`\omega` of the forcing
+    :type omega: float
+
+    :param n_omegas: number of integer harmonics of :math:`\omega` to resolve
+    :type n_omegas: int
+
+    :param n_periods: number of periods :math:`T = 2\pi/\omega` to integrate
+        the ODE through. (This number should be large enough that we can
+        expect transients to have decayed.)
+    :type n_periods: int
+
+    :param n_rand: number of random forcing vectors for randomized SVD
+    :type n_rand: int
+
+    :param n_loops: number of power iterations for randomized SVD
+    :type n_loops: int
+
+    :param n_svals: number of singular values/vectors to output
+    :type n_svals: int
+
+    :param tol: integrate the ODE forward for :code:`n_periods` or until
+        :math:`\lVert x(kT) - x((k-1)T) \rVert < \mathrm{tol}`.
+    :type tol: Optional[float], default is :math:`10^{-3}`
+
+    :param verbose: defines verbosity of output to terminal (useful to
+        monitor progress during time stepping)
+    :type verbose: Optional[int], default is 0
+
+    :return: left singular vectors, singular values, and right singular vectors
+        of the resolvent operators :math:`R(i\omega)` evaluated at frequencies
+        :math:`\Omega = \omega\{0, 1, 2, \ldots, n_{\omega}\}` if
+        the linear operator :math:`A` is real-valued; otherwise at frequencies
+        :math:`\Omega = \omega\{0, 1, 2, \ldots, n_{\omega}, -n_{\omega},-(n_{\omega}-1) \ldots, -1\}`
+    :rtype: Tuple[List[SLEPc.BV], List[np.ndarray], List[SLEPc.BV]]
+
+    References
+    ----------
+    .. [Martini2021] Martini et al., *Efficient computation of global
+        resolvent modes*, Journal of Fluid Mechanics, 2021
+    .. [Farghadan2025] Farghadan et al., *Scalable resolvent analysis
+        for three-dimensional flows*, Journal of Computational Physics, 2025
+    """
+
     size = L.get_dimensions()[0]
 
     tsim, tstore, omegas, n_omegas = _create_time_and_frequency_arrays(
-        dt, omega, n_omegas, n_periods, L._real
+        dt, omega, n_omegas, n_periods, L.get_real_flag()
     )
 
     Qadj_hat_lst, Qfwd_hat_lst = [], []
@@ -269,7 +293,7 @@ def rsvd_dt(
         X.setRandomContext(rand)
         X.setRandomNormal()
         rand.destroy()
-        if L._real:
+        if L.get_real_flag():
             v = X.getColumn(0)
             v = vec_real(v, True)
             X.restoreColumn(0, v)
@@ -298,7 +322,14 @@ def rsvd_dt(
     x = L.create_left_vector()
     for j in range(n_loops):
         for k in range(n_rand):
-            petscprint(L._comm, f"Running k (fwd) {k}")
+            if verbose > 0:
+                str = "Loop %d/%d, Random vec. %d/%d (forward action)" % (
+                    j + 1,
+                    n_loops,
+                    k + 1,
+                    n_rand,
+                )
+                petscprint(L.get_comm(), str)
             x.zeroEntries()
             Qfwd_hat_lst[k] = _action(
                 L,
@@ -310,6 +341,8 @@ def rsvd_dt(
                 Qadj_hat_lst[k],
                 Qfwd_hat_lst[k],
                 Qfwd,
+                tol,
+                verbose,
             )
         Qfwd_hat_lst2 = _reorder_list(Qfwd_hat_lst, Qfwd_hat_lst2)
         for i in range(len(Qfwd_hat_lst2)):
@@ -317,7 +350,14 @@ def rsvd_dt(
         Qfwd_hat_lst = _reorder_list(Qfwd_hat_lst2, Qfwd_hat_lst)
 
         for k in range(n_rand):
-            petscprint(L._comm, f"Running k (adj) {k}")
+            if verbose > 0:
+                str = "Loop %d/%d, Random vec. %d/%d (adjoint action)" % (
+                    j + 1,
+                    n_loops,
+                    k + 1,
+                    n_rand,
+                )
+                petscprint(L.get_comm(), str)
             x.zeroEntries()
             Qadj_hat_lst[k] = _action(
                 L,
@@ -329,6 +369,8 @@ def rsvd_dt(
                 Qfwd_hat_lst[k],
                 Qadj_hat_lst[k],
                 Qadj,
+                tol,
+                verbose,
             )
         Qadj_hat_lst2 = _reorder_list(Qadj_hat_lst, Qadj_hat_lst2)
         Rlst = []

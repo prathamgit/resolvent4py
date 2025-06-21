@@ -11,6 +11,7 @@ import typing
 
 import numpy as np
 from petsc4py import PETSc
+from mpi4py import MPI
 
 from .miscellaneous import get_mpi_type
 
@@ -91,21 +92,17 @@ def sequential_to_distributed_vector(
     return vec_dist
 
 
-def distributed_to_sequential_matrix(
-    comm: PETSc.Comm, Mat_dist: PETSc.Mat
-) -> PETSc.Mat:
+def distributed_to_sequential_matrix(Mat_dist: PETSc.Mat) -> PETSc.Mat:
     r"""
     Allgather dense distributed PETSc matrix into a dense sequential PETSc
     matrix.
 
-    :param comm: MPI communicator :code:`PETSc.COMM_WORLD`
-    :type comm: PETSc.Comm
     :param Mat_dist: a distributed dense matrix
     :type Mat_dist: PETSc.Mat.Type.DENSE
 
     :rtype: PETSc.Mat.Type.DENSE
     """
-    comm = comm.tompi4py()
+    comm = Mat_dist.getComm().tompi4py()
     array = Mat_dist.getDenseArray().copy().reshape(-1)
     counts = np.asarray(comm.allgather(len(array)))
     disps = np.concatenate(([0], np.cumsum(counts[:-1])))
@@ -118,20 +115,16 @@ def distributed_to_sequential_matrix(
     return Mat_seq
 
 
-def distributed_to_sequential_vector(
-    comm: PETSc.Comm, vec_dist: PETSc.Vec
-) -> PETSc.Vec:
+def distributed_to_sequential_vector(vec_dist: PETSc.Vec) -> PETSc.Vec:
     r"""
     Allgather distribued PETSc vector into PETSc sequential vector.
 
-    :param comm: MPI communicator
-    :type comm: PETSc.Comm
     :param vec_dist: a distributed vector
     :type vec_dist: PETSc.Vec.Type.STANDARD
 
     :rtype: PETSc.Vec.Type.SEQ
     """
-    comm = comm.tompi4py()
+    comm = vec_dist.getComm().tompi4py()
     array = vec_dist.getArray().copy()
     counts = comm.allgather(len(array))
     disps = np.concatenate(([0], np.cumsum(counts[:-1]))).astype(PETSc.IntType)
@@ -142,23 +135,21 @@ def distributed_to_sequential_vector(
 
 
 def scatter_array_from_root_to_all(
-    comm: PETSc.Comm, array: np.array, locsize: typing.Optional[int] = None
+    array: np.array, locsize: typing.Optional[int] = None
 ) -> np.array:
     r"""
     Scatter numpy array from root to all other processors
 
-    :param comm: MPI communicator
-    :type comm: PETSc.Comm
     :param array: numpy array to be scattered
     :type array: numpy.array
     :param locsize: local size owned by each processor. If :code:`None`,
         this is computed using the same logic as in the
         :func:`.compute_local_size` routine.
-    :type locsize: Optional[int]
+    :type locsize: Optional[int] default to None
 
     :rtype: numpy.array
     """
-    comm = comm.tompi4py()
+    comm = MPI.COMM_WORLD
     size, rank = comm.Get_size(), comm.Get_rank()
     counts, displs = None, None
     if locsize == None:

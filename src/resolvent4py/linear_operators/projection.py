@@ -26,8 +26,6 @@ class ProjectionLinearOperator(LinearOperator):
     :math:`N\times r` stored as SLEPc BVs. (It is easy to check that :math:`L` 
     is a projection since :math:`L^2 = L`.)
     
-    :param comm: MPI communicator :code:`PETSc.COMM_WORLD`
-    :type comm: PETSc.Comm
     :param Phi: tall and skinny matrix
     :type Phi: SLEPc.BV
     :param Psi: tall and skinny matrix
@@ -40,12 +38,12 @@ class ProjectionLinearOperator(LinearOperator):
 
     def __init__(
         self: "ProjectionLinearOperator",
-        comm: PETSc.Comm,
         Phi: SLEPc.BV,
         Psi: SLEPc.BV,
         complement: typing.Optional[bool] = False,
         nblocks: typing.Optional[int] = None,
     ) -> None:
+        comm = Phi.getComm()
         ncolsPhi = Phi.getSizes()[-1]
         ncolsPsi = Psi.getSizes()[-1]
         if ncolsPhi != ncolsPsi:
@@ -60,12 +58,12 @@ class ProjectionLinearOperator(LinearOperator):
         self.complement = complement
         if self.complement:
             Id = create_AIJ_identity(comm, dimensions)
-            self.Idop = MatrixLinearOperator(comm, Id, None, nblocks)
+            self.Idop = MatrixLinearOperator(Id, None, nblocks)
             self.L = LowRankUpdatedLinearOperator(
-                comm, self.Idop, Phi, -Sig, Psi, None, nblocks
+                self.Idop, Phi, -Sig, Psi, None, nblocks
             )
         else:
-            self.L = LowRankLinearOperator(comm, Phi, Sig, Psi, nblocks)
+            self.L = LowRankLinearOperator(Phi, Sig, Psi, nblocks)
 
         super().__init__(comm, "ProjectionLinearOperator", dimensions, nblocks)
 

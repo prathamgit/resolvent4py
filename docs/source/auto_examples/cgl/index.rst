@@ -118,7 +118,7 @@ Scripts
 
 .. raw:: html
 
-    <div class="sphx-glr-thumbcontainer" tooltip="Description here.">
+    <div class="sphx-glr-thumbcontainer" tooltip="Given the linear dynamics d_t q = Aq, we perform resolvent analysis by computing the singular value decomposition (SVD) of the resolvent operator">
 
 .. only:: html
 
@@ -129,7 +129,7 @@ Scripts
 
 .. raw:: html
 
-      <div class="sphx-glr-thumbnail-title">RSVD-dt Demonstration</div>
+      <div class="sphx-glr-thumbnail-title">Resolvent Analysis Demonstration via Time Stepping</div>
     </div>
 
 

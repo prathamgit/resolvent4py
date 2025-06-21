@@ -1,65 +1,101 @@
 {
- "MPI.COMM_WORLD": [
-  {
-   "is_class": false,
-   "is_explicit": false,
-   "module": "mpi4py.MPI",
-   "module_short": "mpi4py.MPI",
-   "name": "COMM_WORLD"
-  }
- ],
- "PETSc.InsertMode.INSERT_VALUES": [
-  {
-   "is_class": false,
-   "is_explicit": false,
-   "module": "petsc4py.PETSc.InsertMode",
-   "module_short": "petsc4py.PETSc.InsertMode",
-   "name": "INSERT_VALUES"
-  }
- ],
- "PETSc.Mat.AssemblyType.FINAL": [
-  {
-   "is_class": false,
-   "is_explicit": false,
-   "module": "petsc4py.PETSc.Mat.AssemblyType",
-   "module_short": "petsc4py.PETSc.Mat.AssemblyType",
-   "name": "FINAL"
-  }
- ],
- "PETSc.Mat.Option.NEW_NONZERO_LOCATION_ERR": [
-  {
-   "is_class": false,
-   "is_explicit": false,
-   "module": "petsc4py.PETSc.Mat.Option",
-   "module_short": "petsc4py.PETSc.Mat.Option",
-   "name": "NEW_NONZERO_LOCATION_ERR"
-  }
- ],
- "PETSc.Viewer": [
+ "PETSc.COMM_WORLD": [
   {
    "is_class": false,
    "is_explicit": false,
    "module": "petsc4py.PETSc",
    "module_short": "petsc4py.PETSc",
-   "name": "Viewer"
+   "name": "COMM_WORLD"
   }
  ],
- "np.array": [
+ "cgl.CGL": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "cgl",
+   "module_short": "cgl",
+   "name": "CGL"
+  }
+ ],
+ "np.abs": [
   {
    "is_class": false,
    "is_explicit": false,
    "module": "numpy",
    "module_short": "numpy",
-   "name": "array"
+   "name": "abs"
   }
  ],
- "pathlib.Path": [
+ "np.diag": [
   {
    "is_class": false,
    "is_explicit": false,
-   "module": "pathlib",
-   "module_short": "pathlib",
-   "name": "Path"
+   "module": "numpy",
+   "module_short": "numpy",
+   "name": "diag"
+  }
+ ],
+ "np.linspace": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "numpy",
+   "module_short": "numpy",
+   "name": "linspace"
+  }
+ ],
+ "os.makedirs": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "os",
+   "module_short": "os",
+   "name": "makedirs"
+  }
+ ],
+ "os.path.exists": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "os.path",
+   "module_short": "os.path",
+   "name": "exists"
+  }
+ ],
+ "plt.figure": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "matplotlib.pyplot",
+   "module_short": "matplotlib.pyplot",
+   "name": "figure"
+  }
+ ],
+ "plt.gca": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "matplotlib.pyplot",
+   "module_short": "matplotlib.pyplot",
+   "name": "gca"
+  }
+ ],
+ "plt.legend": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "matplotlib.pyplot",
+   "module_short": "matplotlib.pyplot",
+   "name": "legend"
+  }
+ ],
+ "plt.plot": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "matplotlib.pyplot",
+   "module_short": "matplotlib.pyplot",
+   "name": "plot"
   }
  ],
  "plt.rcParams.update": [
@@ -71,13 +107,31 @@
    "name": "update"
   }
  ],
- "res4py.MatrixLinearOperator": [
+ "plt.savefig": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "matplotlib.pyplot",
+   "module_short": "matplotlib.pyplot",
+   "name": "savefig"
+  }
+ ],
+ "plt.tight_layout": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "matplotlib.pyplot",
+   "module_short": "matplotlib.pyplot",
+   "name": "tight_layout"
+  }
+ ],
+ "res4py.check_lu_factorization": [
   {
    "is_class": false,
    "is_explicit": false,
    "module": "resolvent4py",
    "module_short": "resolvent4py",
-   "name": "MatrixLinearOperator"
+   "name": "check_lu_factorization"
   }
  ],
  "res4py.compute_local_size": [
@@ -89,22 +143,58 @@
    "name": "compute_local_size"
   }
  ],
- "res4py.create_gmres_bjacobi_solver": [
+ "res4py.create_AIJ_identity": [
   {
    "is_class": false,
    "is_explicit": false,
    "module": "resolvent4py",
    "module_short": "resolvent4py",
-   "name": "create_gmres_bjacobi_solver"
+   "name": "create_AIJ_identity"
   }
  ],
- "res4py.linalg.randomized_time_stepping_svd": [
+ "res4py.create_mumps_solver": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "resolvent4py",
+   "module_short": "resolvent4py",
+   "name": "create_mumps_solver"
+  }
+ ],
+ "res4py.distributed_to_sequential_vector": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "resolvent4py",
+   "module_short": "resolvent4py",
+   "name": "distributed_to_sequential_vector"
+  }
+ ],
+ "res4py.linalg.randomized_svd": [
   {
    "is_class": false,
    "is_explicit": false,
    "module": "resolvent4py.linalg",
    "module_short": "resolvent4py.linalg",
-   "name": "randomized_time_stepping_svd"
+   "name": "randomized_svd"
+  }
+ ],
+ "res4py.linalg.resolvent_analysis_time_stepping.resolvent_analysis_rsvd_dt": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "resolvent4py.linalg.resolvent_analysis_time_stepping",
+   "module_short": "resolvent4py.linalg",
+   "name": "resolvent_analysis_rsvd_dt"
+  }
+ ],
+ "res4py.linear_operators.MatrixLinearOperator": [
+  {
+   "is_class": false,
+   "is_explicit": false,
+   "module": "resolvent4py.linear_operators",
+   "module_short": "resolvent4py.linear_operators",
+   "name": "MatrixLinearOperator"
   }
  ],
  "res4py.petscprint": [
@@ -123,6 +213,15 @@
    "module": "resolvent4py",
    "module_short": "resolvent4py",
    "name": "read_coo_matrix"
+  }
+ ],
+ "resolvent4py.linalg.resolvent_analysis_time_stepping.resolvent_analysis_rsvd_dt": [
+  {
+   "is_class": false,
+   "is_explicit": true,
+   "module": "resolvent4py.linalg.resolvent_analysis_time_stepping",
+   "module_short": "resolvent4py.linalg",
+   "name": "resolvent_analysis_rsvd_dt"
   }
  ]
 }

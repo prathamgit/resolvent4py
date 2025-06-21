@@ -37,8 +37,6 @@ class LowRankUpdatedLinearOperator(LinearOperator):
         \textcolor{black}{Y} = A^{-*}C,
 
 
-    :param comm: MPI communicator :code:`PETSc.COMM_WORLD`
-    :type comm: PETSc.Comm
     :param A: instance of the :class:`.LinearOperator` class
     :param B: tall and skinny matrix
     :type B: SLEPc.BV
@@ -50,30 +48,30 @@ class LowRankUpdatedLinearOperator(LinearOperator):
         :code:`A.solve()` is enabled and the argument :code:`woodbury_factors`
         is :code:`None`, the factors :math:`X`, :math:`D` and :math:`Y` are
         computed at initialization
-    :type woodbury_factors: Optional[Tuple[SLEPc.BV, numpy.ndarray,
-        SLEPc.BV], None], default is None
+    :type woodbury_factors: Optional[Union[Tuple[SLEPc.BV, numpy.ndarray,
+        SLEPc.BV], None]], default is None
     :param nblocks: number of blocks (if the operator has block structure)
     :type nblocks: Optional[Union[int, None]], default is None
     """
 
     def __init__(
         self: "LowRankUpdatedLinearOperator",
-        comm: PETSc.Comm,
         A: LinearOperator,
         B: SLEPc.BV,
         K: np.ndarray,
         C: SLEPc.BV,
         woodbury_factors: typing.Optional[
-            typing.Tuple[SLEPc.BV, np.ndarray, SLEPc.BV]
+            typing.Union[typing.Tuple[SLEPc.BV, np.ndarray, SLEPc.BV], None]
         ] = None,
-        nblocks: typing.Optional[int] = None,
+        nblocks: typing.Optional[typing.Union[int, None]] = None,
     ) -> None:
+        comm = A.get_comm()
         self.A = A
-        self.L = LowRankLinearOperator(comm, B, K, C, nblocks)
+        self.L = LowRankLinearOperator(B, K, C, nblocks)
         self.W = (
-            self.compute_woodbury_operator(comm, nblocks)
+            self.compute_woodbury_operator(nblocks)
             if woodbury_factors == None
-            else LowRankLinearOperator(comm, *woodbury_factors, nblocks)
+            else LowRankLinearOperator(*woodbury_factors, nblocks)
         )
         self.create_intermediate_vectors()
         super().__init__(
@@ -82,12 +80,9 @@ class LowRankUpdatedLinearOperator(LinearOperator):
 
     def compute_woodbury_operator(
         self: "LowRankUpdatedLinearOperator",
-        comm: PETSc.Comm,
         nblocks: typing.Union[int, None],
     ) -> LowRankLinearOperator:
         r"""
-        :param comm: MPI communicator :code:`PETSc.COMM_WORLD`
-        :type comm: PETSc.Comm
         :param nblocks: number of blocks (if the operator has block structure)
         :type nblocks: Unions[int, None]
 
@@ -95,6 +90,7 @@ class LowRankUpdatedLinearOperator(LinearOperator):
             Woodbury factors :code:`X`, :code:`D` and :code:`Y`
         :rtype: LowRankUpdatedLinearOperator
         """
+        comm = self.A.get_comm()
         try:
             X = self.A.solve_mat(self.L.U)
             Y = self.A.solve_hermitian_transpose_mat(self.L.V)
@@ -108,7 +104,7 @@ class LowRankUpdatedLinearOperator(LinearOperator):
             M = XS.dot(self.L.V)
             Ma = M.getDenseArray()
             D = self.L.Sigma @ sp.linalg.inv(np.eye(Ma.shape[0]) + Ma)
-            W = LowRankLinearOperator(comm, X, D, Y, nblocks)
+            W = LowRankLinearOperator(X, D, Y, nblocks)
             XS.destroy()
             M.destroy()
             S.destroy()
@@ -139,8 +135,8 @@ class LowRankUpdatedLinearOperator(LinearOperator):
 
         :rtype: SLEPc.BV
         """
-        X = SLEPc.BV().create(self._comm)
-        X.setSizes(self._dimensions[0], m)
+        X = SLEPc.BV().create(self.get_comm())
+        X.setSizes(self.get_dimensions()[0], m)
         X.setType("mat")
         return X
 
@@ -161,8 +157,8 @@ class LowRankUpdatedLinearOperator(LinearOperator):
 
         :rtype: SLEPc.BV
         """
-        X = SLEPc.BV().create(self._comm)
-        X.setSizes(self._dimensions[-1], m)
+        X = SLEPc.BV().create(self.get_comm())
+        X.setSizes(self.get_dimensions()[-1], m)
         X.setType("mat")
         return X
 

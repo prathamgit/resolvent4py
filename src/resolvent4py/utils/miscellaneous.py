@@ -15,7 +15,7 @@ numpy_to_mpi_dtype = {
 }
 
 
-def get_mpi_type(dtype: np.dtypes) -> MPI.Datatype:
+def get_mpi_type(dtype: np.dtype) -> MPI.Datatype:
     r"""
     Get the corresponding MPI type for a given numpy data type.
 
@@ -38,10 +38,10 @@ def petscprint(comm: PETSc.Comm, arg: any) -> None:
     :param arg: argument to be fed into print()
     :type arg: any
     """
-    if comm == PETSc.COMM_SELF:
+    if comm == PETSc.COMM_SELF or comm == MPI.COMM_SELF:
         print(arg)
     else:
-        if PETSc.COMM_WORLD.Get_rank() == 0:
+        if PETSc.COMM_WORLD.getRank() == 0:
             print(arg)
 
 

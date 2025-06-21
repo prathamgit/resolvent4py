@@ -15,8 +15,6 @@ class MatrixLinearOperator(LinearOperator):
     may also provide a PETSc KSP object :code:`ksp` to act with :math:`A^{-1}`
     on vectors and matrices.
 
-    :param comm: MPI communicator :code:`PETSc.COMM_WORLD`
-    :type comm: PETSc.Comm
     :param A: a PETSc matrix
     :type A: PETSc.Mat
     :param ksp: a PETSc KSP object to enable the :code:`solve()`
@@ -24,19 +22,20 @@ class MatrixLinearOperator(LinearOperator):
     :type ksp: Optional[Union[PETSc.KSP, None]], defaults to None
     :param nblocks: number of blocks (if the linear operator has block
         structure). This must be an odd number.
-    :type nblocks: Optional[Union[int, None]], defaults to None
+    :type nblocks: Optional[Union[int, None]], default is None
     """
 
     def __init__(
         self: "MatrixLinearOperator",
-        comm: PETSc.Comm,
         A: PETSc.Mat,
         ksp: typing.Optional[typing.Union[PETSc.KSP, None]] = None,
         nblocks: typing.Optional[typing.Union[int, None]] = None,
     ) -> None:
         self.A = A
         self.ksp = ksp
-        super().__init__(comm, "MatrixLinearOperator", A.getSizes(), nblocks)
+        super().__init__(
+            A.getComm(), "MatrixLinearOperator", A.getSizes(), nblocks
+        )
 
     def apply(self, x, y=None):
         y = self.create_left_vector() if y == None else y

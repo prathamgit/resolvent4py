@@ -1,8 +1,20 @@
 r"""
-RSVD-dt Demonstration
-=====================
+Resolvent Analysis Demonstration via Time Stepping
+==================================================
 
-Description here.
+Given the linear dynamics :math:`d_t q = Aq`, we perform resolvent analysis
+by computing the singular value decomposition (SVD) of the resolvent operator
+
+.. math::
+
+    R(i\omega) = \left(i\omega I - A\right)^{-1}
+
+with :math:`\omega = 0.648` the natural frequency of the linearized CGL
+equation. This script demonstrates the following:
+
+- Resolvent analysis using time-stepping via
+  :func:`~resolvent4py.linalg.resolvent_analysis_time_stepping.resolvent_analysis_rsvd_dt`
+
 """
 
 import os
@@ -11,10 +23,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import resolvent4py as res4py
 import scipy as sp
-from mpi4py import MPI
 from petsc4py import PETSc
 
-import pathlib
 import cgl
 
 
@@ -65,7 +75,7 @@ plt.rcParams.update(
         "font.family": "serif",
         "font.sans-serif": ["Computer Modern"],
         "font.size": 18,
-        "text.usetex": False,
+        "text.usetex": True,
     }
 )
 
@@ -76,7 +86,7 @@ save_path = "results/"
 # Read the A matrix from file
 res4py.petscprint(comm, "Reading matrix from file...")
 load_path = "data/"
-N = 48884
+N = 2000
 Nl = res4py.compute_local_size(N)
 sizes = ((Nl, N), (Nl, N))
 names = [
@@ -100,7 +110,7 @@ n_rand = 5
 n_loops = 3
 n_svals = 1
 
-U, S, V = res4py.linalg.rsvd_dt(
+U, S, V = res4py.linalg.resolvent_analysis_rsvd_dt(
     L,
     0.02,
     s,
@@ -110,6 +120,7 @@ U, S, V = res4py.linalg.rsvd_dt(
     n_loops,
     n_svals
 )
+Sa = np.diag(Sa)
 
 save_bv_list(U, "U", save_path)
 save_bv_list(V, "V", save_path)
@@ -118,18 +129,28 @@ if rank == 0:
     for i in range(len(S)):
         print(S[i][0, 0])
 
-# S.assemble()
+idx = 0
+bvs = [Ua, Ut, Va, Vt]
+arrays = []
+for bv in bvs:
+    vec = bv.getColumn(idx)
+    vecseq = res4py.distributed_to_sequential_vector(vec)
+    bv.restoreColumn(idx, vec)
+    arrays.append(vecseq.getArray().copy())
+    vecseq.destroy()
 
-# if comm.rank == 0:
-#     pathlib.Path(save_path).mkdir(exist_ok=True)
-#     s_fname = os.path.join(save_path, "S.petsc")
-#     viewer = PETSc.Viewer().createBinary(s_fname, "w", comm=comm)
-#     S.view(viewer)
-#     viewer.destroy()
+if comm.getRank() == 0:
+    save_path = "results/"
+    os.makedirs(save_path) if not os.path.exists(save_path) else None
 
-# S.destroy()
-# for bv in U: bv.destroy()
-# for bv in V: bv.destroy()
+    l = 30 * 2
+    x = np.linspace(-l / 2, l / 2, num=N, endpoint=True)
+    nu = 1.0 * (2 + 0.4 * 1j)
+    gamma = 1 - 1j
+    mu0 = 0.38
+    mu2 = -0.01
+    sigma = 0.4
+    system = cgl.CGL(x, nu, gamma, mu0, mu2, sigma)
 
 # 225442.64114943202
 # 255609.02196194816

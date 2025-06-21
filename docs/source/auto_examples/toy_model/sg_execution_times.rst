@@ -6,7 +6,7 @@
 
 Computation times
 =================
-**00:00.951** total execution time for 1 file **from auto_examples/toy_model**:
+**00:00.000** total execution time for 1 file **from auto_examples/toy_model**:
 
 .. container::
 
@@ -33,5 +33,5 @@ Computation times
      - Time
      - Mem (MB)
    * - :ref:`sphx_glr_auto_examples_toy_model_demonstrate_harmonic_resolvent.py` (``demonstrate_harmonic_resolvent.py``)
-     - 00:00.951
+     - 00:00.000
      - 0.0

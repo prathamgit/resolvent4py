@@ -26,7 +26,7 @@ the matrix :math:`A` closest to the origin using the shift-and-invert technique.
 This script demonstrates the following:
 
 - LU decomposition using :func:`~resolvent4py.utils.ksp.create_mumps_solver`
-- Eigendecomposition using 
+- Eigendecomposition using
   :func:`~resolvent4py.linalg.eigendecomposition.eig`
 
 .. GENERATED FROM PYTHON SOURCE LINES 14-104
@@ -65,7 +65,7 @@ This script demonstrates the following:
         load_path + "cols.dat",
         load_path + "vals.dat",
     ]
-    A = res4py.read_coo_matrix(comm, names, sizes)
+    A = res4py.read_coo_matrix(names, sizes)
 
     # Compute the eigendecomposition of L using shift and invert about s.
     # We need to define a matrix M = sI - A, compute its lu decomposition,
@@ -75,9 +75,9 @@ This script demonstrates the following:
     M = res4py.create_AIJ_identity(comm, sizes)
     M.scale(s)
     M.axpy(-1.0, A)
-    ksp = res4py.create_mumps_solver(comm, M)
-    res4py.check_lu_factorization(comm, M, ksp)
-    L = res4py.linear_operators.MatrixLinearOperator(comm, M, ksp)
+    ksp = res4py.create_mumps_solver(M)
+    res4py.check_lu_factorization(M, ksp)
+    L = res4py.linear_operators.MatrixLinearOperator(M, ksp)
 
     # Compute the eigendecomp.
     res4py.petscprint(comm, "Running Arnoldi iteration...")
@@ -89,7 +89,7 @@ This script demonstrates the following:
 
     # Check convergence
     L.destroy()
-    L = res4py.linear_operators.MatrixLinearOperator(comm, A)
+    L = res4py.linear_operators.MatrixLinearOperator(A)
     res4py.linalg.check_eig_convergence(L.apply, D, V)
 
     # Destroy objects
