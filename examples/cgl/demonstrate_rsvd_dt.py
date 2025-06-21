@@ -86,7 +86,7 @@ save_path = "results/"
 # Read the A matrix from file
 res4py.petscprint(comm, "Reading matrix from file...")
 load_path = "data/"
-N = 2000
+N = 48884
 Nl = res4py.compute_local_size(N)
 sizes = ((Nl, N), (Nl, N))
 names = [
@@ -94,13 +94,13 @@ names = [
     load_path + "cols.dat",
     load_path + "vals.dat",
 ]
-A = res4py.read_coo_matrix(comm, names, sizes)
+A = res4py.read_coo_matrix(names, sizes)
 
 s = 0.0206
 
-ksp = res4py.create_gmres_bjacobi_solver(comm, A, nblocks=comm.Get_size())
+ksp = res4py.create_gmres_bjacobi_solver(A, nblocks=comm.Get_size())
 res4py.petscprint(comm, "A ksp")
-L = res4py.linear_operators.MatrixLinearOperator(comm, A, ksp)
+L = res4py.linear_operators.MatrixLinearOperator(A, ksp)
 res4py.petscprint(comm, "A operator")
 
 # Compute the svd
@@ -112,7 +112,7 @@ n_svals = 1
 
 U, S, V = res4py.linalg.resolvent_analysis_rsvd_dt(
     L,
-    0.02,
+    0.01,
     s,
     10,
     n_periods,
@@ -152,14 +152,3 @@ if comm.getRank() == 0:
     sigma = 0.4
     system = cgl.CGL(x, nu, gamma, mu0, mu2, sigma)
 
-# 225442.64114943202
-# 255609.02196194816
-# 10853.866858048343
-# 5437.6451349571835
-# 3237.275242550277
-# 2305.4072426501807
-# 1811.7329001981327
-# 1538.666348648664
-# 1345.8019333393772
-# 1229.5436710878569
-# 1155.113762320117
