@@ -70,30 +70,32 @@ All the dependencies above can be installed straightforwardly with `pip`,
 except for `petsc4py` and `slepc4py` whose installation is easier if 
 `PETSc` and `SLEPc` are built from source.
 
-- We recommend creating a clean Python environment.
-- Download [PETSc](https://petsc.org/release/install/download/). Any version >= 
+1. We recommend creating a clean Python environment.
+2. Ensure valid C, C++, and Fortran compilers are available, along with ```make``` and ```flex``` which can be obtained through a package management CLI.
+3. Download [PETSc](https://petsc.org/release/install/download/). Any version >= 
   3.20.0 should work. (The latest version that we tested is 3.23.3.)
-- Configure PETSc using the command below,
+4. Navigate into the downloaded directory using ```cd /path/to/petsc``` and configure PETSc using the command below,
     ```bash
-    ./configure PETSC_ARCH=resolvent4py_arch --download-fblaslapack 
-    --download-mumps --download-scalapack --download-parmetis 
-    --download-metis --download-ptscotch --with-scalar-type=complex 
+    ./configure PETSC_ARCH=resolvent4py_arch --download-fblaslapack \
+    --download-mumps --download-scalapack --download-parmetis \
+    --download-metis --download-ptscotch --with-scalar-type=complex \
+    --download-mpich --download-cmake --download-bison \
     --with-debugging=0 COPTFLAGS=-O3 CXXOPTFLAGS=-O3 FOPTFLAGS=-O3
     ```
-  If some of the libraries above (e.g., `scalapack`, `metis`, etc.) are already
-  available to the user, then see the `PETSc` [configuration guidelines](
-  https://petsc.org/release/install/install/) for details on how to link against
-  them.
-- Follow the `PETSc` instructions (provided during the configuration step) to 
+    If some of the libraries above (e.g., `scalapack`, `metis`, etc.) are already
+    available to the user, then see the `PETSc` [configuration guidelines](
+    https://petsc.org/release/install/install/) for details on how to link against
+    them.
+5. Follow the `PETSc` instructions (provided during the configuration step) to 
   build the library. Then make sure to export the environment variables
   `PETSC_DIR` and `PETSC_ARCH`.
-- Install [SLEPc](https://slepc.upv.es/documentation/instal.htm). Any version >=
+6. Install [SLEPc](https://slepc.upv.es/documentation/instal.htm). Any version >=
   3.20.0 should work. (The latest version that we tested was 3.23.1.)
-- Install `mpi4py`, `petsc4py` and `slepc4py`
+7. Install `mpi4py`, `petsc4py` and `slepc4py`
     ```bash
     pip install mpi4py petsc4py==petsc-version slepc4py==slepc-version
     ```
-- Ensure that the installation was successful by running
+8. Ensure that the installation was successful by running
     ```bash
     python -c "from mpi4py import MPI"
     python -c "from petsc4py import PETSc"
