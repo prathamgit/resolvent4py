@@ -91,11 +91,16 @@ except for `petsc4py` and `slepc4py` whose installation is easier if
   `PETSC_DIR` and `PETSC_ARCH`.
 6. Install [SLEPc](https://slepc.upv.es/documentation/instal.htm). Any version >=
   3.20.0 should work. (The latest version that we tested was 3.23.1.)
-7. Install `mpi4py`, `petsc4py` and `slepc4py`
+7. Run the following command to reference the correct mpi installation: 
+    ```bash
+       export PATH=$PETSC_DIR/$PETSC_ARCH/bin:$PATH \
+       export LD_LIBRARY_PATH=$PETSC_DIR/$PETSC_ARCH/lib:$LD_LIBRARY_PATH
+    ```
+9. Install `mpi4py`, `petsc4py` and `slepc4py`
     ```bash
     pip install mpi4py petsc4py==petsc-version slepc4py==slepc-version
     ```
-8. Ensure that the installation was successful by running
+10. Ensure that the installation was successful by running
     ```bash
     python -c "from mpi4py import MPI"
     python -c "from petsc4py import PETSc"
