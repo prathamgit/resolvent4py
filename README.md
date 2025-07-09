@@ -57,24 +57,30 @@ Click [here](https://albertopadovan.github.io/resolvent4py/).
 
 ## Installation instructions
 
-### Installing `PETSc`, `SLEPc`, `petsc4py` and `slepc4py`
+
+### Installing `PETSc`, `SLEPc`, `petsc4py`, `slepc4py` and `mpi4py`
 
 > **Note**  
 > If you have an existing parallel build of PETSc and SLEPc and their
 > 4py counterparts configured with complex scalars 
 > (i.e., `--with-scalar-type=complex`) and with MUMPS (i.e.,
-> `--download-mumps`) you can skip this subsection and go directly to
-> "Installing `resolvent4py` and building the documentation".
+> `--download-mumps`), you can skip this subsection and go directly to
+> "Installing `resolvent4py`".
 
-All the dependencies above can be installed straightforwardly with `pip`, 
-except for `petsc4py` and `slepc4py` whose installation is easier if 
-`PETSc` and `SLEPc` are built from source.
 
-1. We recommend creating a clean Python environment.
-2. Ensure valid C, C++, and Fortran compilers are available, along with ```make``` and ```flex``` which can be obtained through a package management CLI.
+1. We recommend creating a clean Python environment using, e.g., `venv` or `conda`.
+Ensure that you are using a Python version >= 3.10 by running 
+`python --version` in your terminal.
+2. Ensure valid C, C++, and Fortran compilers are available, 
+along with ```make``` and ```flex```,
+which can be obtained through a package management CLI.
 3. Download [PETSc](https://petsc.org/release/install/download/). Any version >= 
   3.20.0 should work. (The latest version that we tested is 3.23.3.)
-4. Navigate into the downloaded directory using ```cd /path/to/petsc``` and configure PETSc using the command below,
+4. Consult the PETSc [configuration guidelines](https://petsc.org/release/install/install/)
+to configure PETSc with complex scalars (i.e., `--with-scalar-type=complex`) and 
+with MUMPs (i.e., `--download-mumps`).
+For reference, here is the configure command (to be run inside the PETSc directory)
+that has worked for us in the past,
     ```bash
     ./configure PETSC_ARCH=resolvent4py_arch --download-fblaslapack \
     --download-mumps --download-scalapack --download-parmetis \
@@ -82,25 +88,35 @@ except for `petsc4py` and `slepc4py` whose installation is easier if
     --download-mpich --download-cmake --download-bison \
     --with-debugging=0 COPTFLAGS=-O3 CXXOPTFLAGS=-O3 FOPTFLAGS=-O3
     ```
-    If some of the libraries above (e.g., `scalapack`, `metis`, etc.) are already
-    available to the user, then see the `PETSc` [configuration guidelines](
-    https://petsc.org/release/install/install/) for details on how to link against
-    them.
-5. Follow the `PETSc` instructions (provided during the configuration step) to 
+    > **Note**  
+    > Not all configure options shown in the multiline command above are necessary 
+    > for all users. For example, if an MPI
+    > compiler is already available, then `--download-mpich` may
+    > not be necessary and you can pass configure flags like
+    > `--with-cc=mpicc`. (Once again, please consult the PETSc 
+    > [configuration guidelines](https://petsc.org/release/install/install/) for
+    > your specific case.)
+5. Follow the PETSc instructions (provided during the configuration step) to 
   build the library. Then make sure to export the environment variables
   `PETSC_DIR` and `PETSC_ARCH`.
-6. Install [SLEPc](https://slepc.upv.es/documentation/instal.htm). Any version >=
-  3.20.0 should work. (The latest version that we tested was 3.23.1.)
-7. Run the following command to reference the correct mpi installation: 
+6. If you downloaded mpich during the configuration stage, then run the following
+  command to reference the correct MPI installation,
     ```bash
        export PATH=$PETSC_DIR/$PETSC_ARCH/bin:$PATH \
        export LD_LIBRARY_PATH=$PETSC_DIR/$PETSC_ARCH/lib:$LD_LIBRARY_PATH
     ```
-9. Install `mpi4py`, `petsc4py` and `slepc4py`
+7. Install [SLEPc](https://slepc.upv.es/documentation/instal.htm). Any version >=
+  3.20.0 should work. (The latest version that we tested was 3.23.1.)
+8. Install `mpi4py`, `petsc4py` and `slepc4py`
     ```bash
     pip install mpi4py petsc4py==petsc-version slepc4py==slepc-version
     ```
-10. Ensure that the installation was successful by running
+    > **Note**  
+    > It is critical that you install the versions of `petsc4py` and `slepc4py` 
+    > corresponding to your PETSc and SLEPc installations. Otherwise, the
+    > installation will likely fail.
+    
+9. Ensure that the installation was successful by running
     ```bash
     python -c "from mpi4py import MPI"
     python -c "from petsc4py import PETSc"
@@ -113,6 +129,8 @@ except for `petsc4py` and `slepc4py` whose installation is easier if
     ```bash
         pip install resolvent4py
     ```
+  (This will also install the dependencies `numpy`, `scipy` and `matplotlib` if
+  they are not already available.)
 - Alternatively, clone the repository into the local directory `resolvent4py`,
   navigate to it and run
     ```bash
