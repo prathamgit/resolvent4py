@@ -55,17 +55,76 @@ Click [here](https://albertopadovan.github.io/resolvent4py/).
 - `slepc4py >= 3.20` (must be installed from source, see below)
 
 
+
 ## Installation instructions
 
+### Installation using `conda` and `pip` (recommended)
 
-### Installing `PETSc`, `SLEPc`, `petsc4py`, `slepc4py` and `mpi4py`
+1. Create a new `conda` environment with, e.g., Python 3.11
+    ```bash
+    conda create -n resolvent4py_env python=3.11
+    conda activate resolvent4py_env
+    ```
+    > **IMPORTANT:**
+    > Please ensure that the environment variables `PETSC_DIR`, `PETSC_ARCH`
+    > and `SLEPC_DIR` are unset.
+    > This prevents `petsc4py` and `slepc4py` from binding to
+    > unintended preexisting PETSc/SLEPc builds.
+    > Likewise, ensure that any pre-installed MPI toolchains 
+    > (e.g., from system modules or previous installations) are not 
+    > interfering with the current build environment. That is, 
+    > ensure that the output of `which mpicc` is empty. If it is not, then
+    > this indicates a potential conflict.
+
+2. Run the command
+    ```
+    conda search 'petsc=3.23.3=complex*' --channel conda-forge --info
+    ```
+   to list all `PETSc` 3.23.3 builds with support for complex scalars and MUMPS.
+   This command will display metadata for each matching build, including its dependencies.
+   Inspect the list of dependencies and look for "mumps" or "mumps-mpi."
+   You will likely find two candidate builds that satisfy the MUMPS and complex
+   scalar requirements: one built with MPICH and one with OpenMPI. 
+   Select the one you prefer
+   and identify the corresponding build string 
+   (e.g., `complex_h69b5c76_0` on a Mac osx-arm64).
+   
+4. Install `PETSc` and `petsc4py` with
+    ```bash
+    conda install -c conda-forge petsc=3.23.3=build-string petsc4py
+    ```
+
+5. Run
+    ```
+    conda search 'slepc=3.23.2=complex*' --channel conda-forge --info
+    ```
+   to perform the same inspection as above and identify a compatible `SLEPc`
+   build (e.g., `complex_he96486c_0` on a Mac osx-arm64). 
+   If you chose the OpenMPI build in step 3, make sure you select
+   the OpenMPI-compatible build of `SLEPc`.
+
+6. Install `SLEPc` and `slepc4py` with
+    ```bash
+    conda install -c conda-forge slepc=3.23.2=build-string slepc4py
+    ```
+4. Install `mpi4py`
+    ```bash
+    conda install -c conda-forge mpi4py
+    ```
+5. Install `resolvent4py`
+    ```bash
+    pip install resolvent4py
+    ```
+
+
+### Installation from source
 
 > **Note**  
 > If you have an existing parallel build of PETSc and SLEPc and their
 > 4py counterparts configured with complex scalars 
 > (i.e., `--with-scalar-type=complex`) and with MUMPS (i.e.,
-> `--download-mumps`), you can skip this subsection and go directly to
-> "Installing `resolvent4py`".
+> `--download-mumps`), you can go directly to step 10 (after running 
+> `pip install mpi4py`).
 
 
 1. We recommend creating a clean Python environment using, e.g., `venv` or `conda`.
@@ -122,17 +181,7 @@ that has worked for us in the past,
     python -c "from petsc4py import PETSc"
     python -c "from slepc4py import SLEPc"
     ```
-
-## Installing `resolvent4py`
-
-- Install `resolvent4py` with
-    ```bash
-        pip install resolvent4py
-    ```
-  (This will also install the dependencies `numpy`, `scipy` and `matplotlib` if
-  they are not already available.)
-- Alternatively, clone the repository into the local directory `resolvent4py`,
-  navigate to it and run
+10. Install `resolvent4py` with
     ```bash
         pip install resolvent4py
     ```
