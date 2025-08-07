@@ -46,13 +46,13 @@ def compute_gramian_factors(
     .. math::
 
         G_R = \frac{1}{\pi}\int_{0}^{\infty}R(\omega)BB^*R(\omega)^*\
-        \,d\omega \approx \sum_j \delta_j w_j\left(X_\mathrm{r}(\omega_i)\
-        X_\mathrm{r}(\omega)^* + X_{\mathrm{i}}(\omega_j)\
+        \,d\omega \approx \sum_j \delta_j w_j\left(X_\mathrm{r}(\omega_j)\
+        X_\mathrm{r}(\omega_j)^* + X_{\mathrm{i}}(\omega_j)\
             X_{\mathrm{i}}(\omega_j)^*\right),
 
     where the subscripts "r" and "i" denote the real and imaginary parts,
-    and :math:`\delta_j = 1` if :math:`\omega_j = 0` and 
-    :math:`\delta_j = 1/2` otherwise.
+    and :math:`\delta_j = 1/2` if :math:`\omega_j = 0` and 
+    :math:`\delta_j = 1` otherwise.
 
     :param L_generators: tuple of functions that define the linear operator \
         :math:`R(\omega)^{-1}`, the action of :math:`R(\omega)` on matrices,
@@ -181,13 +181,13 @@ def compute_balanced_projection(
     """
     comm = PETSc.COMM_WORLD
     # Compute product Y^*@X
-    Y.hermitianTranspose()
-    Z = Y.matMult(X)
-    Y.hermitianTranspose()
+    Y.conjugate()
+    Z = Y.transposeMatMult(X)
+    Y.conjugate()
     svd = SLEPc.SVD().create(comm)
     svd.setOperators(Z)
     svd.setProblemType(SLEPc.SVD.ProblemType.STANDARD)
-    svd.setType(SLEPc.SVD.Type.CROSS)
+    svd.setType(SLEPc.SVD.Type.LAPACK)
     svd.setWhichSingularTriplets(SLEPc.SVD.Which.LARGEST)
     svd.setUp()
     svd.solve()
