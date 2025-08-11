@@ -40,6 +40,25 @@ to the user through the `resolvent4py` namespace are:
 - Support for MPI communications using `mpi4py`
 - Support for manipulation of PETSc matrices/vector and SLEPc BVs
 
+If you use `resolvent4py` in your workflow, please cite [this](https://www.sciencedirect.com/science/article/pii/S2352711025002523) paper.
+<details>
+<summary>BibTeX</summary>
+
+```bibtex
+@article{PADOVAN2025102286,
+  title = {Resolvent4py: A parallel Python package for analysis, model reduction and control of large-scale linear systems},
+  journal = {SoftwareX},
+  volume = {31},
+  pages = {102286},
+  year = {2025},
+  issn = {2352-7110},
+  doi = {https://doi.org/10.1016/j.softx.2025.102286},
+  url = {https://www.sciencedirect.com/science/article/pii/S2352711025002523},
+  author = {Alberto Padovan and Vishal Anantharaman and Clarence W. Rowley and Blaine Vollmer and Tim Colonius and Daniel J. Bodony},
+}
+```
+</details> 
+
 ## Documentation
 
 Click [here](https://albertopadovan.github.io/resolvent4py/).
