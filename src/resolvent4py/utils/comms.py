@@ -4,6 +4,7 @@ __all__ = [
     "sequential_to_distributed_vector",
     "distributed_to_sequential_matrix",
     "distributed_to_sequential_vector",
+    "distributed_to_sequential_vector_root",
     "scatter_array_from_root_to_all",
 ]
 
@@ -68,6 +69,59 @@ def sequential_to_distributed_matrix(
     Mat_dist.assemble(None)
     return Mat_dist
 
+def distributed_to_sequential_vector_root(
+    vec_dist: PETSc.Vec, root: int = 0
+) -> typing.Optional[PETSc.Vec]:
+    r"""
+    Gather a distributed PETSc vector onto `root` as a PETSc sequential vector.
+
+    Parameters
+    ----------
+    vec_dist : PETSc.Vec
+        Distributed vector (STANDARD type).
+    root : int, optional
+        Root rank in the vector's communicator (default 0).
+
+    Returns
+    -------
+    Optional[PETSc.Vec]
+        On `root`: a PETSc sequential vector (COMM_SELF).
+        On other ranks: None.
+    """
+    comm_petsc = vec_dist.getComm()
+    comm = comm_petsc.tompi4py()
+    rank = comm.Get_rank()
+
+    # Local copy prevents issues if the underlying array is invalidated later.
+    sendbuf = vec_dist.getArray().copy()
+
+    # Gather local lengths at root only.
+    counts = comm.gather(len(sendbuf), root=root)
+
+    # Prepare receive buffers on root.
+    if rank == root:
+        counts_np = np.asarray(counts, dtype=PETSc.IntType)
+        disps = np.zeros_like(counts_np)
+        if counts_np.size > 1:
+            np.cumsum(counts_np[:-1], out=disps[1:])
+        recvbuf = np.empty(int(counts_np.sum()), dtype=sendbuf.dtype)
+    else:
+        counts_np = None
+        disps = None
+        recvbuf = None
+
+    # MPI datatype for numpy dtype (you likely already have this helper).
+    # Replace with your own mapping if needed.
+    mpi_dtype = get_mpi_type(sendbuf.dtype)
+
+    # Gather variable-sized arrays to root.
+    comm.Gatherv(sendbuf, (recvbuf, counts_np, disps, mpi_dtype), root=root)
+
+    if rank == root:
+        vec_seq = PETSc.Vec().createWithArray(recvbuf, comm=PETSc.COMM_SELF)
+        return vec_seq
+    else:
+        return None
 
 def sequential_to_distributed_vector(
     vec_seq: PETSc.Vec, vec_dist: PETSc.Vec
