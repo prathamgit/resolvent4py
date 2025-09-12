@@ -119,97 +119,95 @@ def hermitian_transpose(
         return MatHT_
 
 
-def convert_coo_to_csr(
-    arrays: tuple[np.array, np.array, np.array],
-    sizes: tuple[tuple[int, int], tuple[int, int]],
-) -> tuple[np.array, np.array, np.array]:
-    r"""
-    Convert arrays = [row indices, col indices, values] for COO matrix
-    assembly to [row pointers, col indices, values] for CSR matrix assembly.
-    (Petsc4py currently does not support COO matrix assembly, hence the need
-    to convert.)
-
-    :param arrays: a list of numpy arrays (e.g., arrays = [rows,cols,vals])
-    :type array: tuple[np.array, np.array, np.array]
-    :param sizes: see `MatSizeSpec <MatSizeSpec_>`_
-    :type sizes: tuple[np.array, np.array, np.array]
-
-    :return: csr row pointers, column indices and matrix values for CSR
-        matrix assembly
-    :rtype: tuple[np.array, np.array, np.array]
+def convert_coo_to_csr(arrays, sizes):
     """
-    comm = MPI.COMM_WORLD
-    rank = comm.Get_rank()
-    pool = np.arange(comm.Get_size())
+    arrays: (rows, cols, vals) global COO triplets on each rank (could be empty on most ranks).
+    sizes: ((n_local_rows, n_global_rows), (n_local_cols, n_global_cols))
+           Same layout as you had; only row sizes are needed for ownership.
+    Returns local CSR for this rank:
+        row_ptr (len = n_local_rows+1), col_idx (len = nnz_local), vals_local
+    """
+    comm  = MPI.COMM_WORLD
+    rank  = comm.Get_rank()
+    size  = comm.Get_size()
+
     rows, cols, vals = arrays
-    idces = np.argsort(rows).reshape(-1)
-    rows, cols, vals = rows[idces], cols[idces], vals[idces]
+    rows = np.asarray(rows, dtype=PETSc.IntType, order='C')
+    cols = np.asarray(cols, dtype=PETSc.IntType, order='C')
+    vals = np.asarray(vals, dtype=PETSc.ScalarType, order='C')
 
-    mat_row_sizes_local = np.asarray(
-        comm.allgather(sizes[0][0]), dtype=PETSc.IntType
-    )
-    mat_row_displ = np.concatenate(([0], np.cumsum(mat_row_sizes_local[:-1])))
-    ownership_ranges = np.zeros((comm.Get_size(), 2), dtype=PETSc.IntType)
-    ownership_ranges[:, 0] = mat_row_displ
-    ownership_ranges[:-1, 1] = ownership_ranges[1:, 0]
-    ownership_ranges[-1, 1] = sizes[0][-1]
+    # ---- 1) Compute global ownership ranges for rows (block row distribution) ----
+    # sizes[0][0] is this rank's local row count; allgather to get all
+    local_nrows = np.asarray(sizes[0][0], dtype=PETSc.IntType)
+    all_local   = np.asarray(comm.allgather(int(local_nrows)), dtype=PETSc.IntType)
+    row_starts  = np.concatenate(([0], np.cumsum(all_local[:-1], dtype=PETSc.IntType)))
+    row_ends    = row_starts + all_local  # exclusive
+    my_row0     = row_starts[rank]
+    my_nrows    = int(all_local[rank])
 
-    send_rows, send_cols = [], []
-    send_vals, lengths = [], []
-    for i in pool:
-        idces = np.argwhere(
-            (rows >= ownership_ranges[i, 0]) & (rows < ownership_ranges[i, 1])
-        ).reshape(-1)
-        lengths.append(np.asarray([len(idces)], dtype=PETSc.IntType))
-        send_rows.append(rows[idces])
-        send_cols.append(cols[idces])
-        send_vals.append(vals[idces])
+    # ---- 2) Decide owner rank for each nonzero by its global row ----
+    # owner = smallest r such that rows < row_ends[r]
+    owners = np.searchsorted(row_ends, rows, side='right').astype(PETSc.IntType)
 
-    recv_bufs = [np.empty(1, dtype=PETSc.IntType) for _ in pool]
-    recv_reqs = [comm.Irecv(bf, source=i) for (bf, i) in zip(recv_bufs, pool)]
-    send_reqs = [comm.Isend(sz, dest=i) for (i, sz) in enumerate(lengths)]
-    MPI.Request.waitall(send_reqs + recv_reqs)
-    lengths = [buf[0] for buf in recv_bufs]
+    # ---- 3) Group entries by owner (stable) so each destination gets one contiguous slice ----
+    # order by owners; no need to sort by (row,col) yet
+    order = np.argsort(owners, kind='stable')
+    owners = owners[order]
+    rows   = rows[order]
+    cols   = cols[order]
+    vals   = vals[order]
 
-    dtypes = [PETSc.IntType, PETSc.IntType, np.complex128]
-    my_arrays = []
-    for j, array in enumerate([send_rows, send_cols, send_vals]):
-        dtype = dtypes[j]
-        mpi_type = get_mpi_type(np.dtype(dtype))
-        recv_bufs = [
-            [np.empty(lengths[i], dtype=dtype), mpi_type] for i in pool
-        ]
-        recv_reqs = [
-            comm.Irecv(bf, source=i) for (bf, i) in zip(recv_bufs, pool)
-        ]
-        send_reqs = [comm.Isend(array[i], dest=i) for i in pool]
-        MPI.Request.waitall(send_reqs + recv_reqs)
-        my_arrays.append([recv_bufs[i][0] for i in pool])
+    sendcounts = np.bincount(owners, minlength=size).astype(np.int32)
+    sdispls    = np.concatenate(([0], np.cumsum(sendcounts[:-1], dtype=np.int64))).astype(np.int64)
 
-    my_rows, my_cols, my_vals = [], [], []
-    for i in pool:
-        my_rows.extend(my_arrays[0][i])
-        my_cols.extend(my_arrays[1][i])
-        my_vals.extend(my_arrays[2][i])
+    # ---- 4) Exchange counts to know recv sizes; then Alltoallv the triplets ----
+    recvcounts = np.asarray(comm.alltoall(sendcounts.tolist()), dtype=np.int32)
+    rdispls    = np.concatenate(([0], np.cumsum(recvcounts[:-1], dtype=np.int64))).astype(np.int64)
+    total_recv = int(recvcounts.sum())
 
-    my_rows = (
-        np.asarray(my_rows, dtype=PETSc.IntType) - ownership_ranges[rank, 0]
-    )
-    my_cols = np.asarray(my_cols, dtype=PETSc.IntType)
-    my_vals = np.asarray(my_vals, dtype=np.complex128)
+    r_rows = np.empty(total_recv, dtype=PETSc.IntType)
+    r_cols = np.empty(total_recv, dtype=PETSc.IntType)
+    r_vals = np.empty(total_recv, dtype=PETSc.ScalarType)
 
-    idces = np.argsort(my_rows).reshape(-1)
-    my_rows = my_rows[idces]
-    my_cols = my_cols[idces]
-    my_vals = my_vals[idces]
+    # mpi4py maps numpy dtype -> MPI datatype automatically
+    comm.Alltoallv([rows, (sendcounts, sdispls)],  [r_rows, (recvcounts, rdispls)])
+    comm.Alltoallv([cols, (sendcounts, sdispls)],  [r_cols, (recvcounts, rdispls)])
+    comm.Alltoallv([vals, (sendcounts, sdispls)],  [r_vals, (recvcounts, rdispls)])
 
-    ni = 0
-    my_rows_ptr = np.zeros(sizes[0][0] + 1, dtype=PETSc.IntType)
-    for i in range(sizes[0][0]):
-        ni += np.count_nonzero(my_rows == i)
-        my_rows_ptr[i + 1] = ni
+    # ---- 5) Convert to local row IDs and build CSR pointers with bincount ----
+    if total_recv == 0:
+        row_ptr = np.zeros(my_nrows + 1, dtype=PETSc.IntType)
+        return row_ptr, r_cols, r_vals
 
-    return my_rows_ptr, my_cols, my_vals
+    # make local rows start at 0
+    r_rows -= my_row0
+
+    # (Optional) sort locally by (row, col) if needed
+    # Keeping entries per row grouped is enough for CSR; sort by col if you want monotone col_idx
+    sort_idx = np.lexsort((r_cols, r_rows))
+    r_rows = r_rows[sort_idx]
+    r_cols = r_cols[sort_idx]
+    r_vals = r_vals[sort_idx]
+
+    # (Optional) combine duplicates (same row & col)
+    same = (np.diff(r_rows, prepend=-1) == 0) & (np.diff(r_cols, prepend=-1) == 0)
+    if same.any():
+        # reduce by segments
+        new_flags = ~same
+        seg_ids   = np.cumsum(new_flags) - 1
+        # sum vals per segment
+        vals_sum = np.add.reduceat(r_vals, np.flatnonzero(new_flags))
+        rows_u   = r_rows[new_flags]
+        cols_u   = r_cols[new_flags]
+        r_rows, r_cols, r_vals = rows_u, cols_u, vals_sum
+
+    # Row pointer via bincount (length = my_nrows)
+    counts = np.bincount(r_rows, minlength=my_nrows)
+    row_ptr = np.empty(my_nrows + 1, dtype=PETSc.IntType)
+    row_ptr[0] = 0
+    np.cumsum(counts, out=row_ptr[1:])
+
+    return row_ptr, r_cols, r_vals
 
 
 def assemble_harmonic_resolvent_generator(
